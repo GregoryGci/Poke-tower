@@ -132,8 +132,15 @@ export class Tower {
     // vite, se prépare vite. Les traits de recharge la raccourcissent aussi —
     // sinon « Cadence infernale » n'aurait plus d'effet sur les grosses
     // attaques, qui sont justement celles qui s'incantent.
-    this.cast =
-      move.cast * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
+    // `move.cast ?? 0` et non `move.cast` nu : une attaque sauvegardée avant
+    // l'arrivée de ce champ donnait `undefined`, donc `NaN` après
+    // multiplication. Et comme `NaN <= 0` est faux, l'unité entrait en
+    // incantation sans jamais en sortir — plus un seul tir. La sauvegarde est
+    // désormais rebranchée sur le catalogue, mais une valeur absente, d'où
+    // qu'elle vienne, ne doit plus pouvoir figer un tir.
+    const castBrut =
+      (move.cast ?? 0) * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
+    this.cast = Number.isFinite(castBrut) ? Math.max(0, castBrut) : 0;
   }
 
   private traitBonus(kind: 'stat' | 'range' | 'cooldown'): number {
@@ -195,7 +202,10 @@ export class Tower {
 
     if (this.timer > 0) return RIEN;
 
-    if (this.cast <= 0) {
+    // Le test porte sur « strictement positif » plutot que sur « <= 0 » :
+    // ainsi une valeur non numeriquement comparable tombe du bon cote et
+    // l'unite tire, au lieu de rester bloquee en incantation.
+    if (!(this.cast > 0)) {
       this.timer = this.cooldown;
       return { kind: 'tir', cible: this.target };
     }

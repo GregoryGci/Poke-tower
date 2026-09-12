@@ -820,6 +820,8 @@ export class Game {
    */
   private montrerApercu(tower: Tower, cible: Enemy, duree: number): void {
     const style = tower.style;
+    // Une duree invalide reserverait la forme pour toujours.
+    if (!Number.isFinite(duree) || duree <= 0) return;
 
     if (style.rayon > 0) {
       const apercu = this.prendreApercu(true);
@@ -867,6 +869,14 @@ export class Game {
 
   private avancerApercus(dt: number): void {
     for (const apercu of this.apercus) {
+      // Une duree non finie n'expirait jamais et gardait la forme reservee :
+      // le budget d'apercus se vidait, et un seul Pokemon paraissait alors
+      // afficher sa zone. On la traite comme expiree.
+      if (!Number.isFinite(apercu.restant)) {
+        apercu.restant = 0;
+        apercu.mesh.visible = false;
+        continue;
+      }
       if (apercu.restant <= 0) continue;
       apercu.restant -= dt;
       if (apercu.restant <= 0) apercu.mesh.visible = false;
