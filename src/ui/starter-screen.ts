@@ -117,7 +117,11 @@ export function demanderStarter(showcase: Showcase): Promise<StarterChoice> {
   selecteur.setAttribute('role', 'tablist');
   selecteur.setAttribute('aria-label', 'Valise du professeur');
 
-  haut.append(intro, selecteur);
+  // Le selecteur de valise ne s'affiche que s'il y a plusieurs regions.
+  // Avec une seule, un onglet unique n'est pas un choix : c'est un bouton qui
+  // ne fait rien, sur le premier ecran du jeu.
+  haut.appendChild(intro);
+  if (STARTER_CASES.length > 1) haut.appendChild(selecteur);
 
   /* ---- Bas : cartes et validation ---- */
 

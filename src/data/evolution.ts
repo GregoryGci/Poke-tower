@@ -17,7 +17,7 @@
  * ils ne touchent plus à l'espèce.
  */
 
-import { getSpecies } from './content';
+import { evolutionParNiveau, getSpecies } from './content';
 import type { OwnedPokemon, Species } from './types';
 
 /**
@@ -36,7 +36,7 @@ export function evoluerSiPossible(owned: OwnedPokemon): Species[] {
 
   for (;;) {
     const courante = getSpecies(owned.speciesId);
-    const suite = courante.evolution;
+    const suite = evolutionParNiveau(courante);
     if (!suite || owned.level < suite.niveau) break;
 
     owned.speciesId = suite.into;
@@ -60,7 +60,7 @@ export function evoluerSiPossible(owned: OwnedPokemon): Species[] {
 export function prochaineEvolution(
   owned: OwnedPokemon
 ): { espece: Species; niveau: number; restant: number } | null {
-  const suite = getSpecies(owned.speciesId).evolution;
+  const suite = evolutionParNiveau(getSpecies(owned.speciesId));
   if (!suite) return null;
   return {
     espece: getSpecies(suite.into),

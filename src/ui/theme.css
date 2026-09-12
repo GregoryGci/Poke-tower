@@ -607,90 +607,63 @@
   background: var(--ivoire);
   font-family: var(--ui);
   color: var(--encre);
-  overflow-y: auto;
+  /* Le defilement appartient a la grille, pas a l ecran : sinon la rangee
+     des destinations debordait de sa piste et passait par-dessus le pied
+     de page. */
+  overflow: hidden;
   animation: apparition 0.35s ease both;
 }
 
 /* La fiche à gauche, les destinations à droite : on lit où on en est avant
    de choisir où aller. */
+/* Une bande en haut, la grille en dessous : les soldes se lisent avant de
+   choisir où aller, sans occuper une colonne entière. */
 .menu-corps {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) 1fr;
-  gap: 18px;
+  /* Les deux rangees prennent la hauteur de leur contenu. Avec 1fr sur la
+     seconde, la grille s etirait sur toute la hauteur disponible : les cartes
+     gonflaient et le pied de page finissait par passer dessous. */
+  grid-template-rows: auto auto;
+  gap: 16px;
   align-content: start;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .menu-fiche {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 20px;
-  background: var(--blanc);
-  align-self: start;
-}
-
-.fiche-identite { display: flex; flex-direction: column; gap: 6px; }
-
-.fiche-partenaire {
-  display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 12.5px;
-  color: var(--gris);
-  margin-top: 4px;
+  gap: 22px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: var(--blanc);
 }
 
-.fiche-soldes {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 12px 0;
-  border-top: 2px solid var(--ligne-douce);
-  border-bottom: 2px solid var(--ligne-douce);
-}
+.fiche-identite { display: flex; align-items: center; gap: 11px; min-width: 0; }
 
-.fiche-avancee { display: flex; flex-direction: column; gap: 7px; }
-.fiche-avancee .jauge { height: 6px; }
-
-.fiche-commandes {
+.fiche-avancee {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 14px;
-  border-top: 2px solid var(--ligne-douce);
+  flex: 1 1 220px;
+  min-width: 180px;
 }
 
-.commande {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 12px;
-  color: var(--gris);
-}
+.fiche-avancee .jauge { height: 6px; }
 
-.commande kbd {
-  flex: none;
-  min-width: 58px;
-  text-align: center;
-  font: 600 10.5px var(--mono);
-  padding: 4px 6px;
-  color: var(--encre);
-  background: var(--ivoire);
-  border: 2px solid var(--ligne);
-  border-radius: var(--rayon-petit);
-}
+.fiche-soldes { display: flex; gap: 20px; flex-wrap: wrap; }
 
 /* Les destinations : une grande carte pour l'action principale, le reste en
    grille régulière. */
 .menu-grille {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
   gap: 14px;
   align-content: start;
 }
 
-.destination.principale { grid-column: span 3; }
+.destination.principale { grid-column: span 3; min-height: 0; }
 
 .destination-haut {
   display: flex;
@@ -820,9 +793,8 @@
 .hud-retour:hover { color: var(--encre); border-color: var(--argent); }
 .hud-retour:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
 
-@media (max-width: 1040px) {
-  .menu-corps { grid-template-columns: 1fr; }
-  .menu-fiche { order: 2; }
+@media (max-width: 640px) {
+  .menu-fiche { gap: 14px; padding: 11px 14px; }
 }
 
 @media (max-width: 720px) {
@@ -2986,3 +2958,83 @@
   font-family: var(--ui);
   color: var(--encre);
 }
+
+/* ---------- Raids ---------- */
+
+.raids-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.raid-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  text-align: left;
+  background: var(--blanc);
+  border: 3px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.raid-carte:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--ombre-portee); }
+.raid-carte:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+
+.raid-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.raid-butin {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 2px solid var(--ligne-douce);
+}
+
+.raid-drop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--corps);
+  font-size: 12.5px;
+}
+
+/* Le taux est la seule chose qu'on vient vraiment lire : il est aligné à
+   droite pour se comparer d'une ligne à l'autre. */
+.raid-drop code { margin-left: auto; font-family: var(--mono); font-size: 11px; }
+
+.raid-glyphe { font-size: 15px; line-height: 1; }
+
+/* ---------- Récolte automatique ---------- */
+
+/*
+ * Le bouton vit dans le coin de la case, pas à côté : la grille des quarante
+ * lieux est déjà dense, et une colonne de plus l'aurait cassée.
+ */
+.campagne-auto {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-content: center;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--blanc);
+  background: var(--bleu);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+  padding: 0;
+}
+
+.campagne-auto:hover { filter: brightness(1.15); }
+.campagne-auto:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+.campagne-case { position: relative; }

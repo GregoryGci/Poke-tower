@@ -15,10 +15,11 @@
  * dans data/upgrades, l'écran ne fait qu'appeler et réafficher.
  */
 
-import { getSpecies, lignee, rareteDe } from '@/data/content';
+import { evolutionParNiveau, getSpecies, lignee, rareteDe } from '@/data/content';
 import { prochaineEvolution } from '@/data/evolution';
 import { analyseAffinites } from '@/data/affinites';
 import { bonbonsDisponibles, donnerBonbon } from '@/data/bonbons';
+import { employerPierre, pierresUtiles } from '@/data/pierres';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
 import { PALIER_MAX } from '@/data/paliers';
@@ -376,10 +377,9 @@ function remplirDetail(
       elem('span', 'etiquette', `N°${String(forme.dexNumber).padStart(3, '0')}`),
       elem('b', undefined, forme.name)
     );
-    if (precedente?.evolution) {
-      etape.appendChild(
-        elem('span', 'lignee-niveau', `niveau ${precedente.evolution.niveau}`)
-      );
+    const parNiveau = precedente ? evolutionParNiveau(precedente) : null;
+    if (parNiveau) {
+      etape.appendChild(elem('span', 'lignee-niveau', `niveau ${parNiveau.niveau}`));
     }
     blocLignee.appendChild(etape);
   });
@@ -432,6 +432,40 @@ function remplirDetail(
     bonbons.appendChild(bouton);
   }
 
+  // --- Pierres
+  //
+  // N'apparaissent que pour les Pokémon qui en emploient une : proposer une
+  // Pierre Eau sur un Machoc ne ferait que du bruit. Le choix est
+  // irréversible — c'est le seul du jeu — donc chaque option annonce la forme
+  // qu'elle donne avant qu'on clique.
+  const voies = pierresUtiles(compte, owned);
+  const blocPierres = voies.length ? elem('div', 'bonbons') : null;
+  for (const voie of voies) {
+    const bouton = elem('button', 'bonbon');
+    bouton.type = 'button';
+    bouton.id = `pierre-${voie.modele.id}`;
+    bouton.disabled = voie.quantite < 1;
+    bouton.title =
+      voie.quantite < 1
+        ? `${voie.modele.name} — il n’en tombe que dans les raids`
+        : `Évoluer en ${voie.forme.name}. Irréversible.`;
+
+    const gauche = elem('div');
+    gauche.append(
+      elem('span', 'raid-glyphe', voie.modele.glyphe),
+      elem('b', undefined, voie.modele.name),
+      elem('span', 'lignee-niveau', ` → ${voie.forme.name}`)
+    );
+    bouton.append(gauche, elem('span', 'bonbon-quantite', `×${voie.quantite}`));
+    bouton.addEventListener('click', () => {
+      const usage = employerPierre(compte, owned, voie.modele.id);
+      if (!usage.ok || !usage.forme) return;
+      surChangement();
+      void alerterEvolution([usage.forme.name, ...usage.suite.map((e) => e.name)]);
+    });
+    blocPierres!.appendChild(bouton);
+  }
+
   // --- Affinités
   //
   // La table des types décide de la moitié des dégâts du jeu : elle doit être
@@ -466,6 +500,11 @@ function remplirDetail(
     bloc('Lignée', blocLignee, noteLignee),
     bloc('Bonbons', bonbons)
   );
+  if (blocPierres) {
+    panneau.appendChild(
+      bloc('Pierres — choix définitif', blocPierres, elem('span', 'bloc-note', 'Butin de raid'))
+    );
+  }
 }
 
 /** Affiche l'équipe et rend la main au retour. */

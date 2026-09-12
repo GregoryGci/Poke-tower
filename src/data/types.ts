@@ -71,6 +71,29 @@ export interface Trait {
   effect: TraitEffect;
 }
 
+/**
+ * Une évolution, et sa condition.
+ *
+ * Deux formes, et la distinction porte tout le reste du système :
+ *
+ *  - **par niveau** : elle se déclenche toute seule quand l'expérience passe
+ *    le palier. C'est le cas ordinaire ;
+ *  - **par pierre** : elle demande un objet, et le joueur décide quand — et
+ *    surtout **laquelle**, quand il y en a plusieurs. La pierre ne tombe que
+ *    dans un raid dédié, à taux faible : c'est ce qui fait d'un Aquali autre
+ *    chose qu'un palier de plus.
+ */
+export type Evolution =
+  | { into: string; niveau: number }
+  | { into: string; pierre: string };
+
+/** Vrai pour une évolution qui se déclenche à l'expérience. */
+export function estEvolutionNiveau(
+  evolution: Evolution
+): evolution is { into: string; niveau: number } {
+  return 'niveau' in evolution;
+}
+
 export const STAT_TYPES = ['pv', 'atk', 'def', 'atkSpe', 'defSpe', 'vitesse'] as const;
 export type StatType = (typeof STAT_TYPES)[number];
 
@@ -144,13 +167,14 @@ export interface Species {
   /** Auto-attaques réellement apprenables par l'espèce. */
   movepool: string[];
   /**
-   * Stade suivant de la lignée, et le niveau auquel on y passe.
+   * Évolutions possibles. Vide quand la lignée s'arrête là.
    *
-   * L'évolution est **acquise et définitive** : elle vient de l'expérience,
-   * comme dans les jeux d'origine, et non d'un achat en cours de manche. Un
-   * Pokémon évolué le reste.
+   * C'est une **liste** et non une case unique parce que toutes les lignées
+   * ne sont pas linéaires : Évoli a trois suites, chacune derrière sa propre
+   * pierre. Une case unique aurait obligé à choisir laquelle des trois
+   * mériterait d'exister.
    */
-  evolution: { into: string; niveau: number } | null;
+  evolutions: readonly Evolution[];
   /** Nom du fichier .glb dans public/models, sans extension. */
   model: string;
   /**
@@ -305,6 +329,44 @@ export interface Progression {
   tutorialDone: boolean;
   /** Niveaux terminés, pour ne pas re-donner les récompenses de première fois. */
   clearedLevels: string[];
+  /**
+   * Niveaux tenus **sans perdre un seul point de vie**.
+   *
+   * C'est ce qui ouvre la récolte automatique : refaire à la main un niveau
+   * qu'on a déjà tenu parfaitement n'apprend plus rien au joueur et ne lui
+   * demande plus rien. Le critère est volontairement strict — une victoire
+   * avec neuf vies sur dix ne suffit pas. Un niveau « maîtrisé » doit l'être.
+   */
+  perfectLevels: string[];
+  /** Expérience du dresseur lui-même, cumulée sur toutes les manches. */
+  dresseurXp: number;
+}
+
+/**
+ * Expérience nécessaire pour quitter ce niveau de dresseur.
+ *
+ * Plus raide que celle des Pokémon : le niveau de dresseur ne débloque rien
+ * en soi, il mesure le temps passé. Il doit donc monter assez lentement pour
+ * rester un repère, pas assez vite pour devenir un objectif.
+ */
+export function xpDresseurRequise(niveau: number): number {
+  return Math.round(300 * Math.pow(niveau, 1.35));
+}
+
+/** Niveau du dresseur et avancée dans le palier courant, à partir du cumul. */
+export function niveauDresseur(xpTotal: number): {
+  niveau: number;
+  xp: number;
+  requis: number;
+} {
+  let niveau = 1;
+  let reste = Math.max(0, Math.round(xpTotal));
+  for (;;) {
+    const requis = xpDresseurRequise(niveau);
+    if (reste < requis || niveau > 200) return { niveau, xp: reste, requis };
+    reste -= requis;
+    niveau += 1;
+  }
 }
 
 export interface PlayerAccount {
@@ -341,7 +403,14 @@ export function emptyAccount(id: string): PlayerAccount {
     trainerName: '',
     crystals: 0,
     inventory: [],
-    progression: { storyLevel: 1, raidUnlocked: false, tutorialDone: false, clearedLevels: [] },
+    progression: {
+      storyLevel: 1,
+      raidUnlocked: false,
+      tutorialDone: false,
+      clearedLevels: [],
+      perfectLevels: [],
+      dresseurXp: 0,
+    },
     updatedAt: Date.now(),
   };
 }

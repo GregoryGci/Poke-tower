@@ -2,15 +2,15 @@
  * Menu principal.
  *
  * C'est le point fixe du jeu : on y revient après chaque manche, et c'est le
- * seul écran qu'on revoit des dizaines de fois. Il est donc organisé autour
- * de deux choses et pas plus — **où on en est**, et **où on va**.
+ * seul écran qu'on revoit des dizaines de fois.
  *
- * À gauche, la carte du dresseur : le nom, le partenaire, les soldes, et
- * l'avancée de campagne sous forme de jauge. Ces chiffres étaient auparavant
- * alignés dans un bandeau au-dessus des destinations, où ils se lisaient comme
- * une barre d'outils alors que ce sont eux qu'on vient vérifier.
+ * En haut, une bande étroite : le pseudo, la barre d'expérience du dresseur,
+ * et les monnaies. Elle a remplacé une grande carte latérale qui portait en
+ * plus le partenaire, la jauge de campagne et le rappel des commandes — trop
+ * de choses, et surtout au mauvais endroit : les soldes s'y noyaient alors
+ * qu'ils sont la première chose qu'on vient vérifier en rentrant d'une manche.
  *
- * À droite, les destinations. Chacune porte un glyphe : en pixel art, une
+ * En dessous, les destinations. Chacune porte un glyphe : en pixel art, une
  * forme se reconnaît plus vite qu'un titre, et la grille se parcourt d'un
  * coup d'oeil une fois qu'on la connaît. Les sections verrouillées restent
  * visibles — le joueur doit voir où mène sa progression, pas découvrir des
@@ -21,6 +21,10 @@
 
 import { getSpecies } from '@/data/content';
 import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
+import { RAIDS, raidOuvert } from '@/data/raids';
+import { pierresDisponibles } from '@/data/pierres';
+import { bonbonsDisponibles } from '@/data/bonbons';
+import { niveauDresseur } from '@/data/types';
 import { pastillePokemon } from './pastille';
 import type { PlayerAccount } from '@/data/types';
 
@@ -107,32 +111,27 @@ const CARTES: Carte[] = [
     etiquette: 'Compétitif',
     titre: 'Arène',
     description:
-      'Six vagues d’affilée, une par Pokémon du champion d’arène — le sixième est son ace. Pas de route : un siège long, sans reprendre son souffle entre deux vagues. Posé pour ne pas perdre l’idée, rien n’est encore jouable.',
+      'Six vagues d’affilée, une par Pokémon du champion — le sixième est son ace. Pas de route, et aucun répit entre deux vagues.',
     verrou: () => 'À construire',
   },
   {
     id: 'raid',
     glyphe: '◎',
-    etiquette: 'Coopération',
-    titre: 'Raids à deux',
-    description: 'Affronte des vagues renforcées avec un ami.',
-    verrou: (compte) => (compte.progression.raidUnlocked ? null : 'Bientôt'),
+    etiquette: 'Chasse',
+    titre: 'Raids',
+    description:
+      'Des vagues renforcées, sans répit. Le seul endroit d’où tombent les pierres d’évolution.',
+    verrou: (compte) => {
+      const ouvert = RAIDS.some((raid) =>
+        raidOuvert(raid, compte.progression.clearedLevels.length)
+      );
+      if (ouvert) return null;
+      const prochain = Math.min(...RAIDS.map((raid) => raid.requis));
+      return `${prochain} lieux requis`;
+    },
+    pied: (compte) =>
+      `${RAIDS.filter((raid) => raidOuvert(raid, compte.progression.clearedLevels.length)).length}/${RAIDS.length} ouverts`,
   },
-];
-
-/**
- * Rappel des commandes.
- *
- * Il vit dans le menu et non dans la manche : pendant une vague, personne ne
- * lit un pavé d'aide, et le tutoriel ne passe qu'une fois. C'est le seul
- * endroit où on peut revenir vérifier une touche au calme.
- */
-const COMMANDES: Array<[string, string]> = [
-  ['ZQSD', 'Déplacer le dresseur'],
-  ['Clic', 'Aller là-bas, ou ouvrir un Pokémon posé'],
-  ['A / E', 'Tourner la vue autour de soi'],
-  ['Glisser', 'Tourner et zoomer'],
-  ['R', 'Remettre la vue d’aplomb'],
 ];
 
 function elem<K extends keyof HTMLElementTagNameMap>(
@@ -157,51 +156,46 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
   const racine = elem('div', 'menu');
   const starter = compte.starterId ? getSpecies(compte.starterId).name : null;
 
-  /* ---- Carte du dresseur ---- */
+  /* ---- Bande du dresseur : pseudo, expérience, monnaies ---- */
 
-  const fiche = elem('aside', 'menu-fiche');
+  const fiche = elem('header', 'menu-fiche');
 
   const identite = elem('div', 'fiche-identite');
-  identite.append(
+  if (starter) identite.appendChild(pastillePokemon(compte.starterId!));
+  const nom = elem('div');
+  nom.append(
     elem('p', 'etiquette', 'Dresseur'),
-    elem('h1', 'titre titre-l', compte.trainerName || 'Sans nom')
+    elem('h1', 'titre titre-m', compte.trainerName || 'Sans nom')
   );
-  if (starter) {
-    const pastille = pastillePokemon(compte.starterId!);
-    const partenaire = elem('div', 'fiche-partenaire');
-    partenaire.append(pastille, elem('span', undefined, `Partenaire : ${starter}`));
-    identite.appendChild(partenaire);
-  }
+  identite.appendChild(nom);
 
-  const soldes = elem('div', 'fiche-soldes');
-  soldes.append(
-    solde('Cristaux', String(compte.crystals)),
-    solde('Équipe', `${compte.team.length}/6`),
-    solde('Collection', String(compte.roster.length))
-  );
-
-  // La campagne en jauge plutôt qu'en fraction : « 7/40 » demande de faire la
-  // division soi-même pour savoir où on en est.
-  const faits = compte.progression.clearedLevels.length;
+  // L'expérience du dresseur en jauge plutôt qu'en chiffres : c'est un
+  // repère de temps passé, pas une valeur qu'on compare.
+  const rang = niveauDresseur(compte.progression.dresseurXp ?? 0);
   const avancee = elem('div', 'fiche-avancee');
   const jauge = elem('div', 'jauge');
   const remplissage = elem('i');
-  remplissage.style.width = `${NIVEAUX.length ? (faits / NIVEAUX.length) * 100 : 0}%`;
+  remplissage.style.width = `${rang.requis > 0 ? Math.min(100, (rang.xp / rang.requis) * 100) : 0}%`;
   jauge.appendChild(remplissage);
   avancee.append(
-    elem('p', 'etiquette', `Campagne — ${faits}/${NIVEAUX.length} lieux`),
+    elem('p', 'etiquette', `Niveau ${rang.niveau} — ${rang.xp} / ${rang.requis} XP`),
     jauge
   );
 
-  const commandes = elem('div', 'fiche-commandes');
-  commandes.appendChild(elem('p', 'etiquette', 'Commandes'));
-  for (const [touche, role] of COMMANDES) {
-    const ligne = elem('div', 'commande');
-    ligne.append(elem('kbd', undefined, touche), elem('span', undefined, role));
-    commandes.appendChild(ligne);
+  // Les monnaies, toutes visibles d'un coup : c'est la première chose qu'on
+  // regarde en rentrant d'une manche, et elles avaient disparu de cet écran.
+  const soldes = elem('div', 'fiche-soldes');
+  soldes.append(solde('Cristaux', String(compte.crystals)));
+  for (const { modele, quantite } of pierresDisponibles(compte)) {
+    soldes.appendChild(solde(modele.name, String(quantite)));
   }
+  const bonbons = bonbonsDisponibles(compte).reduce(
+    (total, entree) => total + entree.item.quantity,
+    0
+  );
+  if (bonbons > 0) soldes.appendChild(solde('Bonbons', String(bonbons)));
 
-  fiche.append(identite, soldes, avancee, commandes);
+  fiche.append(identite, avancee, soldes);
 
   /* ---- Destinations ---- */
 

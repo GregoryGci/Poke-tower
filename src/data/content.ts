@@ -17,6 +17,7 @@
  *    Un Grolem reste un lanceur de zone, avec un peu plus d'allonge.
  */
 
+import { estEvolutionNiveau } from './types';
 import type { Move, Rarity, Species, Trait, BaseStats, PokemonType } from './types';
 
 /**
@@ -127,37 +128,37 @@ const BASES: Record<string, Species> = {
     id: 'bulbasaur', dexNumber: 1, name: 'Bulbizarre', types: ['plante', 'poison'],
     baseStats: stats(45, 49, 49, 65, 65, 45), rarity: 'legendaire',
     range: 7.5, style: 'ligne', movepool: ['charge', 'fouet_lianes', 'tranch_herbe', 'dard_venin'],
-    evolution: { into: 'ivysaur', niveau: 16 }, model: 'bulbasaur', height: 1.07,
+    evolutions: [{ into: 'ivysaur', niveau: 16 }], model: 'bulbasaur', height: 1.07,
   },
   charmander: {
     id: 'charmander', dexNumber: 4, name: 'Salamèche', types: ['feu'],
     baseStats: stats(39, 52, 43, 60, 50, 65), rarity: 'legendaire',
     range: 5.2, style: 'zone', movepool: ['griffe', 'flammeche', 'morsure', 'vive_attaque'],
-    evolution: { into: 'charmeleon', niveau: 16 }, model: 'charmander', height: 1.31,
+    evolutions: [{ into: 'charmeleon', niveau: 16 }], model: 'charmander', height: 1.31,
   },
   squirtle: {
     id: 'squirtle', dexNumber: 7, name: 'Carapuce', types: ['eau'],
     baseStats: stats(44, 48, 65, 50, 64, 43), rarity: 'legendaire',
     range: 8.5, style: 'unique', movepool: ['charge', 'pistolet_a_o', 'morsure', 'ecras_face'],
-    evolution: { into: 'wartortle', niveau: 16 }, model: 'squirtle', height: 1.17,
+    evolutions: [{ into: 'wartortle', niveau: 16 }], model: 'squirtle', height: 1.17,
   },
   treecko: {
     id: 'treecko', dexNumber: 252, name: 'Arcko', types: ['plante'],
     baseStats: stats(40, 45, 35, 65, 55, 70), rarity: 'legendaire',
     range: 6.4, style: 'unique', movepool: ['charge', 'fouet_lianes', 'tranch_herbe', 'vive_attaque'],
-    evolution: { into: 'grovyle', niveau: 16 }, model: 'treecko', height: 1.53,
+    evolutions: [{ into: 'grovyle', niveau: 16 }], model: 'treecko', height: 1.53,
   },
   torchic: {
     id: 'torchic', dexNumber: 255, name: 'Poussifeu', types: ['feu'],
     baseStats: stats(45, 60, 40, 70, 50, 45), rarity: 'legendaire',
     range: 5, style: 'zone', movepool: ['griffe', 'flammeche', 'vive_attaque', 'ecras_face'],
-    evolution: { into: 'combusken', niveau: 16 }, model: 'torchic', height: 1.45,
+    evolutions: [{ into: 'combusken', niveau: 16 }], model: 'torchic', height: 1.45,
   },
   mudkip: {
     id: 'mudkip', dexNumber: 258, name: 'Gobou', types: ['eau'],
     baseStats: stats(50, 70, 50, 50, 50, 40), rarity: 'legendaire',
     range: 3, style: 'cac', movepool: ['charge', 'pistolet_a_o', 'morsure'],
-    evolution: { into: 'marshtomp', niveau: 16 }, model: 'mudkip', height: 1.41,
+    evolutions: [{ into: 'marshtomp', niveau: 16 }], model: 'mudkip', height: 1.41,
   },
 
   // --- Épiques : les gros cogneurs sauvages
@@ -165,13 +166,13 @@ const BASES: Record<string, Species> = {
     id: 'geodude', dexNumber: 74, name: 'Racaillou', types: ['roche', 'sol'],
     baseStats: stats(40, 80, 100, 30, 30, 20), rarity: 'epique',
     range: 4.8, style: 'zone', movepool: ['charge', 'jet_pierres', 'eclate_roc', 'ecras_face'],
-    evolution: { into: 'graveler', niveau: 25 }, model: 'geodude', height: 0.55,
+    evolutions: [{ into: 'graveler', niveau: 25 }], model: 'geodude', height: 0.55,
   },
   machop: {
     id: 'machop', dexNumber: 66, name: 'Machoc', types: ['combat'],
     baseStats: stats(70, 80, 50, 35, 35, 35), rarity: 'epique',
     range: 2.8, style: 'cac', movepool: ['eclate_roc', 'balayage', 'ecras_face', 'charge'],
-    evolution: { into: 'machoke', niveau: 28 }, model: 'machop', height: 1.47,
+    evolutions: [{ into: 'machoke', niveau: 28 }], model: 'machop', height: 1.47,
   },
 
   // --- Rares : la faune ordinaire des routes
@@ -179,19 +180,19 @@ const BASES: Record<string, Species> = {
     id: 'zigzagoon', dexNumber: 263, name: 'Zigzaton', types: ['normal'],
     baseStats: stats(38, 30, 41, 30, 41, 60), rarity: 'rare',
     range: 3.4, style: 'cac', movepool: ['charge', 'morsure', 'vive_attaque'],
-    evolution: { into: 'linoone', niveau: 20 }, model: 'zigzagoon', height: 0.71,
+    evolutions: [{ into: 'linoone', niveau: 20 }], model: 'zigzagoon', height: 0.71,
   },
   pidgey: {
     id: 'pidgey', dexNumber: 16, name: 'Roucool', types: ['normal', 'vol'],
     baseStats: stats(40, 45, 40, 35, 35, 56), rarity: 'rare',
     range: 9, style: 'unique', movepool: ['charge', 'tornade', 'vive_attaque'],
-    evolution: { into: 'pidgeotto', niveau: 18 }, model: 'pidgey', height: 0.89,
+    evolutions: [{ into: 'pidgeotto', niveau: 18 }], model: 'pidgey', height: 0.89,
   },
   rattata: {
     id: 'rattata', dexNumber: 19, name: 'Rattata', types: ['normal'],
     baseStats: stats(30, 56, 35, 25, 35, 72), rarity: 'rare',
     range: 3, style: 'cac', movepool: ['charge', 'morsure', 'vive_attaque'],
-    evolution: { into: 'raticate', niveau: 20 }, model: 'rattata', height: 0.81,
+    evolutions: [{ into: 'raticate', niveau: 20 }], model: 'rattata', height: 0.81,
   },
 
   // --- Normaux : les premières rencontres
@@ -199,25 +200,60 @@ const BASES: Record<string, Species> = {
     id: 'weedle', dexNumber: 13, name: 'Aspicot', types: ['insecte', 'poison'],
     baseStats: stats(40, 35, 30, 20, 20, 50), rarity: 'normal',
     range: 6.8, style: 'ligne', movepool: ['piqure', 'dard_venin'],
-    evolution: { into: 'kakuna', niveau: 7 }, model: 'weedle', height: 1.22,
+    evolutions: [{ into: 'kakuna', niveau: 7 }], model: 'weedle', height: 1.22,
   },
   caterpie: {
     id: 'caterpie', dexNumber: 10, name: 'Chenipan', types: ['insecte'],
     baseStats: stats(45, 30, 35, 20, 20, 45), rarity: 'normal',
     range: 4.2, style: 'zone', movepool: ['charge', 'piqure'],
-    evolution: { into: 'metapod', niveau: 7 }, model: 'caterpie', height: 1.17,
+    evolutions: [{ into: 'metapod', niveau: 7 }], model: 'caterpie', height: 1.17,
   },
   wurmple: {
     id: 'wurmple', dexNumber: 265, name: 'Chenipotte', types: ['insecte'],
     baseStats: stats(45, 45, 35, 20, 30, 20), rarity: 'normal',
     range: 4.6, style: 'zone', movepool: ['charge', 'piqure', 'dard_venin'],
-    evolution: { into: 'silcoon', niveau: 7 }, model: 'wurmple', height: 0.6,
+    evolutions: [{ into: 'silcoon', niveau: 7 }], model: 'wurmple', height: 0.6,
   },
   poochyena: {
     id: 'poochyena', dexNumber: 261, name: 'Medhyèna', types: ['tenebres'],
     baseStats: stats(35, 55, 35, 30, 30, 35), rarity: 'normal',
     range: 3.2, style: 'cac', movepool: ['charge', 'morsure'],
-    evolution: { into: 'mightyena', niveau: 18 }, model: 'poochyena', height: 1.29,
+    evolutions: [{ into: 'mightyena', niveau: 18 }], model: 'poochyena', height: 1.29,
+  },
+
+  // --- Évoli : la lignée à pierres
+  //
+  // Il n'évolue à aucun niveau. Ses trois suites demandent chacune une
+  // pierre, qui ne tombe que dans un raid dédié : c'est le seul Pokémon du
+  // jeu dont on **choisit** la forme finale, et ce choix est irréversible.
+  eevee: {
+    id: 'eevee', dexNumber: 133, name: 'Évoli', types: ['normal'],
+    baseStats: stats(55, 55, 50, 45, 65, 55), rarity: 'epique',
+    range: 4.4, style: 'cac', movepool: ['charge', 'morsure', 'vive_attaque', 'ecras_face'],
+    evolutions: [
+      { into: 'vaporeon', pierre: 'pierre-eau' },
+      { into: 'jolteon', pierre: 'pierre-foudre' },
+      { into: 'flareon', pierre: 'pierre-feu' },
+    ],
+    model: 'eevee', height: 1.2,
+  },
+  vaporeon: {
+    id: 'vaporeon', dexNumber: 134, name: 'Aquali', types: ['eau'],
+    baseStats: stats(130, 65, 60, 110, 95, 65), rarity: 'epique',
+    range: 8.6, style: 'unique', movepool: ['pistolet_a_o', 'charge', 'morsure'],
+    evolutions: [], model: 'vaporeon', height: 1.79,
+  },
+  jolteon: {
+    id: 'jolteon', dexNumber: 135, name: 'Voltali', types: ['electrik'],
+    baseStats: stats(65, 65, 60, 110, 95, 130), rarity: 'epique',
+    range: 7.8, style: 'ligne', movepool: ['charge', 'vive_attaque', 'morsure'],
+    evolutions: [], model: 'jolteon', height: 1.43,
+  },
+  flareon: {
+    id: 'flareon', dexNumber: 136, name: 'Pyroli', types: ['feu'],
+    baseStats: stats(65, 130, 60, 95, 110, 65), rarity: 'epique',
+    range: 5.4, style: 'zone', movepool: ['flammeche', 'morsure', 'griffe'],
+    evolutions: [], model: 'flareon', height: 1.5,
   },
 
   // --- Prismatique : le premier Pokémon unique
@@ -229,7 +265,7 @@ const BASES: Record<string, Species> = {
     id: 'rayquaza', dexNumber: 384, name: 'Rayquaza', types: ['dragon', 'vol'],
     baseStats: stats(105, 150, 90, 150, 90, 95), rarity: 'prismatique',
     range: 11, style: 'ligne', movepool: ['draco_griffe', 'tornade', 'ecras_face'],
-    evolution: null, model: 'rayquaza', height: 1.5, echelle: 0.4,
+    evolutions: [], model: 'rayquaza', height: 1.5, echelle: 0.4,
   },
 };
 
@@ -347,9 +383,9 @@ export const SPECIES: Record<string, Species> = (() => {
         range: Math.round(base.range * (1 + 0.08 * (rang + 1)) * 10) / 10,
         style: base.style,
         movepool: base.movepool,
-        evolution: stade.evolution
-          ? { into: stade.evolution, niveau: stades[rang + 1]?.niveau ?? 99 }
-          : null,
+        evolutions: stade.evolution
+          ? [{ into: stade.evolution, niveau: stades[rang + 1]?.niveau ?? 99 }]
+          : [],
         model: stade.id,
         height: stade.height,
       };
@@ -372,13 +408,23 @@ export interface StarterCase {
   starters: [string, string, string];
 }
 
+/**
+ * Une seule valise, et c'est un choix.
+ *
+ * Le premier ecran du jeu proposait deux regions, donc six starters et un
+ * selecteur pour passer de l'une a l'autre. C'est deja une decision a prendre
+ * avant d'avoir vu la moindre regle. Les trois de Kanto suffisent : ce sont
+ * les plus reconnaissables, et trois options se comparent d'un coup d'oeil la
+ * ou six demandent de naviguer.
+ *
+ * Les starters de Hoenn restent au catalogue et sortent au portail.
+ */
 export const STARTER_CASES: StarterCase[] = [
   { id: 'kanto', region: 'Kanto', starters: ['bulbasaur', 'charmander', 'squirtle'] },
-  { id: 'hoenn', region: 'Hoenn', starters: ['treecko', 'torchic', 'mudkip'] },
 ];
 
 /** Starters de la valise ouverte par défaut. */
-export const STARTER_IDS = STARTER_CASES[1]!.starters;
+export const STARTER_IDS = STARTER_CASES[0]!.starters;
 
 /** Espèces utilisées comme ennemis dans les vagues. */
 export const ENEMY_IDS = ['rattata', 'pidgey', 'caterpie', 'weedle', 'zigzagoon', 'poochyena', 'wurmple', 'geodude', 'machop'] as const;
@@ -390,7 +436,16 @@ export const ENEMY_IDS = ['rattata', 'pidgey', 'caterpie', 'weedle', 'zigzagoon'
  * un Pokémon de niveau. Les invoquer directement viderait la progression de
  * son intérêt.
  */
-export const ESPECES_OBTENABLES = Object.keys(BASES);
+/**
+ * Espèces obtenues autrement qu'au portail.
+ *
+ * Les trois évolutions d'Évoli vivent dans BASES — elles n'ont pas de
+ * pré-évolution par niveau, donc pas de lignée au sens du générateur — mais
+ * les invoquer directement rendrait les pierres inutiles.
+ */
+const HORS_PORTAIL = new Set(['vaporeon', 'jolteon', 'flareon']);
+
+export const ESPECES_OBTENABLES = Object.keys(BASES).filter((id) => !HORS_PORTAIL.has(id));
 
 export function getSpecies(id: string): Species {
   const species = SPECIES[id];
@@ -420,18 +475,39 @@ export function especesDeRarete(rarity: Rarity): string[] {
   return ESPECES_OBTENABLES.filter((id) => getSpecies(id).rarity === rarity);
 }
 
+/** L'évolution par niveau d'une espèce, s'il y en a une. */
+export function evolutionParNiveau(species: Species): { into: string; niveau: number } | null {
+  for (const evolution of species.evolutions) {
+    if (estEvolutionNiveau(evolution)) return evolution;
+  }
+  return null;
+}
+
+/** Les évolutions par pierre d'une espèce. */
+export function evolutionsParPierre(species: Species): Array<{ into: string; pierre: string }> {
+  return species.evolutions.filter(
+    (evolution): evolution is { into: string; pierre: string } => !estEvolutionNiveau(evolution)
+  );
+}
+
 /**
- * Toute la lignée d'une espèce, de sa base à son dernier stade.
+ * La lignée d'une espèce, de sa base à son dernier stade.
  *
- * Sert à afficher une fiche, et à retrouver la base d'un stade évolué.
+ * Elle suit les évolutions **par niveau** : c'est la chaîne linéaire, celle
+ * qui arrive toute seule. Les embranchements à pierre sont listés à part —
+ * les afficher en ligne obligerait à choisir laquelle des trois suites
+ * d'Évoli est « la » lignée, ce qui n'a pas de sens.
  */
 export function lignee(speciesId: string): Species[] {
   const base = baseDeLaLignee(speciesId);
   const suite: Species[] = [base];
   let courante = base;
-  while (courante.evolution) {
-    courante = getSpecies(courante.evolution.into);
+  for (;;) {
+    const etape = evolutionParNiveau(courante);
+    if (!etape) break;
+    courante = getSpecies(etape.into);
     suite.push(courante);
+    if (suite.length > 8) break;
   }
   return suite;
 }

@@ -25,6 +25,11 @@ import { ouvrirCollection } from '@/ui/collection';
 import { ouvrirArmes } from '@/ui/weapons';
 import { ouvrirCampagne } from '@/ui/campaign';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
+import { butinDuRaid, niveauDuRaid, type Raid } from '@/data/raids';
+import { ajouterPierres, getPierre } from '@/data/pierres';
+import { recolter } from '@/data/recolte';
+import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
+import { ouvrirRaids } from '@/ui/raids';
 import { demanderNomDresseur } from '@/ui/creation';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
@@ -103,7 +108,7 @@ function armeEquipee(compte: typeof account.account): OwnedWeapon | null {
 /* ---------- Une manche ---------- */
 
 /** Joue une manche et rend la main quand le joueur la quitte. */
-async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
+async function jouerManche(niveau: Niveau, tutoriel: boolean, raid: Raid | null = null): Promise<void> {
   input.reset();
 
   // Le ciel suit le monde : le Mont Braise ne peut pas avoir le fond clair de
@@ -254,14 +259,62 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
   // de laisser farmer les niveaux faciles sans casser la progression.
   if (bilanFinal.outcome === 'victoire' && !tutoriel) {
     const progression = account.account.progression;
-    if (!progression.clearedLevels.includes(niveau.id)) {
-      progression.clearedLevels.push(niveau.id);
-    }
-    if (niveau.index >= progression.storyLevel) {
-      progression.storyLevel = niveau.index + 1;
+
+    // L'expérience du dresseur suit les manches, gagnées ou non : c'est un
+    // compteur de temps passé, pas une récompense de performance.
+    progression.dresseurXp =
+      (progression.dresseurXp ?? 0) + 40 + niveau.index * 12;
+
+    if (raid) {
+      // Le butin d'un raid est tiré ici et nulle part ailleurs : c'est la
+      // seule source de pierres du jeu.
+      const pierres = butinDuRaid(raid);
+      for (const pierreId of pierres) ajouterPierres(account.account, pierreId, 1);
+      if (pierres.length) {
+        const noms = pierres.map((id) => getPierre(id)?.name ?? id).join(', ');
+        await alerterButin(noms);
+      }
+    } else {
+      if (!progression.clearedLevels.includes(niveau.id)) {
+        progression.clearedLevels.push(niveau.id);
+      }
+      if (niveau.index >= progression.storyLevel) {
+        progression.storyLevel = niveau.index + 1;
+      }
+
+      // Une manche tenue sans perdre une seule vie ouvre la récolte
+      // automatique de ce lieu. Le critère porte sur `leaked` et non sur les
+      // vies affichées : c'est le compteur brut, il ne peut pas mentir.
+      progression.perfectLevels = progression.perfectLevels ?? [];
+      if (bilanFinal.leaked === 0 && !progression.perfectLevels.includes(niveau.id)) {
+        progression.perfectLevels.push(niveau.id);
+      }
     }
   }
   await account.flush();
+}
+
+/**
+ * Annonce le résultat d'une récolte automatique.
+ *
+ * Même cadre que l'annonce d'évolution, et c'est voulu : inventer une
+ * seconde fenêtre modale pour trois chiffres aurait ajouté un vocabulaire
+ * visuel de plus sans rien clarifier.
+ */
+async function alerterRecolte(
+  lieu: string,
+  cristaux: number,
+  xp: number,
+  bonbons: number
+): Promise<void> {
+  const lignes = [`+${cristaux} cristaux`, `+${xp} XP par Pokémon de l’équipe`];
+  if (bonbons > 0) lignes.push(`+${bonbons} bonbon${bonbons > 1 ? 's' : ''}`);
+  await alerterInfo('Récolte automatique', lieu, lignes);
+}
+
+/** Annonce les pierres tombées d'un raid. */
+async function alerterButin(noms: string): Promise<void> {
+  await alerterInfo('Butin du raid', noms);
 }
 
 /* ---------- Enchaînement des écrans ---------- */
@@ -287,7 +340,17 @@ for (;;) {
       continue;
     }
     const choix = await ouvrirCampagne(account.account);
-    if (choix) await jouerManche(choix, false);
+    if (!choix) continue;
+    if (choix.auto) {
+      const gains = recolter(account.account, choix.niveau);
+      await account.flush();
+      await alerterRecolte(choix.niveau.nom, gains.cristaux, gains.xpParPokemon, gains.bonbons.length);
+      if (gains.evolutions.length) {
+        await alerterEvolution(gains.evolutions.map((espece) => espece.name));
+      }
+      continue;
+    }
+    await jouerManche(choix.niveau, false);
     continue;
   }
 
@@ -308,6 +371,12 @@ for (;;) {
 
   if (destination === 'invocation') {
     await ouvrirInvocation(account);
+    continue;
+  }
+
+  if (destination === 'raid') {
+    const raid = await ouvrirRaids(account.account);
+    if (raid) await jouerManche(niveauDuRaid(raid), false, raid);
     continue;
   }
 

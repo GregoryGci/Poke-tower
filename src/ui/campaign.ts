@@ -39,11 +39,24 @@ const MARQUE: Record<Niveau['sorte'], string> = {
 };
 
 /**
+ * Ce que le joueur a choisi de faire d'un lieu.
+ *
+ * Deux façons de le jouer, et la seconde ne s'ouvre qu'après une manche
+ * parfaite : voir `perfectLevels`.
+ */
+export interface ChoixCampagne {
+  niveau: Niveau;
+  /** Vrai pour une récolte automatique, sans passer par le terrain. */
+  auto: boolean;
+}
+
+/**
  * Affiche la campagne et rend le niveau choisi, ou null si le joueur repart.
  */
-export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
+export function ouvrirCampagne(compte: PlayerAccount): Promise<ChoixCampagne | null> {
   const atteint = compte.progression.storyLevel;
   const faits = new Set(compte.progression.clearedLevels);
+  const parfaits = new Set(compte.progression.perfectLevels ?? []);
 
   const racine = elem('div', 'ecran-equipe');
 
@@ -68,8 +81,8 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
 
   let mondeCourant: Monde = MONDES[0]!;
 
-  return new Promise<Niveau | null>((resolve) => {
-    const partir = (choix: Niveau | null): void => {
+  return new Promise<ChoixCampagne | null>((resolve) => {
+    const partir = (choix: ChoixCampagne | null): void => {
       racine.style.transition = 'opacity .22s ease';
       racine.style.opacity = '0';
       setTimeout(() => {
@@ -121,7 +134,25 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
         }
         if (fait) case_.appendChild(elem('span', 'campagne-fait', '✓'));
 
-        case_.addEventListener('click', () => partir(niveau));
+        case_.addEventListener('click', () => partir({ niveau, auto: false }));
+
+        // La récolte automatique ne s'ouvre qu'après une manche tenue sans
+        // perdre une seule vie. Un niveau qu'on a maîtrisé à ce point n'a plus
+        // rien à apprendre au joueur ; le refaire à la main est du temps pris,
+        // pas du jeu.
+        if (parfaits.has(niveau.id)) {
+          const auto = elem('button', 'campagne-auto', '⏩');
+          auto.type = 'button';
+          auto.id = `auto-${niveau.id}`;
+          auto.title = `Récolter ${niveau.nom} sans jouer — débloqué par une manche sans dégât`;
+          auto.addEventListener('click', (evenement) => {
+            // Sans ça, le clic remonte à la case et lance la manche.
+            evenement.stopPropagation();
+            partir({ niveau, auto: true });
+          });
+          case_.appendChild(auto);
+        }
+
         grille.appendChild(case_);
       }
     };
