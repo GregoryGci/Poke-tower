@@ -2217,3 +2217,65 @@
   .badge-niveau[data-visible='true'] { animation: none; }
   .badge-niveau[data-visible='false'] { opacity: 1; transform: none; }
 }
+
+/* ==========================================================================
+   Rateau d'armes, dans l'ecran d'equipe
+   ========================================================================== */
+
+.armes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.armes-rangee {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.arme-vignette {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 9px 12px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+/* L'arme portee est la seule a etre marquee : le reste du rateau est du stock. */
+.arme-vignette[aria-pressed='true'] {
+  border-color: var(--emeraude);
+  background: var(--emeraude-clair);
+  box-shadow: var(--ombre-douce);
+}
+
+.arme-vignette:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+.arme-nom {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.arme-chiffres {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--gris);
+}
+
+.arme-style {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gris-clair);
+}
