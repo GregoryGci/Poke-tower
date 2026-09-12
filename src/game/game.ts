@@ -49,6 +49,8 @@ import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, vaguesPourNiveau, vaguesTutoriel } from './waves';
 import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
+import { getWeapon, type WeaponModel } from '@/data/weapons';
+import { STYLES } from '@/data/types';
 
 const TERRAIN_SIZE = 34;
 const PATH_WIDTH = 2.4;
@@ -57,6 +59,8 @@ const MAX_PROJECTILES = 512;
 const CROWD_CAPACITY = 128;
 /** Pokémon simultanément sur le terrain, doublons compris. */
 const MAX_POSES = 6;
+/** Identifiant reserve au dresseur dans le bilan de manche. */
+export const ARME_OWNER = 'dresseur';
 /**
  * Cristaux rapportes par un ennemi abattu.
  *
@@ -177,6 +181,9 @@ export class Game {
   private readonly projectiles = new Pool<Projectile>(() => new Projectile(), 128);
   private readonly towers: Tower[] = [];
   private readonly trainer = new Trainer();
+  /** Arme portee par le dresseur. Il tire seul sur ce qui passe a portee. */
+  private arme: WeaponModel | null = null;
+  private armeTimer = 0;
 
   /** Une foule par espèce d'ennemi, construite au chargement. */
   private readonly crowds = new Map<string, SpeciesCrowd>();
@@ -226,8 +233,10 @@ export class Game {
     private readonly camera: PerspectiveCamera,
     private readonly input: InputState,
     niveau: number,
-    tutoriel: boolean
+    tutoriel: boolean,
+    armeId: string | null
   ) {
+    this.arme = armeId ? getWeapon(armeId) : null;
     this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesPourNiveau(niveau));
     this.terrain = createTerrain(LEVEL_PATH, { size: TERRAIN_SIZE, pathWidth: PATH_WIDTH });
     this.root.add(this.terrain.group);
@@ -281,9 +290,10 @@ export class Game {
     input: InputState,
     rosterSpeciesIds: readonly string[],
     niveau = 1,
-    tutoriel = false
+    tutoriel = false,
+    armeId: string | null = null
   ): Promise<Game> {
-    const game = new Game(scene, camera, input, niveau, tutoriel);
+    const game = new Game(scene, camera, input, niveau, tutoriel, armeId);
 
     const enemySpecies = [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))];
     await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));
@@ -423,6 +433,8 @@ export class Game {
       this.playAttack(this.towerVisuals[i]);
     }
 
+    this.tirerAvecArme(dt);
+
     this.projectiles.forEach((shot) => {
       if (!shot.update(dt)) return;
       this.appliquerImpact(shot);
@@ -519,9 +531,13 @@ export class Game {
     if (!shot.ownerId) return;
     let contribution = this.contributions.get(shot.ownerId);
     if (!contribution) {
-      const tour = this.towers.find((candidate) => candidate.owned.id === shot.ownerId);
-      if (!tour) return;
-      contribution = { ownedId: shot.ownerId, speciesId: tour.owned.speciesId, degats: 0, kills: 0 };
+      if (shot.ownerId === ARME_OWNER) {
+        contribution = { ownedId: ARME_OWNER, speciesId: ARME_OWNER, degats: 0, kills: 0 };
+      } else {
+        const tour = this.towers.find((candidate) => candidate.owned.id === shot.ownerId);
+        if (!tour) return;
+        contribution = { ownedId: shot.ownerId, speciesId: tour.owned.speciesId, degats: 0, kills: 0 };
+      }
       this.contributions.set(shot.ownerId, contribution);
     }
     contribution.degats += degats;
@@ -529,6 +545,34 @@ export class Game {
     if (shot.moveType) {
       this.degatsParType.set(shot.moveType, (this.degatsParType.get(shot.moveType) ?? 0) + degats);
     }
+  }
+
+  /**
+   * Le dresseur tire seul sur ce qui passe a portee.
+   *
+   * Viser a la souris obligerait a choisir entre se deplacer et tirer, alors
+   * que son interet est justement d'etre la piece mobile du terrain.
+   */
+  private tirerAvecArme(dt: number): void {
+    if (!this.arme || this.phase !== 'en_cours') return;
+    this.armeTimer -= dt;
+    if (this.armeTimer > 0) return;
+
+    const cible = this.enemyGrid.nearest(
+      this.trainer.x,
+      this.trainer.z,
+      this.arme.range,
+      (enemy) => enemy.active
+    );
+    if (!cible) return;
+
+    this.armeTimer = this.arme.cooldown;
+    if (this.projectiles.activeCount >= MAX_PROJECTILES) return;
+
+    const tir = this.projectiles.acquire();
+    tir.launch(this.trainer.x, this.trainer.z, cible, this.arme.damage, 22, STYLES[this.arme.style]);
+    tir.ownerId = ARME_OWNER;
+    tir.moveType = null;
   }
 
   private countMarching(): number {

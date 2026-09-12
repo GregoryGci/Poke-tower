@@ -177,6 +177,13 @@ export interface OwnedPokemon {
   subStats: [SubStat, SubStat, SubStat, SubStat];
 }
 
+/** Arme possedee. Le modele vit dans data/weapons ; ceci est l'exemplaire. */
+export interface OwnedWeapon {
+  id: string;
+  weaponId: string;
+  rarity: Rarity;
+}
+
 export interface Item {
   id: string;
   name: string;
@@ -199,6 +206,14 @@ export interface PlayerAccount {
   schemaVersion: number;
   starterId: string | null;
   roster: OwnedPokemon[];
+  /** Armes possedees par le dresseur. */
+  weapons: OwnedWeapon[];
+  /** Arme portee sur le terrain. */
+  equippedWeaponId: string | null;
+  /** Equipe emmenee en manche : au plus six identifiants du roster. */
+  team: string[];
+  /** Nom choisi a la creation. */
+  trainerName: string;
   crystals: number;
   inventory: Item[];
   progression: Progression;
@@ -213,6 +228,10 @@ export function emptyAccount(id: string): PlayerAccount {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     starterId: null,
     roster: [],
+    weapons: [],
+    equippedWeaponId: null,
+    team: [],
+    trainerName: '',
     crystals: 0,
     inventory: [],
     progression: { storyLevel: 1, raidUnlocked: false, tutorialDone: false, clearedLevels: [] },

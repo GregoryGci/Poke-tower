@@ -1,17 +1,32 @@
 /**
  * Écran d'invocation.
  *
- * Une seule action, et les taux affichés en permanence : le joueur doit
+ * Deux portails, une seule grammaire : on choisit le portail, puis un tirage
+ * simple ou un ×10. Les taux restent affichés en permanence — le joueur doit
  * pouvoir vérifier ce qu'il achète avant de dépenser, pas après.
  *
  * L'écran modifie le compte — c'est le seul de l'interface à le faire — donc
  * il reçoit le gestionnaire et non une copie des données.
  */
 
-import { COUT_INVOCATION, LIBELLE_RARETE, TAUX, invoquer } from '@/data/gacha';
+import {
+  COUT_INVOCATION,
+  COUT_MULTIPLE,
+  LIBELLE_RARETE,
+  TAUX,
+  TIRAGE_MULTIPLE,
+  invoquer,
+  invoquerArme,
+  invoquerArmesMultiple,
+  invoquerMultiple,
+} from '@/data/gacha';
 import { getSpecies } from '@/data/content';
+import { getWeapon, libelleStyle } from '@/data/weapons';
+import { rareteDominante, revelation } from './reveal';
 import type { AccountManager } from '@/save';
-import type { OwnedPokemon, Rarity } from '@/data/types';
+import type { OwnedPokemon, OwnedWeapon, Rarity } from '@/data/types';
+
+type Portail = 'pokemon' | 'arme';
 
 function elem<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -24,15 +39,19 @@ function elem<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+function badgeRarete(rarete: Rarity): HTMLSpanElement {
+  const badge = elem('span', 'rarete', LIBELLE_RARETE[rarete]);
+  badge.dataset['rarete'] = rarete;
+  return badge;
+}
+
 function carteResultat(owned: OwnedPokemon): HTMLDivElement {
   const species = getSpecies(owned.speciesId);
   const carte = elem('div', 'resultat');
+  carte.dataset['rarete'] = owned.rarity;
 
   const pastille = elem('span', 'pastille', species.name.slice(0, 1));
   pastille.dataset['type'] = species.types[0];
-
-  const rarete = elem('span', 'rarete', LIBELLE_RARETE[owned.rarity]);
-  rarete.dataset['rarete'] = owned.rarity;
 
   const types = elem('div', 'types');
   for (const type of species.types) {
@@ -43,7 +62,7 @@ function carteResultat(owned: OwnedPokemon): HTMLDivElement {
 
   carte.append(
     pastille,
-    rarete,
+    badgeRarete(owned.rarity),
     elem('div', 'resultat-nom', species.name),
     types,
     elem('p', 'sous-titre', `${owned.moves[0].name} · ${owned.traits[0].name}`)
@@ -51,15 +70,49 @@ function carteResultat(owned: OwnedPokemon): HTMLDivElement {
   return carte;
 }
 
+function carteArme(arme: OwnedWeapon): HTMLDivElement {
+  const modele = getWeapon(arme.weaponId);
+  const carte = elem('div', 'resultat');
+  carte.dataset['rarete'] = arme.rarity;
+
+  const stats = elem('div', 'resultat-stats');
+  const ligne = (etiquette: string, valeur: string): HTMLDivElement => {
+    const bloc = elem('div', 'resultat-stat');
+    bloc.append(elem('span', 'etiquette', etiquette), elem('b', undefined, valeur));
+    return bloc;
+  };
+  stats.append(
+    ligne('Dégâts', String(modele.damage)),
+    ligne('Cadence', `${(1 / modele.cooldown).toFixed(1)}/s`),
+    ligne('Portée', modele.range.toFixed(1))
+  );
+
+  carte.append(
+    elem('span', 'pastille pastille-arme', '✦'),
+    badgeRarete(arme.rarity),
+    elem('div', 'resultat-nom', modele.name),
+    elem('p', 'sous-titre', libelleStyle(modele)),
+    stats
+  );
+  return carte;
+}
+
+/** Un lot de cartes, pour la révélation d'un ×10. */
+function grille(cartes: readonly HTMLElement[]): HTMLDivElement {
+  const bloc = elem('div', 'revelation-grille');
+  for (const carte of cartes) bloc.appendChild(carte);
+  return bloc;
+}
+
 export function ouvrirInvocation(account: AccountManager): Promise<void> {
   const compte = account.account;
   const racine = elem('div', 'ecran-invocation');
+  let portail: Portail = 'pokemon';
+  /** Verrou : sans lui, un double-clic paie deux fois pendant l'animation. */
+  let occupe = false;
 
   const titre = elem('div');
-  titre.append(
-    elem('p', 'etiquette', 'Gacha'),
-    elem('h1', 'titre titre-xl', 'Invocation')
-  );
+  titre.append(elem('p', 'etiquette', 'Gacha'), elem('h1', 'titre titre-xl', 'Invocation'));
 
   const retour = elem('button', 'bouton-discret', 'Retour au menu');
   retour.type = 'button';
@@ -68,9 +121,20 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   const haut = elem('div', 'equipe-haut');
   haut.append(titre, retour);
 
+  /* ---- Choix du portail ---- */
+
+  const onglets = elem('div', 'onglets');
+  const ongletPoke = elem('button', 'onglet', 'Pokémon');
+  ongletPoke.type = 'button';
+  ongletPoke.id = 'portail-pokemon';
+  const ongletArme = elem('button', 'onglet', '✦ Armes');
+  ongletArme.type = 'button';
+  ongletArme.id = 'portail-arme';
+  onglets.append(ongletPoke, ongletArme);
+
   const scene = elem('div', 'invocation-scene');
   const capsule = elem('div', 'capsule', '?');
-  const consigne = elem('p', 'sous-titre', `Chaque invocation coûte ${COUT_INVOCATION} cristaux.`);
+  const consigne = elem('p', 'sous-titre');
   scene.append(capsule, consigne);
 
   const taux = elem('div', 'taux');
@@ -83,43 +147,102 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
     taux.appendChild(ligne);
   }
 
-  const invoquerBouton = elem('button', 'bouton bouton-primaire');
-  invoquerBouton.type = 'button';
-  invoquerBouton.id = 'invoquer';
+  const boutonUn = elem('button', 'bouton bouton-primaire');
+  boutonUn.type = 'button';
+  boutonUn.id = 'invoquer';
+  const boutonDix = elem('button', 'bouton');
+  boutonDix.type = 'button';
+  boutonDix.id = 'invoquer-dix';
+
+  const boutons = elem('div', 'invocation-boutons');
+  boutons.append(boutonUn, boutonDix);
 
   const pied = elem('div', 'invocation-pied');
-  pied.append(taux, invoquerBouton);
+  pied.append(taux, boutons);
 
-  const majBouton = (): void => {
-    const possible = compte.crystals >= COUT_INVOCATION;
-    invoquerBouton.disabled = !possible;
-    invoquerBouton.textContent = possible
-      ? `Invoquer — ${COUT_INVOCATION} cristaux`
-      : `Il te manque ${COUT_INVOCATION - compte.crystals} cristaux`;
+  const majEtat = (): void => {
+    ongletPoke.setAttribute('aria-selected', String(portail === 'pokemon'));
+    ongletArme.setAttribute('aria-selected', String(portail === 'arme'));
+    capsule.textContent = portail === 'pokemon' ? '?' : '✦';
+    consigne.textContent =
+      portail === 'pokemon'
+        ? `Un Pokémon pour ${COUT_INVOCATION} cristaux.`
+        : `Une arme de dresseur pour ${COUT_INVOCATION} cristaux.`;
+
+    boutonUn.disabled = occupe || compte.crystals < COUT_INVOCATION;
+    boutonDix.disabled = occupe || compte.crystals < COUT_MULTIPLE;
+    boutonUn.textContent =
+      compte.crystals >= COUT_INVOCATION
+        ? `Invoquer — ${COUT_INVOCATION} ◆`
+        : `Il te manque ${COUT_INVOCATION - compte.crystals} ◆`;
+    boutonDix.textContent = `Invoquer ×${TIRAGE_MULTIPLE} — ${COUT_MULTIPLE} ◆`;
+    boutonDix.title =
+      compte.crystals >= COUT_MULTIPLE
+        ? `Au moins un ${LIBELLE_RARETE.rare} garanti`
+        : `Il te manque ${COUT_MULTIPLE - compte.crystals} cristaux`;
   };
-  majBouton();
 
-  invoquerBouton.addEventListener('click', () => {
-    if (compte.crystals < COUT_INVOCATION) return;
-    compte.crystals -= COUT_INVOCATION;
-
-    const obtenu = invoquer();
-    compte.roster.push(obtenu);
-    account.touch();
-
+  /** Rappel du solde sous la capsule, après un tirage. */
+  const rappelSolde = (): void => {
     scene.innerHTML = '';
     scene.append(
-      carteResultat(obtenu),
+      capsule,
+      consigne,
       elem('p', 'sous-titre', `Il te reste ${compte.crystals} cristaux.`)
     );
-    majBouton();
+  };
+
+  const tirer = async (multiple: boolean): Promise<void> => {
+    const cout = multiple ? COUT_MULTIPLE : COUT_INVOCATION;
+    if (occupe || compte.crystals < cout) return;
+    occupe = true;
+    compte.crystals -= cout;
+    majEtat();
+
+    let raretes: Rarity[];
+    let contenu: HTMLElement;
+
+    if (portail === 'pokemon') {
+      const lot = multiple ? invoquerMultiple() : [invoquer()];
+      compte.roster.push(...lot);
+      raretes = lot.map((membre) => membre.rarity);
+      contenu = multiple ? grille(lot.map(carteResultat)) : carteResultat(lot[0]!);
+    } else {
+      const lot = multiple ? invoquerArmesMultiple() : [invoquerArme()];
+      compte.weapons.push(...lot);
+      // Le dresseur équipe sa première arme sans avoir à y penser.
+      if (!compte.equippedWeaponId) compte.equippedWeaponId = lot[0]!.id;
+      raretes = lot.map((arme) => arme.rarity);
+      contenu = multiple ? grille(lot.map(carteArme)) : carteArme(lot[0]!);
+    }
+
+    account.touch();
+    await revelation(rareteDominante(raretes), contenu);
+
+    occupe = false;
+    rappelSolde();
+    majEtat();
+  };
+
+  boutonUn.addEventListener('click', () => void tirer(false));
+  boutonDix.addEventListener('click', () => void tirer(true));
+  ongletPoke.addEventListener('click', () => {
+    portail = 'pokemon';
+    majEtat();
+  });
+  ongletArme.addEventListener('click', () => {
+    portail = 'arme';
+    majEtat();
   });
 
-  racine.append(haut, scene, pied);
+  majEtat();
+
+  racine.append(haut, onglets, scene, pied);
   document.body.appendChild(racine);
 
   return new Promise<void>((resolve) => {
     retour.addEventListener('click', () => {
+      if (occupe) return;
       racine.style.transition = 'opacity .22s ease';
       racine.style.opacity = '0';
       setTimeout(() => {

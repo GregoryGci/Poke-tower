@@ -46,6 +46,17 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     shiny: membre.shiny ?? false,
   }));
 
-  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return { ...account, progression, roster };
-  return { ...account, progression, roster, schemaVersion: CURRENT_SCHEMA_VERSION };
+  // Armes, equipe et nom sont arrives apres les premieres sauvegardes.
+  const complete = {
+    ...account,
+    progression,
+    roster,
+    weapons: account.weapons ?? [],
+    equippedWeaponId: account.equippedWeaponId ?? null,
+    team: account.team ?? roster.slice(0, 6).map((membre) => membre.id),
+    trainerName: account.trainerName ?? '',
+  };
+
+  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return complete;
+  return { ...complete, schemaVersion: CURRENT_SCHEMA_VERSION };
 }

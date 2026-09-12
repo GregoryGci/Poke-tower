@@ -11,7 +11,8 @@
 
 import { SPECIES } from './content';
 import { createPokemon } from './roll';
-import type { OwnedPokemon, Rarity } from './types';
+import { armePourRarete } from './weapons';
+import type { OwnedPokemon, OwnedWeapon, Rarity } from './types';
 
 /** Coût d'une invocation, en cristaux. */
 export const COUT_INVOCATION = 10;
@@ -59,4 +60,50 @@ export function invoquer(rng: () => number = Math.random): OwnedPokemon {
   const speciesId = pool[Math.floor(rng() * pool.length)];
   if (!speciesId) throw new Error('Aucune espèce invocable');
   return createPokemon(speciesId, tirerRarete(rng), rng);
+}
+
+/** Nombre de tirages d'un tirage multiple. */
+export const TIRAGE_MULTIPLE = 10;
+
+/** Cout d'un tirage multiple. Dix tirages payes dix : pas de remise. */
+export const COUT_MULTIPLE = COUT_INVOCATION * TIRAGE_MULTIPLE;
+
+/**
+ * Tirage multiple.
+ *
+ * Avec les taux actuels, un x10 entierement normal arrive une fois sur six —
+ * assez souvent pour gacher la sequence de revelation, qui est le seul
+ * interet du x10. On garantit donc un rare au minimum, en promouvant le
+ * dernier tirage si rien n'est sorti.
+ */
+export function invoquerMultiple(rng: () => number = Math.random): OwnedPokemon[] {
+  const lot: OwnedPokemon[] = [];
+  for (let i = 0; i < TIRAGE_MULTIPLE; i++) lot.push(invoquer(rng));
+
+  if (lot.every((membre) => membre.rarity === 'normal')) {
+    const dernier = lot[lot.length - 1];
+    if (dernier) lot[lot.length - 1] = createPokemon(dernier.speciesId, 'rare', rng);
+  }
+  return lot;
+}
+
+/**
+ * Portail d'armes.
+ *
+ * Meme table de raretes que les Pokemon : le joueur a deja appris a lire ces
+ * chiffres, en inventer d'autres ne ferait qu'ajouter a verifier.
+ */
+export function invoquerArme(rng: () => number = Math.random): OwnedWeapon {
+  const modele = armePourRarete(tirerRarete(rng), rng);
+  return { id: crypto.randomUUID(), weaponId: modele.id, rarity: modele.rarity };
+}
+
+export function invoquerArmesMultiple(rng: () => number = Math.random): OwnedWeapon[] {
+  const lot: OwnedWeapon[] = [];
+  for (let i = 0; i < TIRAGE_MULTIPLE; i++) lot.push(invoquerArme(rng));
+  if (lot.every((arme) => arme.rarity === 'normal')) {
+    const modele = armePourRarete('rare', rng);
+    lot[lot.length - 1] = { id: crypto.randomUUID(), weaponId: modele.id, rarity: modele.rarity };
+  }
+  return lot;
 }

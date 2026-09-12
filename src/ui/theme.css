@@ -1645,3 +1645,246 @@
 /* `hidden` doit l'emporter : les conteneurs en display:flex l'ecrasaient,
    et les deux onglets du bilan s'affichaient ensemble. */
 [hidden] { display: none !important; }
+
+/* ==========================================================================
+   Revelation d'invocation
+   --------------------------------------------------------------------------
+   Le defile d'ombres de Diamant/Perle. Tout se joue sur trois phases portees
+   par data-phase : defile, flash, revele. Aucun flou : les auras sont des
+   anneaux nets, comme le reste de la charte.
+   ========================================================================== */
+
+.revelation {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  /* Indigo profond : les silhouettes claires doivent trancher net dessus. */
+  background: #171a33;
+  cursor: pointer;
+}
+
+.revelation[data-phase='revele'] {
+  cursor: default;
+  background: var(--ivoire);
+}
+
+/* La bande d'ombres. Elle part lentement et finit lancee : c'est l'ease-in
+   sur une seule passe longue qui donne l'acceleration, pas une boucle. */
+.revelation-piste {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 0 40px;
+  animation: defile-ombres var(--duree-defile, 1200ms) cubic-bezier(0.55, 0, 0.9, 0.6) forwards;
+}
+
+.revelation[data-phase='flash'] .revelation-piste,
+.revelation[data-phase='revele'] .revelation-piste {
+  display: none;
+}
+
+@keyframes defile-ombres {
+  from { transform: translateX(0); }
+  to { transform: translateX(-1900px); }
+}
+
+/* Silhouettes. Huit decoupes suffisent : a cette vitesse on lit une
+   succession de formes, pas des especes. */
+/* Silhouettes claires sur fond sombre, comme l'ecran d'evolution : une ombre
+   noire sur du noir ne se lit pas. */
+.revelation .ombre {
+  flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  background: #f2f6e6;
+}
+
+.revelation .ombre[data-forme='0'] { clip-path: polygon(50% 0, 86% 22%, 100% 62%, 74% 100%, 26% 100%, 0 62%, 14% 22%); }
+.revelation .ombre[data-forme='1'] { clip-path: polygon(50% 2%, 78% 18%, 70% 44%, 96% 58%, 74% 98%, 26% 98%, 4% 58%, 30% 44%, 22% 18%); }
+.revelation .ombre[data-forme='2'] { clip-path: polygon(30% 0, 70% 0, 88% 34%, 100% 78%, 62% 100%, 38% 100%, 0 78%, 12% 34%); }
+.revelation .ombre[data-forme='3'] { clip-path: polygon(50% 0, 100% 36%, 82% 72%, 96% 100%, 50% 84%, 4% 100%, 18% 72%, 0 36%); }
+.revelation .ombre[data-forme='4'] { clip-path: polygon(44% 0, 76% 12%, 64% 40%, 100% 52%, 78% 82%, 50% 100%, 20% 82%, 0 48%, 26% 34%); }
+.revelation .ombre[data-forme='5'] { clip-path: polygon(50% 4%, 92% 26%, 100% 70%, 66% 96%, 34% 96%, 0 70%, 8% 26%); height: 74px; }
+.revelation .ombre[data-forme='6'] { clip-path: polygon(24% 8%, 76% 8%, 100% 44%, 84% 92%, 50% 74%, 16% 92%, 0 44%); width: 106px; }
+.revelation .ombre[data-forme='7'] { clip-path: polygon(50% 0, 70% 28%, 100% 30%, 78% 60%, 88% 100%, 50% 80%, 12% 100%, 22% 60%, 0 30%, 30% 28%); }
+
+/* Le blanchiment. Il couvre la coupure entre l'ombre et le resultat : sans
+   lui, le changement de fond se voit comme un saut. */
+.revelation-flash {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.revelation[data-phase='flash'] .revelation-flash { animation: revelation-flash 240ms steps(4, end) forwards; }
+.revelation[data-phase='revele'] .revelation-flash { display: none; }
+
+@keyframes revelation-flash {
+  0% { opacity: 0; }
+  40% { opacity: 1; }
+  100% { opacity: 0.92; }
+}
+
+.revelation-indice {
+  position: absolute;
+  bottom: 26px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #6c7a6a;
+  text-transform: uppercase;
+}
+
+.revelation[data-phase='flash'] .revelation-indice,
+.revelation[data-phase='revele'] .revelation-indice { display: none; }
+
+.revelation-scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  max-height: 100vh;
+  overflow-y: auto;
+  animation: revelation-entree 260ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes revelation-entree {
+  from { transform: scale(0.82); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* L'aura de rarete. Un anneau pixel qui pulse, decline par palier : le
+   prismatique secoue le cadre, le normal ne fait rien du tout. */
+.revelation[data-phase='revele']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.revelation[data-rarete='rare'][data-phase='revele']::before {
+  box-shadow: inset 0 0 0 6px #4b86d4;
+  animation: aura-pulse 900ms steps(2, end) 3;
+}
+.revelation[data-rarete='epique'][data-phase='revele']::before {
+  box-shadow: inset 0 0 0 8px #8b57a5, inset 0 0 0 14px #e2cdec;
+  animation: aura-pulse 620ms steps(2, end) 5;
+}
+.revelation[data-rarete='legendaire'][data-phase='revele']::before {
+  box-shadow: inset 0 0 0 10px var(--or), inset 0 0 0 18px #fff2d4;
+  animation: aura-pulse 440ms steps(2, end) 7;
+}
+.revelation[data-rarete='prismatique'][data-phase='revele'] {
+  animation: aura-secousse 320ms steps(3, end) 4;
+}
+.revelation[data-rarete='prismatique'][data-phase='revele']::before {
+  box-shadow: inset 0 0 0 10px var(--emeraude), inset 0 0 0 18px var(--or), inset 0 0 0 26px #b15ea8;
+  animation: aura-prisme 360ms steps(4, end) infinite;
+}
+
+@keyframes aura-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes aura-prisme {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes aura-secousse {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, -2px); }
+  75% { transform: translate(-2px, -3px); }
+}
+
+/* Tirage multiple : les cartes tombent en cascade, la meilleure en premier
+   n'aurait aucun suspense — on garde l'ordre du tirage. */
+.revelation-grille {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .revelation-grille { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.revelation-grille > * {
+  animation: revelation-entree 220ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.revelation-grille > *:nth-child(1) { animation-delay: 0ms; }
+.revelation-grille > *:nth-child(2) { animation-delay: 70ms; }
+.revelation-grille > *:nth-child(3) { animation-delay: 140ms; }
+.revelation-grille > *:nth-child(4) { animation-delay: 210ms; }
+.revelation-grille > *:nth-child(5) { animation-delay: 280ms; }
+.revelation-grille > *:nth-child(6) { animation-delay: 350ms; }
+.revelation-grille > *:nth-child(7) { animation-delay: 420ms; }
+.revelation-grille > *:nth-child(8) { animation-delay: 490ms; }
+.revelation-grille > *:nth-child(9) { animation-delay: 560ms; }
+.revelation-grille > *:nth-child(10) { animation-delay: 630ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .revelation-piste,
+  .revelation-scene,
+  .revelation-grille > *,
+  .revelation[data-phase='revele']::before,
+  .revelation[data-rarete='prismatique'][data-phase='revele'] { animation: none; }
+}
+
+/* ---- Portails d'invocation ---- */
+
+.invocation-boutons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.pastille-arme {
+  background: var(--ligne);
+  color: var(--or);
+}
+
+/* Stats d'arme : trois chiffres alignes, lisibles d'un coup d'oeil. */
+.resultat-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.resultat-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 3px;
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+  background: var(--blanc);
+}
+
+.resultat-stat b {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Dans la revelation, les cartes du x10 sont plus serrees que la carte seule. */
+.revelation-grille .resultat {
+  padding: 10px 8px;
+  gap: 5px;
+}
+
+.revelation-grille .resultat-stats { display: none; }

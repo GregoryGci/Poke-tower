@@ -12,7 +12,7 @@
 
 import { getSpecies } from '@/data/content';
 import { STYLES, ajouterXp, xpRequise, type OwnedPokemon, type PlayerAccount } from '@/data/types';
-import type { GameStatus, RapportManche } from '@/game/game';
+import { ARME_OWNER, type GameStatus, type RapportManche } from '@/game/game';
 import { ecrire } from './typewriter';
 
 /** Expérience versée par point de dégât infligé. */
@@ -127,6 +127,11 @@ function panneauDegats(rapport: RapportManche): HTMLDivElement {
   const parPokemon = elem('div', 'bloc');
   parPokemon.appendChild(elem('p', 'etiquette', 'Dégâts par Pokémon'));
   for (const contribution of rapport.parPokemon) {
+    // Le dresseur figure au bilan comme les autres, mais ce n'est pas une espece.
+    if (contribution.speciesId === ARME_OWNER) {
+      parPokemon.appendChild(barre('Dresseur · arme', contribution.degats, `${Math.round(contribution.degats)}`));
+      continue;
+    }
     const species = getSpecies(contribution.speciesId);
     parPokemon.appendChild(
       barre(

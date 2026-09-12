@@ -24,6 +24,7 @@ import { ouvrirInvocation } from '@/ui/summon';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
+import { ARME_DE_DEPART } from '@/data/weapons';
 
 import { STARTER_CASES } from '@/data/content';
 import { Hud } from '@/ui/hud';
@@ -77,7 +78,22 @@ async function choisirStarter(): Promise<void> {
   // Le starter choisi ouvre le roster ; le reste viendra du gacha.
   account.account.roster.push(createPokemon(choix.speciesId, 'normal'));
   account.account.starterId = choix.speciesId;
+  account.account.team = account.account.roster.map((membre) => membre.id);
+
+  // Le dresseur ne part pas les mains vides.
+  account.account.weapons.push({
+    id: crypto.randomUUID(),
+    weaponId: ARME_DE_DEPART,
+    rarity: 'normal',
+  });
+  account.account.equippedWeaponId = account.account.weapons[0]!.id;
   await account.flush();
+}
+
+/** Modele de l'arme portee, ou null si le dresseur n'en a aucune. */
+function armeEquipee(compte: typeof account.account): string | null {
+  const portee = compte.weapons.find((arme) => arme.id === compte.equippedWeaponId);
+  return portee?.weaponId ?? null;
 }
 
 /* ---------- Une manche ---------- */
@@ -93,7 +109,8 @@ async function jouerManche(): Promise<void> {
     input,
     rosterSpecies,
     account.account.progression.storyLevel,
-    !account.account.progression.tutorialDone
+    !account.account.progression.tutorialDone,
+    armeEquipee(account.account)
   );
 
   let selectionActive = false;
