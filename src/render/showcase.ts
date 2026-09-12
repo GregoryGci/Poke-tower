@@ -43,6 +43,10 @@ interface Presentation {
   socle: Mesh;
   /** Décalage d'animation, pour que les trois ne respirent pas ensemble. */
   phase: number;
+  /** Avancement de l'entrée en scène, de 0 à 1. */
+  entree: number;
+  /** Retard avant que ce sujet n'entre, en secondes. */
+  retard: number;
 }
 
 function choisirClip(clips: readonly AnimationClip[], ...noms: string[]): AnimationClip | null {
@@ -103,7 +107,7 @@ export interface Showcase {
 
 export async function createShowcase(renderer: WebGLRenderer): Promise<Showcase> {
   const scene = new Scene();
-  scene.background = new Color('#f7f8f6');
+  scene.background = new Color('#e9efd9');
 
   const camera = new PerspectiveCamera(34, 1, 0.1, 100);
   camera.position.set(0, 2.7, 7.6);
@@ -167,6 +171,9 @@ export async function createShowcase(renderer: WebGLRenderer): Promise<Showcase>
         mixer.setTime(Math.random() * repos.duration);
       }
 
+      // Les trois arrivent l'un apres l'autre : une apparition simultanee se
+      // lit comme un changement d'image, pas comme une valise qui s'ouvre.
+      support.scale.setScalar(0.01);
       scene.add(support);
       presentations.push({
         speciesId: trois[index]!,
@@ -175,6 +182,8 @@ export async function createShowcase(renderer: WebGLRenderer): Promise<Showcase>
         mixer,
         socle,
         phase: index * 1.9,
+        entree: 0,
+        retard: index * 0.12,
       });
     });
   }
@@ -185,21 +194,46 @@ export async function createShowcase(renderer: WebGLRenderer): Promise<Showcase>
 
   const cible = new Vector3();
 
+  /** Sortie douce puis arrivee franche : le mouvement part vite et s'installe. */
+  const adoucir = (t: number): number => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+
+  /** Rebond leger a l'arrivee, pour que l'entree ait du poids. */
+  const rebondir = (t: number): number => {
+    const x = Math.min(1, Math.max(0, t));
+    return 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2);
+  };
+
   function update(dt: number): void {
     temps += dt;
     for (const presentation of presentations) {
       presentation.mixer?.update(dt);
 
+      // Entree en scene, une seule fois.
+      if (presentation.entree < 1) {
+        if (presentation.retard > 0) {
+          presentation.retard -= dt;
+        } else {
+          presentation.entree = Math.min(1, presentation.entree + dt * 2.4);
+        }
+      }
+
       const actif = presentation.speciesId === choisi;
 
       // Le sujet retenu s'avance, se redresse et s'allume ; les autres
       // reculent légèrement pour lui laisser la vedette.
-      cible.set(presentation.support.position.x, actif ? 0.12 : 0, actif ? 0.9 : 0);
-      presentation.support.position.lerp(cible, Math.min(1, dt * 7));
+      const monte = adoucir(presentation.entree);
+      cible.set(
+        presentation.support.position.x,
+        (actif ? 0.14 : 0) + (1 - monte) * 1.1,
+        actif ? 1 : 0
+      );
+      // Amorti constant quelle que soit la cadence d'affichage.
+      const suivi = 1 - Math.pow(0.0008, dt);
+      presentation.support.position.lerp(cible, suivi);
 
-      const echelleVoulue = actif ? 1.12 : 0.97;
+      const echelleVoulue = (actif ? 1.14 : 0.96) * rebondir(presentation.entree);
       const echelle = presentation.support.scale.x;
-      presentation.support.scale.setScalar(echelle + (echelleVoulue - echelle) * Math.min(1, dt * 7));
+      presentation.support.scale.setScalar(echelle + (echelleVoulue - echelle) * suivi);
 
       // Sans animation de repos, une respiration discrète évite la statue.
       if (!presentation.mixer) {
@@ -207,11 +241,15 @@ export async function createShowcase(renderer: WebGLRenderer): Promise<Showcase>
         presentation.modele.scale.set(1 - souffle * 0.5, 1 + souffle, 1 - souffle * 0.5);
       }
 
-      presentation.modele.rotation.y = Math.PI + Math.sin(temps * 0.5 + presentation.phase) * 0.22;
+      // Le sujet choisi cesse de se balancer et se tourne face au joueur.
+      const balancement = Math.sin(temps * 0.5 + presentation.phase) * (actif ? 0.06 : 0.22);
+      presentation.modele.rotation.y = Math.PI + balancement;
 
       const materiau = presentation.socle.material as MeshStandardMaterial;
-      const opaciteVoulue = actif ? 0.22 : 0;
-      materiau.opacity += (opaciteVoulue - materiau.opacity) * Math.min(1, dt * 7);
+      // Le socle bat doucement sous le sujet retenu.
+      const pulsation = actif ? 0.2 + Math.sin(temps * 2.6) * 0.06 : 0;
+      materiau.opacity += (pulsation - materiau.opacity) * suivi;
+      presentation.socle.scale.setScalar(actif ? 1.05 + Math.sin(temps * 2.6) * 0.04 : 1);
     }
   }
 
