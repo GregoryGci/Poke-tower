@@ -48,6 +48,31 @@ export const WAVES: Wave[] = [
   },
 ];
 
+/**
+ * Met les vagues à l'échelle du niveau d'histoire.
+ *
+ * Les points de vie montent plus vite que les effectifs : allonger les vagues
+ * rallongerait surtout l'attente, alors que des ennemis plus coriaces obligent
+ * vraiment à élargir son équipe. La cadence d'apparition se resserre un peu,
+ * sans jamais descendre sous un tiers de seconde.
+ */
+export function vaguesPourNiveau(niveau: number): Wave[] {
+  const palier = Math.max(0, niveau - 1);
+  const vie = 1 + palier * 0.4;
+  const renfort = Math.floor(palier * 0.75);
+
+  return WAVES.map((vague) => ({
+    restAfter: vague.restAfter,
+    batches: vague.batches.map((lot) => ({
+      ...lot,
+      count: lot.count + renfort,
+      hp: Math.round(lot.hp * vie),
+      speed: lot.speed * (1 + palier * 0.04),
+      interval: Math.max(0.33, lot.interval * (1 - palier * 0.05)),
+    })),
+  }));
+}
+
 export type WaveEvent =
   | { kind: 'spawn'; request: SpawnRequest }
   | { kind: 'waveCleared'; index: number }

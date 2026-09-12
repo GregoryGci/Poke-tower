@@ -87,7 +87,13 @@ async function jouerManche(): Promise<void> {
   input.reset();
 
   const rosterSpecies = [...new Set(account.account.roster.map((p) => p.speciesId))];
-  const game = await Game.create(stage.scene, stage.camera, input, rosterSpecies);
+  const game = await Game.create(
+    stage.scene,
+    stage.camera,
+    input,
+    rosterSpecies,
+    account.account.progression.storyLevel
+  );
 
   let selectionActive = false;
   let terminer: ((abandon: boolean) => void) | null = null;
