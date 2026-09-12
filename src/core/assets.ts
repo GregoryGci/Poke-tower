@@ -64,7 +64,48 @@ export async function preloadModels(names: readonly string[]): Promise<void> {
   await Promise.all(names.map((name) => loadModel(name)));
 }
 
+/**
+ * Applique la pose canonique du modèle avant toute animation.
+ *
+ * La pose de repos d'un modèle Cobblemon n'est pas une posture jouable : les
+ * lianes de Bulbizarre y sont déployées à plat sur quatre blocs de large, et
+ * rien dans `ground_idle` ne les replie. Le mod s'en sort parce que son code
+ * place ces membres lui-même.
+ *
+ * On applique donc la première image du clip de présentation, qui lui couvre
+ * tout le squelette. Les os que l'animation de repos pilote seront écrasés
+ * juste après ; les autres — lianes, ailes repliées — gardent cette pose.
+ */
+function applyRestPose(root: Object3D, clips: readonly AnimationClip[]): void {
+  const pose =
+    clips.find((clip) => clip.name.endsWith('.render')) ??
+    clips.find((clip) => clip.name.endsWith('.battle_idle'));
+  if (!pose) return;
+
+  for (const track of pose.tracks) {
+    const separateur = track.name.lastIndexOf('.');
+    if (separateur < 0) continue;
+    const node = root.getObjectByName(track.name.slice(0, separateur));
+    if (!node) continue;
+
+    const v = track.values;
+    switch (track.name.slice(separateur + 1)) {
+      case 'quaternion':
+        node.quaternion.set(v[0] ?? 0, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1);
+        break;
+      case 'position':
+        node.position.set(v[0] ?? 0, v[1] ?? 0, v[2] ?? 0);
+        break;
+      case 'scale':
+        node.scale.set(v[0] ?? 1, v[1] ?? 1, v[2] ?? 1);
+        break;
+    }
+  }
+}
+
 export async function instantiate(name: string): Promise<ModelInstance> {
   const model = await loadModel(name);
-  return { object: cloneSkinned(model.scene), clips: model.clips };
+  const object = cloneSkinned(model.scene);
+  applyRestPose(object, model.clips);
+  return { object, clips: model.clips };
 }

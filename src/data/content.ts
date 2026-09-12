@@ -139,8 +139,26 @@ export const SPECIES: Record<string, Species> = {
   },
 };
 
-/** Les trois starters proposés dans la valise d'ouverture. */
-export const STARTER_IDS = ['treecko', 'torchic', 'mudkip'] as const;
+/**
+ * Les valises du professeur.
+ *
+ * Une par région dont les trois starters sont convertis. Le joueur choisit
+ * d'abord la valise, puis le Pokémon qu'elle contient.
+ */
+export interface StarterCase {
+  id: string;
+  region: string;
+  /** Exactement trois espèces, dans l'ordre plante / feu / eau. */
+  starters: [string, string, string];
+}
+
+export const STARTER_CASES: StarterCase[] = [
+  { id: 'kanto', region: 'Kanto', starters: ['bulbasaur', 'charmander', 'squirtle'] },
+  { id: 'hoenn', region: 'Hoenn', starters: ['treecko', 'torchic', 'mudkip'] },
+];
+
+/** Starters de la valise ouverte par défaut. */
+export const STARTER_IDS = STARTER_CASES[1]!.starters;
 
 /** Espèces utilisées comme ennemis dans les vagues. */
 export const ENEMY_IDS = ['rattata', 'pidgey', 'caterpie', 'weedle', 'zigzagoon', 'poochyena', 'wurmple', 'geodude', 'machop'] as const;

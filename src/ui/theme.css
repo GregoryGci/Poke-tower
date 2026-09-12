@@ -1,0 +1,307 @@
+/**
+ * Socle visuel du jeu.
+ *
+ * Direction : la clarté des menus de Pokémon Émeraude et SoulSilver, mais
+ * débarrassée de leurs cadres et de leurs dégradés — surfaces blanches,
+ * ombres presque absentes, typographie qui porte la hiérarchie. L'émeraude
+ * est l'unique couleur d'accent ; l'argent sert aux états secondaires.
+ */
+
+:root {
+  --ivoire: #f7f8f6;
+  --blanc: #ffffff;
+  --encre: #13171a;
+  --gris: #6e7671;
+  --gris-clair: #9aa29c;
+  --ligne: #e4e8e1;
+  --emeraude: #0e7a57;
+  --emeraude-clair: #e8f3ee;
+  --argent: #aeb6bc;
+  --argent-clair: #eef1f3;
+
+  --ombre-douce: 0 1px 2px rgba(19, 23, 26, 0.04), 0 8px 24px rgba(19, 23, 26, 0.06);
+  --ombre-portee: 0 2px 6px rgba(19, 23, 26, 0.06), 0 18px 48px rgba(19, 23, 26, 0.1);
+
+  --titre: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --ui: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --rayon: 14px;
+  --rayon-petit: 9px;
+}
+
+.ui-racine {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--ui);
+  color: var(--encre);
+  pointer-events: none;
+}
+
+.ui-racine > * {
+  pointer-events: auto;
+}
+
+/* ---------- Typographie ---------- */
+
+.titre {
+  font-family: var(--titre);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-wrap: balance;
+  margin: 0;
+}
+
+.titre-xl { font-size: clamp(28px, 3.4vw, 44px); }
+.titre-m { font-size: 19px; }
+
+.sous-titre {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--gris);
+  max-width: 52ch;
+}
+
+.etiquette {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gris-clair);
+}
+
+/* ---------- Sélecteur de valise ---------- */
+
+.selecteur {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--argent-clair);
+  border-radius: 999px;
+}
+
+.selecteur button {
+  font: 500 13px var(--ui);
+  color: var(--gris);
+  background: transparent;
+  border: 0;
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.selecteur button:hover { color: var(--encre); }
+
+.selecteur button[aria-selected='true'] {
+  background: var(--blanc);
+  color: var(--encre);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(19, 23, 26, 0.08);
+}
+
+/* ---------- Cartes de starter ---------- */
+
+.cartes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: min(880px, 100%);
+}
+
+.carte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 18px;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.carte:hover {
+  border-color: var(--argent);
+  transform: translateY(-2px);
+}
+
+.carte[aria-pressed='true'] {
+  border-color: var(--emeraude);
+  box-shadow: var(--ombre-portee), inset 0 0 0 1px var(--emeraude);
+}
+
+.carte-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.carte-nom {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+.carte-dex {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gris-clair);
+}
+
+.types { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.type {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--argent-clair);
+  color: var(--gris);
+}
+
+.type[data-type='plante'] { background: #e6f2e3; color: #2f6b33; }
+.type[data-type='feu'] { background: #fbeade; color: #a4521d; }
+.type[data-type='eau'] { background: #e2eefb; color: #24578f; }
+.type[data-type='poison'] { background: #f0e6f5; color: #6d3b80; }
+
+/* ---------- Jauges de stats ---------- */
+
+.stats { display: grid; gap: 6px; margin-top: 2px; }
+
+.stat {
+  display: grid;
+  grid-template-columns: 52px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--gris);
+}
+
+.stat b {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--encre);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.jauge {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--argent-clair);
+  overflow: hidden;
+}
+
+.jauge i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--emeraude);
+}
+
+/* ---------- Boutons ---------- */
+
+.bouton {
+  font: 600 14px var(--ui);
+  padding: 13px 26px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.12s ease, opacity 0.16s ease;
+}
+
+.bouton-primaire {
+  background: var(--emeraude);
+  color: var(--blanc);
+  box-shadow: 0 2px 10px rgba(14, 122, 87, 0.24);
+}
+
+.bouton-primaire:hover { background: #0c6a4b; }
+.bouton-primaire:active { transform: translateY(1px); }
+
+.bouton-primaire:disabled {
+  background: var(--argent-clair);
+  color: var(--gris-clair);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.bouton:focus-visible,
+.carte:focus-visible,
+.selecteur button:focus-visible {
+  outline: 2px solid var(--emeraude);
+  outline-offset: 3px;
+}
+
+/* ---------- Écran de choix du starter ---------- */
+
+.ecran-starter {
+  position: fixed;
+  inset: 0;
+  /* L'écran est attaché au body : sans famille explicite, il retombe sur la
+     police par défaut du navigateur — un serif, très visible sur le corps. */
+  font-family: var(--ui);
+  color: var(--encre);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 30px clamp(18px, 4vw, 48px) 28px;
+  box-sizing: border-box;
+  background: linear-gradient(to bottom, rgba(247, 248, 246, 0.96) 0%, rgba(247, 248, 246, 0) 22%, rgba(247, 248, 246, 0) 52%, rgba(247, 248, 246, 0.97) 78%);
+  animation: apparition 0.5s ease both;
+}
+
+.starter-haut {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.starter-bas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.starter-valide {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.starter-rappel {
+  font-size: 13px;
+  color: var(--gris);
+  min-height: 1.4em;
+}
+
+.starter-rappel b { color: var(--encre); font-weight: 600; }
+
+@keyframes apparition {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  .cartes { grid-template-columns: 1fr; gap: 8px; }
+  .carte { padding: 12px 14px; }
+  .stats { display: none; }
+  .ecran-starter { grid-template-rows: auto 1fr auto; padding-block: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

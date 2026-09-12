@@ -1,18 +1,23 @@
 /**
  * Point d'entrée.
  *
- * Assemble la scène, les entrées, le compte joueur et la manche, puis lance
- * la boucle. L'interface est ici réduite à un relevé de bord : l'habillage
- * viendra avec les écrans de menu, il n'a pas sa place dans les fondations.
+ * Deux temps : la vitrine des starters au premier lancement, puis la manche.
+ * Les deux partagent le même renderer mais pas la même scène — la vitrine a
+ * son propre éclairage, pensé pour du blanc, et il n'aurait aucun sens sur le
+ * terrain.
  */
+
+import './ui/theme.css';
 
 import { GameLoop } from '@/core/loop';
 import { InputState } from '@/core/input';
 import { createStage } from '@/render/scene';
+import { createShowcase } from '@/render/showcase';
+import { demanderStarter } from '@/ui/starter-screen';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
-import { getSpecies, STARTER_IDS } from '@/data/content';
+import { getSpecies, STARTER_CASES } from '@/data/content';
 import type { OwnedPokemon } from '@/data/types';
 
 const container = document.getElementById('app');
@@ -21,24 +26,48 @@ if (!container) throw new Error('#app introuvable');
 const stage = createStage(container);
 const input = new InputState(stage.renderer.domElement);
 
-
 const store = createStore();
 const account = await AccountManager.open(store, resolveAccountId());
 
-// Tant que l'écran de choix du starter n'existe pas, on en attribue un d'office
-// pour que la manche soit jouable dès le lancement.
-if (account.account.roster.length === 0) {
-  for (const id of STARTER_IDS) {
-    account.account.roster.push(createPokemon(id, 'normal'));
+/* ---------- Premier lancement : choix du starter ---------- */
+
+if (!account.account.starterId) {
+  const showcase = await createShowcase(stage.renderer);
+  await showcase.charger(STARTER_CASES[0]!.starters);
+
+  let vitrineActive = true;
+  let precedent = performance.now();
+
+  const boucleVitrine = (maintenant: number): void => {
+    if (!vitrineActive) return;
+    requestAnimationFrame(boucleVitrine);
+    const dt = Math.min(0.1, (maintenant - precedent) / 1000);
+    precedent = maintenant;
+    showcase.resize(container.clientWidth, container.clientHeight);
+    showcase.update(dt);
+    stage.renderer.render(showcase.scene, showcase.camera);
+  };
+  requestAnimationFrame(boucleVitrine);
+
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>)['__showcase'] = showcase;
   }
-  account.account.starterId = account.account.roster[0]?.speciesId ?? null;
-  account.touch();
+
+  const choix = await demanderStarter(showcase);
+
+  vitrineActive = false;
+  showcase.dispose();
+
+  // Le starter choisi ouvre le roster ; le reste viendra du gacha.
+  account.account.roster.push(createPokemon(choix.speciesId, 'normal'));
+  account.account.starterId = choix.speciesId;
+  await account.flush();
 }
+
+/* ---------- Manche ---------- */
 
 const rosterSpecies = [...new Set(account.account.roster.map((p) => p.speciesId))];
 const game = await Game.create(stage.scene, stage.camera, input, rosterSpecies);
-
-/* ---------- Relevé de bord ---------- */
 
 const hud = document.createElement('div');
 hud.style.cssText = `
@@ -82,8 +111,6 @@ function select(owned: OwnedPokemon): void {
 }
 
 renderBar();
-
-/* ---------- Boucle ---------- */
 
 let lastCrystals = 0;
 
