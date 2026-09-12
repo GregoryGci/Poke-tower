@@ -11,7 +11,7 @@
 import { getSpecies } from '@/data/content';
 import type { PlayerAccount } from '@/data/types';
 
-export type Destination = 'histoire' | 'equipe' | 'invocation' | 'raid';
+export type Destination = 'histoire' | 'equipe' | 'collection' | 'invocation' | 'raid';
 
 interface Carte {
   id: Destination;
@@ -36,11 +36,18 @@ const CARTES: Carte[] = [
   },
   {
     id: 'equipe',
-    etiquette: 'Collection',
+    etiquette: 'Composition',
     titre: 'Mon équipe',
-    description: 'Attaques, traits et sub-stats de chaque Pokémon.',
-    pied: (compte) => `${compte.roster.length} Pokémon`,
-
+    description:
+      'Choisis les six Pokémon que tu emmènes, et dépense tes cristaux sur leurs attaques, traits et sub-stats.',
+    pied: (compte) => `${compte.team.length}/6 engagés`,
+  },
+  {
+    id: 'collection',
+    etiquette: 'Pokédex',
+    titre: 'Collection',
+    description: 'Tout ce que tu possèdes : exemplaires, étoiles, stats de base.',
+    pied: (compte) => `${new Set(compte.roster.map((membre) => membre.speciesId)).size} espèces`,
   },
   {
     id: 'invocation',
@@ -84,15 +91,17 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
 
   const titre = elem('div');
   const starter = compte.starterId ? getSpecies(compte.starterId).name : null;
+  // Le nom du dresseur apparaît ici : c'est le seul écran qu'il revoit à
+  // chaque retour de manche, donc le seul endroit où le rappel a du poids.
   titre.append(
-    elem('p', 'etiquette', 'Poke Tower'),
+    elem('p', 'etiquette', compte.trainerName ? `Dresseur ${compte.trainerName}` : 'Poke Tower'),
     elem('h1', 'titre titre-xl', starter ? `Prêt, ${starter} t’attend` : 'Prêt à défendre')
   );
 
   const soldes = elem('div', 'menu-solde');
   soldes.append(
     solde('Cristaux', String(compte.crystals)),
-    solde('Équipe', String(compte.roster.length)),
+    solde('Équipe', `${compte.team.length}/6`),
     solde('Niveau', String(compte.progression.storyLevel))
   );
 

@@ -70,6 +70,7 @@
 }
 
 .titre-xl { font-size: clamp(28px, 3.4vw, 44px); }
+.titre-l { font-size: clamp(22px, 2.4vw, 30px); }
 .titre-m { font-size: 19px; }
 
 .sous-titre {
@@ -1888,3 +1889,193 @@
 }
 
 .revelation-grille .resultat-stats { display: none; }
+
+/* ==========================================================================
+   Modale de creation
+   ========================================================================== */
+
+.modale {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(30, 42, 28, 0.82);
+}
+
+.modale-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(440px, 100%);
+  padding: 26px;
+  background: var(--blanc);
+  border: 3px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-portee);
+}
+
+/* Le dialogue garde sa hauteur pendant la frappe : sans reserve, la carte
+   sautait d'une ligne au premier caractere ecrit. */
+.modale-dialogue {
+  margin: 0;
+  font-family: var(--ui);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--encre);
+}
+
+.champ {
+  font-family: var(--ui);
+  font-size: 17px;
+  padding: 11px 13px;
+  color: var(--encre);
+  background: var(--ivoire);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+}
+
+.champ::placeholder { color: var(--gris-clair); }
+.champ:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* ==========================================================================
+   Equipe : la rangee porte la vignette et sa bascule
+   ========================================================================== */
+
+.equipe-rangee {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.equipe-rangee > .equipe-vignette { width: 100%; }
+
+/* Un liseré vert suffit à dire « celui-là part au combat » ; le bouton dit
+   quoi faire, le liseré dit l'état. */
+.equipe-rangee[data-engage='true'] > .equipe-vignette {
+  border-left: 5px solid var(--emeraude);
+}
+
+.equipe-bascule {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--ligne);
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+}
+
+.equipe-bascule[aria-pressed='true'] {
+  color: var(--blanc);
+  background: var(--emeraude);
+  border-color: var(--emeraude);
+}
+
+.equipe-bascule:disabled {
+  color: var(--gris-clair);
+  border-color: var(--ligne-douce);
+  cursor: not-allowed;
+}
+
+.equipe-bascule:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* ==========================================================================
+   Collection
+   ========================================================================== */
+
+.collection-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ecran-equipe .collection-grille { grid-column: 1; }
+
+.collection-vignette {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Une espece jamais obtenue reste a sa place, en creux : le joueur voit ce
+   qui lui manque au lieu de deviner que la liste est incomplete. */
+.collection-vignette[data-possede='false'] {
+  background: var(--ivoire);
+  border-color: var(--ligne-douce);
+  color: var(--gris-clair);
+}
+
+.collection-vignette[data-possede='false'] .pastille {
+  background: var(--ligne-douce);
+  color: var(--blanc);
+}
+
+.collection-vignette[aria-pressed='true'] {
+  border-color: var(--emeraude);
+  background: var(--emeraude-clair);
+}
+
+.collection-vignette:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+.collection-nom {
+  font-family: var(--ui);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.collection-compte {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  color: var(--blanc);
+  background: var(--ligne);
+  border-radius: 2px;
+}
+
+.collection-copies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collection-copie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--ivoire);
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+}
+
+.collection-copie-texte {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* La collection tient plus large que la liste d'equipe : ses vignettes sont
+   carrees et il y en a quinze, pas six. */
+.equipe-corps:has(.collection-grille) {
+  grid-template-columns: 340px minmax(0, 1fr);
+}

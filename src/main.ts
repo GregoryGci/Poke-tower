@@ -21,10 +21,13 @@ import { ouvrirMenu } from '@/ui/menu';
 import { afficherBilan } from '@/ui/result';
 import { ouvrirEquipe } from '@/ui/team';
 import { ouvrirInvocation } from '@/ui/summon';
+import { ouvrirCollection } from '@/ui/collection';
+import { demanderNomDresseur } from '@/ui/creation';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
 import { ARME_DE_DEPART } from '@/data/weapons';
+import { membresEquipe, normaliserEquipe } from '@/data/team';
 
 import { STARTER_CASES } from '@/data/content';
 import { Hud } from '@/ui/hud';
@@ -102,7 +105,11 @@ function armeEquipee(compte: typeof account.account): string | null {
 async function jouerManche(): Promise<void> {
   input.reset();
 
-  const rosterSpecies = [...new Set(account.account.roster.map((p) => p.speciesId))];
+  // Seule l'équipe part au combat : les modèles chargés sont les siens, pas
+  // ceux de toute la collection.
+  normaliserEquipe(account.account);
+  const equipe = membresEquipe(account.account);
+  const rosterSpecies = [...new Set(equipe.map((p) => p.speciesId))];
   const game = await Game.create(
     stage.scene,
     stage.camera,
@@ -131,7 +138,7 @@ async function jouerManche(): Promise<void> {
       loop.speed = multiplicateur;
     },
   });
-  hud.setRoster(account.account.roster);
+  hud.setRoster(equipe);
 
   // Le clic gauche a vide lache la camera ; une touche la recolle au dresseur.
   game.onCameraLibre = () => stage.libererSuivi();
@@ -215,6 +222,11 @@ async function jouerManche(): Promise<void> {
 
 /* ---------- Enchaînement des écrans ---------- */
 
+if (!account.account.trainerName) {
+  account.account.trainerName = await demanderNomDresseur();
+  await account.flush();
+}
+
 if (!account.account.starterId) {
   await choisirStarter();
 }
@@ -230,6 +242,11 @@ for (;;) {
 
   if (destination === 'equipe') {
     await ouvrirEquipe(account);
+    continue;
+  }
+
+  if (destination === 'collection') {
+    await ouvrirCollection(account.account);
     continue;
   }
 

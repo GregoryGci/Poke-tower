@@ -1,6 +1,11 @@
 /**
  * Écran d'équipe.
  *
+ * On y compose l'équipe emmenée en manche — six au plus, comme le nombre de
+ * Pokémon posables sur le terrain — et on y dépense les cristaux. Le reste de
+ * la collection vit dans son propre écran : mêler l'inventaire complet à la
+ * sélection noyait le geste de choisir.
+ *
  * Tout ce qu'un Pokémon possède tient sur une page : ses quatre attaques,
  * ses deux traits, ses quatre sub-stats. C'est là que le joueur ira vérifier
  * ce qu'un reroll lui a donné, donc rien n'est caché derrière un onglet.
@@ -11,6 +16,7 @@
  */
 
 import { getSpecies } from '@/data/content';
+import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -269,10 +275,8 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
   const racine = elem('div', 'ecran-equipe');
 
   const titre = elem('div');
-  titre.append(
-    elem('p', 'etiquette', 'Collection'),
-    elem('h1', 'titre titre-xl', `Mon équipe — ${compte.roster.length}`)
-  );
+  const compteurTitre = elem('h1', 'titre titre-xl');
+  titre.append(elem('p', 'etiquette', 'Six Pokémon au plus'), compteurTitre);
 
   const retour = elem('button', 'bouton-discret', 'Retour au menu');
   retour.type = 'button';
@@ -307,28 +311,69 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
     rafraichir();
   };
 
-  for (const owned of compte.roster) {
-    const species = getSpecies(owned.speciesId);
-    const vignette = elem('button', 'equipe-vignette');
-    vignette.type = 'button';
-    vignette.id = `equipe-${owned.id}`;
-    vignette.setAttribute('aria-pressed', String(choisi?.id === owned.id));
+  /**
+   * Reconstruit la liste.
+   *
+   * Les membres de l'équipe remontent en tête : c'est la composition qu'on
+   * vient vérifier ici, pas l'ordre d'obtention.
+   */
+  const construireListe = (): void => {
+    liste.innerHTML = '';
+    compteurTitre.textContent = `Mon équipe — ${compte.team.length}/${EQUIPE_MAX}`;
 
-    const pastille = elem('span', 'pastille', species.name.slice(0, 1));
-    pastille.dataset['type'] = species.types[0];
+    const ordonne = [...compte.roster].sort((a, b) => {
+      const da = dansEquipe(compte, a) ? 0 : 1;
+      const db = dansEquipe(compte, b) ? 0 : 1;
+      return da - db;
+    });
 
-    const texte = elem('span', 'unite-texte');
-    texte.append(
-      elem('span', 'unite-nom', species.name),
-      elem('span', 'unite-detail', `${owned.rarity} · niveau ${owned.level}`),
-      rangeeEtoiles(owned.stars, owned.shiny, 'vignette-etoiles')
-    );
+    for (const owned of ordonne) {
+      const species = getSpecies(owned.speciesId);
+      const engage = dansEquipe(compte, owned);
 
-    vignette.append(pastille, texte);
-    vignette.addEventListener('click', () => selectionner(owned));
-    liste.appendChild(vignette);
-  }
+      const rangee = elem('div', 'equipe-rangee');
+      rangee.dataset['engage'] = String(engage);
 
+      const vignette = elem('button', 'equipe-vignette');
+      vignette.type = 'button';
+      vignette.id = `equipe-${owned.id}`;
+      vignette.setAttribute('aria-pressed', String(choisi?.id === owned.id));
+
+      const pastille = elem('span', 'pastille', species.name.slice(0, 1));
+      pastille.dataset['type'] = species.types[0];
+
+      const texte = elem('span', 'unite-texte');
+      texte.append(
+        elem('span', 'unite-nom', species.name),
+        elem('span', 'unite-detail', `${owned.rarity} · niveau ${owned.level}`),
+        rangeeEtoiles(owned.stars, owned.shiny, 'vignette-etoiles')
+      );
+
+      vignette.append(pastille, texte);
+      vignette.addEventListener('click', () => selectionner(owned));
+
+      const bascule = elem('button', 'equipe-bascule', engage ? '−' : '+');
+      bascule.type = 'button';
+      bascule.id = `bascule-${owned.id}`;
+      bascule.title = engage
+        ? 'Retirer de l’équipe'
+        : compte.team.length >= EQUIPE_MAX
+          ? 'Équipe complète'
+          : 'Ajouter à l’équipe';
+      bascule.setAttribute('aria-pressed', String(engage));
+      bascule.disabled = !engage && compte.team.length >= EQUIPE_MAX;
+      bascule.addEventListener('click', () => {
+        if (!basculerEquipe(compte, owned)) return;
+        account.touch();
+        construireListe();
+      });
+
+      rangee.append(vignette, bascule);
+      liste.appendChild(rangee);
+    }
+  };
+
+  construireListe();
   if (choisi) rafraichir();
   else detail.appendChild(elem('p', 'sous-titre', 'Ton équipe est vide.'));
 
