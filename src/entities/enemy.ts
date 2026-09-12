@@ -15,7 +15,7 @@ import type { Poolable } from '@/core/pool';
  * 'mort' est l'instant du coup fatal ; 'ko' est l'agonie jouée à l'écran.
  * Les deux sont distincts pour que les cristaux ne soient comptés qu'une fois.
  */
-export type EnemyState = 'marche' | 'attire' | 'mort' | 'ko' | 'arrive';
+export type EnemyState = 'marche' | 'mort' | 'ko' | 'arrive';
 
 export class Enemy implements Poolable, SpatialItem {
   /** Espèce affichée : décide de la foule instanciée qui la rendra. */
@@ -37,8 +37,6 @@ export class Enemy implements Poolable, SpatialItem {
   /** Décalage latéral, pour éviter la file indienne. */
   offset = 0;
   state: EnemyState = 'marche';
-  /** Cible d'un appât lancé par le dresseur, s'il y en a un. */
-  lure: { x: number; z: number; until: number } | null = null;
   /** Secondes restantes d'agonie avant de rendre l'unité au réservoir. */
   corpseTimer = 0;
 
@@ -54,7 +52,6 @@ export class Enemy implements Poolable, SpatialItem {
     this.hp = this.maxHp = 10;
     this.offset = 0;
     this.state = 'marche';
-    this.lure = null;
     this.corpseTimer = 0;
   }
 
@@ -85,29 +82,14 @@ export class Enemy implements Poolable, SpatialItem {
 
   /** Vrai tant que l'unité participe au jeu : ni morte, ni sortie. */
   get active(): boolean {
-    return this.state === 'marche' || this.state === 'attire';
+    return this.state === 'marche';
   }
 
-  update(dt: number, tick: number): void {
+  update(dt: number): void {
     if (!this.active || !this.path) return;
     this.prevX = this.x;
     this.prevZ = this.z;
 
-    if (this.lure && tick < this.lure.until) {
-      // Détourné : il marche vers l'appât sans perdre sa progression.
-      const dx = this.lure.x - this.x;
-      const dz = this.lure.z - this.z;
-      const len = Math.hypot(dx, dz);
-      if (len > 0.05) {
-        const step = Math.min(this.speed * dt, len);
-        this.x += (dx / len) * step;
-        this.z += (dz / len) * step;
-      }
-      this.state = 'attire';
-      return;
-    }
-
-    this.lure = null;
     this.state = 'marche';
     this.distance += this.speed * dt;
     if (this.distance >= this.path.length) {

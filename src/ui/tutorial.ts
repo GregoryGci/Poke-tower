@@ -54,13 +54,7 @@ const ETAPES: Etape[] = [
     accomplie: (c) => c.status.trainerMoved,
     pause: 1,
   },
-  {
-    titre: 'Lance un appât',
-    corps: '{Espace} détourne les ennemis proches de ta position. De quoi gagner de précieuses secondes.',
-    accomplie: (c) => c.status.lures > 0,
-    pause: 1.2,
-  },
-  {
+ {
     titre: 'Tiens la ligne',
     corps:
       'Chaque ennemi qui atteint le bout du chemin te coûte. Ceux que tu abats laissent des cristaux.',

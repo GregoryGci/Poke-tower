@@ -116,6 +116,13 @@ async function jouerManche(): Promise<void> {
   });
   hud.setRoster(account.account.roster);
 
+  // Le clic gauche a vide lache la camera ; une touche la recolle au dresseur.
+  game.onCameraLibre = () => stage.libererSuivi();
+  const recoller = (evenement: KeyboardEvent): void => {
+    if (evenement.code === 'Space' || evenement.code === 'Escape') stage.reprendreSuivi();
+  };
+  window.addEventListener('keydown', recoller);
+
 
   // Première run : les consignes s'effacent d'elles-mêmes dès que le geste est fait.
   const tutorial = account.account.progression.tutorialDone
@@ -149,6 +156,8 @@ async function jouerManche(): Promise<void> {
     },
     render(alpha) {
       game.render(alpha);
+      // La camera colle au dresseur, sauf si le joueur l a saisie.
+      stage.suivre(game.positionDresseur, 1 / 60);
       stage.renderer.render(stage.scene, stage.camera);
       hud.update(game.status);
     },
@@ -167,6 +176,8 @@ async function jouerManche(): Promise<void> {
   // On fige la simulation avant de lire le bilan : sans cela, les compteurs
   // continueraient d'avancer pendant que le joueur lit son résultat.
   loop.stop();
+  window.removeEventListener('keydown', recoller);
+  stage.reprendreSuivi();
   const bilanFinal = game.status;
   hud.dispose();
   tutorial?.dispose();

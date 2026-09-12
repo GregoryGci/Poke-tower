@@ -83,8 +83,49 @@ function buildPathSurface(path: EnemyPath, width: number): BufferGeometry {
   return geometry;
 }
 
+/**
+ * Fleches posees le long du chemin.
+ *
+ * Rien n'indiquait par ou les ennemis arrivaient : le joueur devait lancer la
+ * vague pour le decouvrir, donc placer a l'aveugle. Elles ne servent que
+ * pendant la preparation et s'effacent au depart.
+ */
+function construireFleches(path: EnemyPath): Group {
+  const fleches = new Group();
+  const materiau = new MeshStandardMaterial({
+    color: '#2f5fa8',
+    emissive: '#16325e',
+    transparent: true,
+    opacity: 0.92,
+  });
+
+  // Une fleche tous les quatre metres environ, jamais collee aux extremites.
+  const pas = 4.2;
+  const point = new Vector2();
+  const direction = new Vector2();
+
+  for (let distance = pas * 0.6; distance < path.length - 0.5; distance += pas) {
+    path.sample(distance, point);
+    path.direction(distance, direction);
+
+    const fleche = new Mesh(new ConeGeometry(0.42, 1.05, 3), materiau);
+    // Le cone pointe vers +Y : on le couche, puis on l'oriente sur le chemin.
+    fleche.rotation.x = -Math.PI / 2;
+    fleche.rotation.y = 0;
+    const support = new Group();
+    support.add(fleche);
+    support.position.set(point.x, 0.06, point.y);
+    support.rotation.y = Math.atan2(direction.x, direction.y);
+    fleches.add(support);
+  }
+
+  return fleches;
+}
+
 export interface Terrain {
   group: Group;
+  /** Repères de direction, visibles seulement avant le lancement. */
+  fleches: Group;
   /** Plan du sol, cible du raycast pour savoir où pointe la souris. */
   groundMesh: Mesh;
   dispose(): void;
@@ -142,11 +183,15 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
     mesh.position.set(at.x, 0.02, at.y);
     return mesh;
   };
+  const fleches = construireFleches(path);
+  group.add(fleches);
+
   group.add(marker('#0e7a57', path.sample(0, new Vector2())));
 
 
   return {
     group,
+    fleches,
     groundMesh,
     dispose(): void {
       group.traverse((child) => {

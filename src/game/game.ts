@@ -55,8 +55,6 @@ const PATH_WIDTH = 2.4;
 const MAX_PROJECTILES = 512;
 /** Capacité d'une foule, par espèce. */
 const CROWD_CAPACITY = 128;
-/** Durée d'un appât, en ticks. */
-const LURE_TICKS = 90;
 /** Pokémon simultanément sur le terrain, doublons compris. */
 const MAX_POSES = 6;
 /**
@@ -145,7 +143,6 @@ export interface GameStatus {
   maxPoses: number;
   /** Le joueur a-t-il déjà déplacé son dresseur ? */
   trainerMoved: boolean;
-  lures: number;
   message: string | null;
 }
 
@@ -210,17 +207,19 @@ export class Game {
   private leaked = 0;
   private crystals = 0;
   private trainerMoved = false;
-  private lures = 0;
   private message: string | null = null;
   private messageUntil = 0;
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
+  /** Prevenu quand le joueur saisit la camera au clic gauche. */
+  onCameraLibre: (() => void) | null = null;
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
   private readonly tmpVec2 = new Vector2();
   private readonly tmpScale = new Vector3(1, 1, 1);
+  private readonly tmpFocus = new Vector3();
 
   private constructor(
     private readonly scene: Scene,
@@ -262,10 +261,14 @@ export class Game {
     this.scene.add(this.root);
 
     this.input.onClick((button) => {
-      if (button === 0) void this.tryPlace();
+      if (button === 0) {
+        // Sans Pokemon selectionne, le clic gauche sert a saisir la camera
+        // plutot qu'a poser dans le vide.
+        if (this.pendingPlacement) void this.tryPlace();
+        else this.onCameraLibre?.();
+      }
       if (button === 2) this.pendingPlacement = null;
     });
-    this.input.onAction(() => this.throwLure());
   }
 
   /**
@@ -330,7 +333,6 @@ export class Game {
       outcome: this.outcome,
       phase: this.phase,
       trainerMoved: this.trainerMoved,
-      lures: this.lures,
       // Une foule par espèce visible, plus les projectiles et le décor.
       drawCalls: [...this.crowds.values()].filter((c) => c.crowd.mesh.count > 0).length
         + (this.projectileMesh.count > 0 ? 1 : 0)
@@ -345,6 +347,8 @@ export class Game {
   lancerRun(): void {
     if (this.phase !== 'preparation') return;
     this.phase = 'en_cours';
+    // Les reperes de direction ont fait leur office.
+    this.terrain.fleches.visible = false;
     this.notify('La vague arrive');
   }
 
@@ -377,7 +381,7 @@ export class Game {
     }
 
     this.enemies.forEach((enemy) => {
-      enemy.update(dt, tick);
+      enemy.update(dt);
 
       if (enemy.state === 'arrive') {
         this.leaked++;
@@ -485,6 +489,11 @@ export class Game {
       const inflige = Math.min(shot.damage, shot.target.hp);
       this.crediter(shot, inflige, shot.target.damage(shot.damage));
     }
+  }
+
+  /** Position du dresseur, cible du suivi de camera. */
+  get positionDresseur(): Vector3 {
+    return this.tmpFocus.set(this.trainer.x, 0, this.trainer.z);
   }
 
   /** Rapport de manche, construit à la demande. */
@@ -724,17 +733,6 @@ export class Game {
     visual.lunge = 1;
   }
 
-  private throwLure(): void {
-    const { x, z } = this.trainer;
-    let attracted = 0;
-    this.enemyGrid.queryRadius(x, z, 6, (enemy) => {
-      if (!enemy.active) return;
-      enemy.lure = { x, z, until: this.tick + LURE_TICKS };
-      attracted++;
-    });
-    this.lures++;
-    this.notify(attracted ? `Appât lancé — ${attracted} détournés` : 'Appât lancé dans le vide');
-  }
 
   private notify(text: string): void {
     this.message = text;
