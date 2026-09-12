@@ -9,7 +9,7 @@
  * Tout ce qui bouge la caméra passe par une **valeur voulue** et une valeur
  * courante qui la rattrape à chaque image. Rien ne saute :
  *
- *  - la rotation était appliquée d'un bloc, par cran de 15°, au rythme de
+ *  - la rotation était appliquée d'un bloc, par cran, au rythme de
  *    répétition du clavier. Ça se voyait comme une saccade, et c'était bien
  *    une saccade ;
  *  - le zoom à la molette sautait de la même façon.
@@ -18,6 +18,7 @@
  * résultat ne dépend donc pas de la cadence d'affichage.
  */
 
+import { SEUIL_GLISSER, identifiantTouche } from '@/core/input';
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -50,15 +51,6 @@ const VITESSE_ROTATION = 110;
 const ROTATION_PAR_PIXEL = 0.32;
 /** Unités de distance par pixel de glisser vertical. */
 const ZOOM_PAR_PIXEL = 0.06;
-/**
- * Pixels de glisser au-delà desquels le geste devient une rotation.
- *
- * En dessous, c'est un clic : le clic gauche sert à poser un Pokémon et à en
- * sélectionner un, il ne doit pas se transformer en rotation parce que la
- * main a bougé de deux pixels.
- */
-const SEUIL_GLISSER = 4;
-
 /** Distance au point visé, en unités monde. */
 const DISTANCE_MIN = 26;
 const DISTANCE_MAX = 76;
@@ -255,13 +247,14 @@ export function createStage(container: HTMLElement): Stage {
   /**
    * Glisser à la souris.
    *
-   * Bouton gauche ou droit : le geste horizontal tourne la vue, le geste
-   * vertical rapproche ou éloigne. Le bouton du milieu fait glisser le
-   * terrain, quand le suivi a été lâché.
+   * Bouton gauche ou droit : le geste horizontal fait tourner la vue autour
+   * du dresseur, le geste vertical rapproche ou éloigne. Le bouton du milieu
+   * fait glisser le terrain et détache le suivi.
    *
-   * Le seuil est là pour une raison précise : le clic gauche pose un Pokémon
-   * et en sélectionne un. Tant que la main n'a pas franchi quelques pixels,
-   * le geste reste un clic et la caméra ne bouge pas.
+   * Le seuil est là pour une raison précise : le clic gauche pose un Pokémon,
+   * en sélectionne un, ou envoie le dresseur quelque part. Tant que la main
+   * n'a pas franchi quelques pixels, le geste reste un clic et la caméra ne
+   * bouge pas.
    */
   let bouton: number | null = null;
   let franchi = false;
@@ -292,7 +285,11 @@ export function createStage(container: HTMLElement): Stage {
     }
 
     if (bouton === 1) {
-      if (!suit) deplacer(dx, dy);
+      // Le bouton du milieu fait glisser le terrain. Il détache le suivi de
+      // lui-même : c'est le seul geste qui décolle la caméra du dresseur, et
+      // devoir l'annoncer par une autre commande serait absurde.
+      suit = false;
+      deplacer(dx, dy);
       return;
     }
 
@@ -348,19 +345,21 @@ export function createStage(container: HTMLElement): Stage {
   // A et E tournent la vue, R la remet d'aplomb. Maintenir tourne en continu :
   // l'appui bref garde son pas, pour un ajustement précis au clavier.
   const onKey = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyA') {
+    const touche = identifiantTouche(event);
+    if (touche === 'a') {
       if (!event.repeat) pivoter(-PAS_ROTATION);
       rotationTenue.gauche = true;
-    } else if (event.code === 'KeyE') {
+    } else if (touche === 'e') {
       if (!event.repeat) pivoter(PAS_ROTATION);
       rotationTenue.droite = true;
-    } else if (event.code === 'KeyR' && !event.repeat) {
+    } else if (touche === 'r' && !event.repeat) {
       reinitialiserCap();
     }
   };
   const onKeyUp = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyA') rotationTenue.gauche = false;
-    if (event.code === 'KeyE') rotationTenue.droite = false;
+    const touche = identifiantTouche(event);
+    if (touche === 'a') rotationTenue.gauche = false;
+    if (touche === 'e') rotationTenue.droite = false;
   };
   // Une touche relâchée hors de la fenêtre ne produit pas de keyup : sans ce
   // filet, la caméra continuerait de tourner toute seule au retour.

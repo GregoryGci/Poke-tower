@@ -6,18 +6,50 @@
 import { Vector2 } from 'three';
 
 /**
- * Déplacement du dresseur : ZQSD et les flèches, rien d'autre.
+ * Déplacement du dresseur : ZQSD et les flèches.
  *
- * W et A ont été retirés. Ils doublaient Z et Q pour les claviers QWERTY,
- * mais A est désormais une commande de caméra : sur AZERTY, faire pivoter la
- * vue déplaçait donc le dresseur vers la gauche en même temps.
+ * Les lettres sont reconnues par `event.key` et non par `event.code`, et la
+ * différence n'est pas un détail : `code` désigne la **position physique** de
+ * la touche sur un clavier QWERTY de référence. Sur un clavier AZERTY, la
+ * touche marquée A produit donc `KeyQ`, et celle marquée Z produit `KeyW` —
+ * ce qui inversait tout : les commandes de caméra tombaient sur Q et E au
+ * lieu de A et E, et ZQSD ne déplaçait pas ce qu'il devait déplacer.
+ *
+ * `key` donne la lettre réellement imprimée sur la touche. Ce qui est écrit
+ * sur le clavier fait donc ce qui est écrit dans le menu, quelle que soit la
+ * disposition.
  */
 const KEY_AXES: Record<string, [number, number]> = {
-  KeyZ: [0, -1], ArrowUp: [0, -1],
-  KeyS: [0, 1], ArrowDown: [0, 1],
-  KeyQ: [-1, 0], ArrowLeft: [-1, 0],
-  KeyD: [1, 0], ArrowRight: [1, 0],
+  z: [0, -1], ArrowUp: [0, -1],
+  s: [0, 1], ArrowDown: [0, 1],
+  q: [-1, 0], ArrowLeft: [-1, 0],
+  d: [1, 0], ArrowRight: [1, 0],
 };
+
+/**
+ * Pixels au-delà desquels un appui devient un glisser, et non un clic.
+ *
+ * La caméra tourne en maintenant le bouton gauche ou droit ; le clic gauche,
+ * lui, envoie le dresseur là où on a cliqué. Sans ce seuil — et sans attendre
+ * le relâchement pour trancher — les deux se déclenchaient ensemble : chaque
+ * rotation à la souris expédiait aussi le dresseur à l'autre bout de la
+ * carte.
+ *
+ * La valeur est partagée avec la caméra : les deux doivent trancher au même
+ * endroit, sinon il existe une bande de quelques pixels où le geste fait les
+ * deux choses, ou aucune.
+ */
+export const SEUIL_GLISSER = 4;
+
+/**
+ * Identifiant stable d'une touche.
+ *
+ * Une lettre par ce qu'elle imprime, le reste — flèches, espace — par son
+ * code, qui ne dépend d'aucune disposition.
+ */
+export function identifiantTouche(evenement: KeyboardEvent): string {
+  return evenement.key.length === 1 ? evenement.key.toLowerCase() : evenement.code;
+}
 
 export class InputState {
   /** Direction souhaitée, normalisée. x = est/ouest, y = nord/sud. */
@@ -27,6 +59,8 @@ export class InputState {
   pointerInside = false;
 
   private readonly pressed = new Set<string>();
+  /** Appui en cours : bouton, et point de départ pour mesurer le glisser. */
+  private appui: { bouton: number; x: number; y: number } | null = null;
   private actionListeners: Array<() => void> = [];
   private clickListeners: Array<(button: number) => void> = [];
   private joystick: { active: boolean; origin: Vector2; current: Vector2 } = {
@@ -49,6 +83,13 @@ export class InputState {
     this.actionListeners.push(fn);
   }
 
+  /**
+   * S'abonne au clic.
+   *
+   * Les abonnés sont prévenus au **relâchement**, et seulement si le pointeur
+   * n'a pas glissé au-delà de SEUIL_GLISSER — sinon le geste appartenait à la
+   * caméra.
+   */
   onClick(fn: (button: number) => void): void {
     this.clickListeners.push(fn);
   }
@@ -62,6 +103,7 @@ export class InputState {
   reset(): void {
     this.actionListeners = [];
     this.clickListeners = [];
+    this.appui = null;
     this.pressed.clear();
     this.move.set(0, 0);
   }
@@ -81,17 +123,19 @@ export class InputState {
       for (const fn of this.actionListeners) fn();
       return;
     }
-    if (KEY_AXES[e.code]) {
-      this.pressed.add(e.code);
+    const touche = identifiantTouche(e);
+    if (KEY_AXES[touche]) {
+      this.pressed.add(touche);
       this.recompute();
     }
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
-    if (this.pressed.delete(e.code)) this.recompute();
+    if (this.pressed.delete(identifiantTouche(e))) this.recompute();
   };
 
   private onBlur = (): void => {
+    this.appui = null;
     this.pressed.clear();
     this.joystick.active = false;
     this.recompute();
@@ -111,7 +155,7 @@ export class InputState {
   };
 
   private onPointerDown = (e: PointerEvent): void => {
-    for (const fn of this.clickListeners) fn(e.button);
+    this.appui = { bouton: e.button, x: e.clientX, y: e.clientY };
     if (e.pointerType === 'touch') {
       this.joystick.active = true;
       this.joystick.origin.set(e.clientX, e.clientY);
@@ -119,13 +163,26 @@ export class InputState {
     }
   };
 
-  private onPointerUp = (): void => {
+  private onPointerUp = (e: PointerEvent): void => {
+    const appui = this.appui;
+    this.appui = null;
+    // Un appui relâché sans avoir bougé est un clic ; au-delà du seuil,
+    // c'était un glisser, et la caméra s'en est déjà chargée.
+    if (appui && appui.bouton === e.button) {
+      const parcouru = Math.hypot(e.clientX - appui.x, e.clientY - appui.y);
+      if (parcouru < SEUIL_GLISSER) {
+        for (const fn of this.clickListeners) fn(appui.bouton);
+      }
+    }
     this.joystick.active = false;
     this.recompute();
   };
 
   private onPointerLeave = (): void => {
     this.pointerInside = false;
+    // Un bouton relâché hors du canvas ne donne pas de pointerup exploitable :
+    // on oublie l'appui plutôt que de le valider au retour du curseur.
+    this.appui = null;
   };
 
   private recompute(): void {

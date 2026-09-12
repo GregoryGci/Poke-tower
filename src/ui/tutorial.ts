@@ -50,7 +50,7 @@ const ETAPES: Etape[] = [
   },
   {
     titre: 'Prends ton dresseur en main',
-    corps: '{ZQSD} ou les flèches pour te déplacer. Tu joues pendant que tes Pokémon défendent.',
+    corps: '{ZQSD} ou un clic sur le terrain pour te déplacer, {A} et {E} pour tourner la vue. Tu joues pendant que tes Pokémon défendent.',
     accomplie: (c) => c.status.trainerMoved,
     pause: 1,
   },

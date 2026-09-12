@@ -151,8 +151,9 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
   });
   hud.setRoster(equipe);
 
-  // Le clic gauche a vide lache la camera ; une touche la recolle au dresseur.
-  game.onCameraLibre = () => stage.libererSuivi();
+  // La camera reste sur le dresseur : c'est autour de lui qu'on tourne la
+  // vue. Seul le glisser au bouton du milieu la detache, et une touche la
+  // recolle.
   const recoller = (evenement: KeyboardEvent): void => {
     if (evenement.code === 'Space' || evenement.code === 'Escape') stage.reprendreSuivi();
   };

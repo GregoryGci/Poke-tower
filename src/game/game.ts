@@ -331,6 +331,8 @@ export class Game {
   private readonly barresVie = new BarresVie({ capacite: 256 });
   private readonly projectileMesh: InstancedMesh;
   private readonly ghostRange: Mesh;
+  /** Anneau posé au sol là où le dresseur se rend. */
+  private readonly repereDestination: Mesh;
   private ghostModel: Object3D | null = null;
   private ghostSpeciesId: string | null = null;
   private readonly trainerMesh: Group;
@@ -375,8 +377,6 @@ export class Game {
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
-  /** Prevenu quand le joueur saisit la camera au clic gauche. */
-  onCameraLibre: (() => void) | null = null;
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
@@ -439,6 +439,17 @@ export class Game {
     this.ghostRange.visible = false;
     this.root.add(this.ghostRange);
 
+    // Repère de destination : sans lui, un clic manqué sur le terrain ne
+    // donne aucun retour, et on ne sait pas si le jeu a entendu.
+    this.repereDestination = new Mesh(
+      new RingGeometry(0.34, 0.5, 24),
+      new MeshBasicMaterial({ color: '#2f5fa8', transparent: true, opacity: 0.7, depthWrite: false })
+    );
+    this.repereDestination.rotation.x = -Math.PI / 2;
+    this.repereDestination.renderOrder = 2;
+    this.repereDestination.visible = false;
+    this.root.add(this.repereDestination);
+
     this.construireApercus();
     this.root.add(this.apercusGroup);
     this.root.add(this.barresVie.fond, this.barresVie.jauge);
@@ -453,23 +464,24 @@ export class Game {
 
     this.scene.add(this.root);
 
+    // Le clic gauche fait trois choses, dans cet ordre : il pose le Pokémon
+    // en attente, il ouvre celui qui est sous le curseur, ou — à défaut — il
+    // envoie le dresseur là où on a cliqué. L'ordre compte : poser et
+    // sélectionner sont des gestes visés, se déplacer est ce qui reste.
     this.input.onClick((button) => {
       if (button === 0) {
         if (this.pendingPlacement) {
           void this.tryPlace();
         } else if (this.survolTour) {
-          // Cliquer un Pokémon déjà posé l'ouvre : c'est là qu'on dépense ses
-          // Poképièces. Sans ce geste, les paliers n'auraient aucune prise.
           this.tourSelectionnee = this.survolTour;
-        } else {
-          // Le clic dans le vide rend la camera au joueur, et referme le
-          // panneau : laisser une selection ouverte sur un terrain qu'on
-          // regarde ailleurs n'aide personne.
+        } else if (this.pointerValid) {
           this.tourSelectionnee = null;
-          this.onCameraLibre?.();
+          this.trainer.allerVers(this.pointerWorld.x, this.pointerWorld.z);
         }
       }
       if (button === 2) {
+        // Le clic droit annule : une pose en cours, sinon le panneau ouvert.
+        // Il sert aussi à tourner la vue, mais seul un vrai glisser le fait.
         this.pendingPlacement = null;
         this.tourSelectionnee = null;
       }
@@ -574,7 +586,13 @@ export class Game {
     this.tick = tick;
     if (this.message && tick > this.messageUntil) this.message = null;
 
-    this.trainer.update(dt, this.input.move);
+    // Le dresseur se déplace par rapport à ce que le joueur voit, donc par
+    // rapport au cap **courant** de la caméra. On le relit sur la caméra
+    // elle-même plutôt que de le recopier : une constante alignée à la main
+    // sur le cap d'origine poussait dans la mauvaise direction dès la
+    // première rotation.
+    this.camera.getWorldDirection(this.tmpVec);
+    this.trainer.update(dt, this.input.move, Math.atan2(-this.tmpVec.x, -this.tmpVec.z));
     if (!this.trainerMoved && this.input.move.lengthSq() > 0.01) this.trainerMoved = true;
 
     this.enemyGrid.clear();
@@ -741,7 +759,7 @@ export class Game {
    * vient de se deplacer ne l'est pas.
    */
   get dresseurEnMouvement(): boolean {
-    return this.input.move.lengthSq() > 0.01;
+    return this.input.move.lengthSq() > 0.01 || this.trainer.enRoute;
   }
 
   /** Position du dresseur, cible du suivi de camera. */
@@ -1401,6 +1419,17 @@ export class Game {
       } else if (visual.object.position.z !== 0) {
         visual.object.position.z = 0;
       }
+    }
+
+    const cible = this.trainer.cible;
+    if (cible) {
+      this.repereDestination.position.set(cible.x, 0.05, cible.y);
+      // L'anneau pulse doucement : un cercle fixe au sol se confond avec le
+      // décor, celui-ci se retrouve du coin de l'oeil.
+      this.repereDestination.scale.setScalar(1 + Math.sin(this.tick * 0.25) * 0.12);
+      this.repereDestination.visible = true;
+    } else {
+      this.repereDestination.visible = false;
     }
 
     this.trainer.renderAt(alpha, this.tmpVec2);

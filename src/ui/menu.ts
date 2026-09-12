@@ -128,10 +128,10 @@ const CARTES: Carte[] = [
  */
 const COMMANDES: Array<[string, string]> = [
   ['ZQSD', 'Déplacer le dresseur'],
-  ['A / E', 'Tourner la vue'],
-  ['R', 'Remettre la vue d’aplomb'],
+  ['Clic', 'Aller là-bas, ou ouvrir un Pokémon posé'],
+  ['A / E', 'Tourner la vue autour de soi'],
   ['Glisser', 'Tourner et zoomer'],
-  ['Clic', 'Poser, ou ouvrir un Pokémon posé'],
+  ['R', 'Remettre la vue d’aplomb'],
 ];
 
 function elem<K extends keyof HTMLElementTagNameMap>(
