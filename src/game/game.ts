@@ -52,7 +52,8 @@ import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, vaguesPourNiveau, vaguesTutoriel } from './waves';
 import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
-import { getWeapon, type WeaponModel } from '@/data/weapons';
+import { statsArme, type StatsArme } from '@/data/weapon-upgrade';
+import type { OwnedWeapon } from '@/data/types';
 import { STYLES } from '@/data/types';
 
 const TERRAIN_SIZE = 34;
@@ -234,7 +235,7 @@ export class Game {
   private readonly towers: Tower[] = [];
   private readonly trainer = new Trainer();
   /** Arme portee par le dresseur. Il tire seul sur ce qui passe a portee. */
-  private arme: WeaponModel | null = null;
+  private arme: StatsArme | null = null;
   private armeTimer = 0;
   /** Temps de visée restant avant le tir du dresseur. */
   private armeCast = 0;
@@ -301,9 +302,9 @@ export class Game {
     private readonly input: InputState,
     niveau: number,
     tutoriel: boolean,
-    armeId: string | null
+    arme: OwnedWeapon | null
   ) {
-    this.arme = armeId ? getWeapon(armeId) : null;
+    this.arme = arme ? statsArme(arme) : null;
     this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesPourNiveau(niveau));
     this.terrain = createTerrain(LEVEL_PATH, { size: TERRAIN_SIZE, pathWidth: PATH_WIDTH });
     this.root.add(this.terrain.group);
@@ -361,9 +362,9 @@ export class Game {
     rosterSpeciesIds: readonly string[],
     niveau = 1,
     tutoriel = false,
-    armeId: string | null = null
+    arme: OwnedWeapon | null = null
   ): Promise<Game> {
-    const game = new Game(scene, camera, input, niveau, tutoriel, armeId);
+    const game = new Game(scene, camera, input, niveau, tutoriel, arme);
 
     const enemySpecies = [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))];
     await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));
@@ -472,7 +473,8 @@ export class Game {
       if (enemy.state === 'mort') {
         // Coup fatal : on encaisse la récompense une seule fois, puis on laisse
         // l'agonie se jouer avant de rendre l'unité au réservoir.
-        this.crystals += PRIME_KO;
+        // La sub-stat « Cristaux » de l'arme portee majore chaque K.O.
+        this.crystals += Math.round(PRIME_KO * (1 + (this.arme?.cristaux ?? 0)));
         const entry = this.crowds.get(enemy.speciesId);
         const faint = entry?.faint ?? null;
         if (faint && entry) {
@@ -668,7 +670,12 @@ export class Game {
     if (this.projectiles.activeCount >= MAX_PROJECTILES) return;
 
     const tir = this.projectiles.acquire();
-    tir.launch(this.trainer.x, this.trainer.z, cible, this.arme.damage, 22, STYLES[this.arme.style]);
+    // Le profil de style est copie puis elargi : une arme de zone dont les
+    // sub-stats ont monte doit toucher plus large, pas seulement plus fort.
+    const profil = { ...STYLES[this.arme.style] };
+    profil.rayon *= this.arme.zone;
+    profil.couloir *= this.arme.zone;
+    tir.launch(this.trainer.x, this.trainer.z, cible, this.arme.damage, 22, profil);
     tir.ownerId = ARME_OWNER;
     tir.moveType = null;
   }

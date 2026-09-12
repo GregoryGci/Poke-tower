@@ -51,7 +51,14 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     ...account,
     progression,
     roster,
-    weapons: account.weapons ?? [],
+    // Les armes d'avant la mecanique de runes n'avaient ni palier ni lignes
+    // de stats : elles repartent nues plutot que d'etre jetees.
+    weapons: (account.weapons ?? []).map((arme) => ({
+      ...arme,
+      niveau: arme.niveau ?? 0,
+      innee: arme.innee ?? null,
+      subStats: arme.subStats ?? [],
+    })),
     equippedWeaponId: account.equippedWeaponId ?? null,
     team: account.team ?? roster.slice(0, 6).map((membre) => membre.id),
     trainerName: account.trainerName ?? '',

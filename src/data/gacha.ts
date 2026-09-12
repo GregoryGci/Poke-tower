@@ -12,6 +12,7 @@
 import { SPECIES } from './content';
 import { createPokemon } from './roll';
 import { armePourRarete } from './weapons';
+import { initialiserArme } from './weapon-upgrade';
 import type { OwnedPokemon, OwnedWeapon, Rarity } from './types';
 
 /** Coût d'une invocation, en cristaux. */
@@ -95,7 +96,19 @@ export function invoquerMultiple(rng: () => number = Math.random): OwnedPokemon[
  */
 export function invoquerArme(rng: () => number = Math.random): OwnedWeapon {
   const modele = armePourRarete(tirerRarete(rng), rng);
-  return { id: crypto.randomUUID(), weaponId: modele.id, rarity: modele.rarity };
+  return armeNeuve(modele.id, modele.rarity, rng);
+}
+
+/** Une arme prête à être portée : palier zéro, innée et sub-stats tirées. */
+export function armeNeuve(
+  weaponId: string,
+  rarity: Rarity,
+  rng: () => number = Math.random
+): OwnedWeapon {
+  return initialiserArme(
+    { id: crypto.randomUUID(), weaponId, rarity, niveau: 0, innee: null, subStats: [] },
+    rng
+  );
 }
 
 export function invoquerArmesMultiple(rng: () => number = Math.random): OwnedWeapon[] {
@@ -103,7 +116,7 @@ export function invoquerArmesMultiple(rng: () => number = Math.random): OwnedWea
   for (let i = 0; i < TIRAGE_MULTIPLE; i++) lot.push(invoquerArme(rng));
   if (lot.every((arme) => arme.rarity === 'normal')) {
     const modele = armePourRarete('rare', rng);
-    lot[lot.length - 1] = { id: crypto.randomUUID(), weaponId: modele.id, rarity: modele.rarity };
+    lot[lot.length - 1] = armeNeuve(modele.id, modele.rarity, rng);
   }
   return lot;
 }

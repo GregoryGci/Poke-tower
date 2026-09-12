@@ -11,7 +11,13 @@
 import { getSpecies } from '@/data/content';
 import type { PlayerAccount } from '@/data/types';
 
-export type Destination = 'histoire' | 'equipe' | 'collection' | 'invocation' | 'raid';
+export type Destination =
+  | 'histoire'
+  | 'equipe'
+  | 'collection'
+  | 'armes'
+  | 'invocation'
+  | 'raid';
 
 interface Carte {
   id: Destination;
@@ -48,6 +54,17 @@ const CARTES: Carte[] = [
     titre: 'Collection',
     description: 'Tout ce que tu possèdes : exemplaires, étoiles, stats de base.',
     pied: (compte) => `${new Set(compte.roster.map((membre) => membre.speciesId)).size} espèces`,
+  },
+  {
+    id: 'armes',
+    etiquette: 'Arsenal',
+    titre: 'Armes',
+    description:
+      'Paliers, stat innée et sub-stats. C’est là que se travaille la puissance du dresseur.',
+    pied: (compte) => {
+      const portee = compte.weapons.find((arme) => arme.id === compte.equippedWeaponId);
+      return portee ? `Portée : +${portee.niveau}` : `${compte.weapons.length} en stock`;
+    },
   },
   {
     id: 'invocation',

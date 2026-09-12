@@ -17,8 +17,6 @@
 
 import { getSpecies } from '@/data/content';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
-import { getWeapon, libelleStyle } from '@/data/weapons';
-import { LIBELLE_RARETE } from '@/data/gacha';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -384,64 +382,7 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
   if (choisi) rafraichir();
   else detail.appendChild(elem('p', 'sous-titre', 'Ton équipe est vide.'));
 
-  /* ---- Arme portee ---- */
-
-  /**
-   * Rateau d'armes.
-   *
-   * Le dresseur est la seule piece mobile du terrain : son arme se choisit
-   * donc au meme endroit que son equipe, pas dans un ecran a part. Une seule
-   * est portee a la fois — c'est ce qui donne du poids au tirage.
-   */
-  const armes = elem('div', 'armes');
-  const construireArmes = (): void => {
-    armes.innerHTML = '';
-    armes.appendChild(elem('p', 'etiquette', 'Arme du dresseur'));
-
-    if (compte.weapons.length === 0) {
-      armes.appendChild(elem('p', 'sous-titre', 'Aucune arme. Le portail d’invocation en distribue.'));
-      return;
-    }
-
-    const rangee = elem('div', 'armes-rangee');
-    for (const arme of compte.weapons) {
-      const modele = getWeapon(arme.weaponId);
-      const portee = compte.equippedWeaponId === arme.id;
-
-      const bouton = elem('button', 'arme-vignette');
-      bouton.type = 'button';
-      bouton.id = `arme-${arme.id}`;
-      bouton.setAttribute('aria-pressed', String(portee));
-      bouton.dataset['rarete'] = arme.rarity;
-      bouton.title = modele.description;
-
-      const badge = elem('span', 'rarete', LIBELLE_RARETE[arme.rarity]);
-      badge.dataset['rarete'] = arme.rarity;
-
-      bouton.append(
-        elem('span', 'arme-nom', modele.name),
-        badge,
-        elem(
-          'span',
-          'arme-chiffres',
-          `${modele.damage} dégâts · ${(1 / modele.cooldown).toFixed(1)}/s · portée ${modele.range.toFixed(1)}`
-        ),
-        elem('span', 'arme-style', libelleStyle(modele))
-      );
-
-      bouton.addEventListener('click', () => {
-        if (compte.equippedWeaponId === arme.id) return;
-        compte.equippedWeaponId = arme.id;
-        account.touch();
-        construireArmes();
-      });
-      rangee.appendChild(bouton);
-    }
-    armes.appendChild(rangee);
-  };
-  construireArmes();
-
-  racine.append(haut, corps, armes);
+  racine.append(haut, corps);
   document.body.appendChild(racine);
 
   return new Promise<void>((resolve) => {

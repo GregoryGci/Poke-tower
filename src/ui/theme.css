@@ -2283,3 +2283,107 @@
 /* L'incantation se distingue de la simple mise en joue : ambre, pas vert. */
 .infobulle-etat[data-cast='true'] { color: var(--or); }
 .infobulle[data-visible='true'] .jauge i { background: var(--emeraude); }
+
+/* ==========================================================================
+   Ecran des armes
+   --------------------------------------------------------------------------
+   La fiche montre tout, emplacements fermes compris : c'est cette visibilite
+   qui donne envie de monter un palier. Les lignes fermees restent en creux,
+   comme les especes jamais obtenues de la collection.
+   ========================================================================== */
+
+.arme-mesures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.arme-mesure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  background: var(--ivoire);
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+}
+
+.arme-mesure b {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.arme-socle,
+.arme-lignes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arme-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 11px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+}
+
+.arme-ligne[data-ouverte='false'] {
+  background: var(--ivoire);
+  border-color: var(--ligne-douce);
+  border-style: dashed;
+  color: var(--gris-clair);
+}
+
+/* La stat principale porte le liseré : c'est elle qu'on monte en priorité. */
+.arme-ligne[data-role='principale'] { border-left: 5px solid var(--bleu); }
+.arme-ligne[data-role='innee'] { border-left: 5px solid var(--or); }
+
+.arme-ligne-texte {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.arme-ligne-nom {
+  font-family: var(--ui);
+  font-size: 13px;
+}
+
+.arme-ligne-note {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gris-clair);
+}
+
+.arme-ligne-actions {
+  display: flex;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.arme-amelioration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Le journal dit ce qui vient de se passer, a la machine a ecrire : un palier
+   rate sans message laisse croire a un bug. */
+.arme-journal {
+  margin: 0;
+  min-height: 20px;
+  font-family: var(--ui);
+  font-size: 13px;
+}
+
+.arme-journal[data-issue='echec'] { color: var(--rouge); }
+.arme-journal[data-issue='reussite'] { color: var(--emeraude); }

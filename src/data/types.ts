@@ -190,6 +190,35 @@ export interface OwnedWeapon {
   id: string;
   weaponId: string;
   rarity: Rarity;
+  /** Palier d'amélioration, de 0 à 15. */
+  niveau: number;
+  /** Stat innée, tirée à l'obtention et jamais modifiable. */
+  innee: WeaponStat | null;
+  /** Jusqu'à quatre sub-stats, révélées aux paliers +3, +6, +9 et +12. */
+  subStats: WeaponStat[];
+}
+
+/**
+ * Stats qu'une ligne d'arme peut porter.
+ *
+ * L'union vit ici, avec le reste du schéma de sauvegarde, et non dans le
+ * module de règles : c'est elle qui décide de ce qu'un fichier de sauvegarde
+ * peut contenir, donc elle appartient au schéma. Les règles l'importent.
+ */
+export type WeaponStatKind =
+  | 'degats_plats'
+  | 'degats_pct'
+  | 'cadence'
+  | 'portee'
+  | 'zone'
+  | 'cristaux';
+
+/** Une ligne de stat d'arme : son type, sa valeur cumulée, ses rolls. */
+export interface WeaponStat {
+  kind: WeaponStatKind;
+  valeur: number;
+  /** Nombre de rolls encaissés, pour l'afficher comme Summoners War. */
+  rolls: number;
 }
 
 export interface Item {

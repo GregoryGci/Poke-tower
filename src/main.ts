@@ -22,11 +22,14 @@ import { afficherBilan } from '@/ui/result';
 import { ouvrirEquipe } from '@/ui/team';
 import { ouvrirInvocation } from '@/ui/summon';
 import { ouvrirCollection } from '@/ui/collection';
+import { ouvrirArmes } from '@/ui/weapons';
 import { demanderNomDresseur } from '@/ui/creation';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
 import { ARME_DE_DEPART } from '@/data/weapons';
+import { armeNeuve } from '@/data/gacha';
+import type { OwnedWeapon } from '@/data/types';
 import { membresEquipe, normaliserEquipe } from '@/data/team';
 
 import { STARTER_CASES } from '@/data/content';
@@ -83,20 +86,16 @@ async function choisirStarter(): Promise<void> {
   account.account.starterId = choix.speciesId;
   account.account.team = account.account.roster.map((membre) => membre.id);
 
-  // Le dresseur ne part pas les mains vides.
-  account.account.weapons.push({
-    id: crypto.randomUUID(),
-    weaponId: ARME_DE_DEPART,
-    rarity: 'normal',
-  });
+  // Le dresseur ne part pas les mains vides. Le Glock passe par le meme
+  // tirage que les autres : il a donc son innee, comme toute arme.
+  account.account.weapons.push(armeNeuve(ARME_DE_DEPART, 'normal'));
   account.account.equippedWeaponId = account.account.weapons[0]!.id;
   await account.flush();
 }
 
-/** Modele de l'arme portee, ou null si le dresseur n'en a aucune. */
-function armeEquipee(compte: typeof account.account): string | null {
-  const portee = compte.weapons.find((arme) => arme.id === compte.equippedWeaponId);
-  return portee?.weaponId ?? null;
+/** Arme portee, ou null si le dresseur n'en a aucune. */
+function armeEquipee(compte: typeof account.account): OwnedWeapon | null {
+  return compte.weapons.find((arme) => arme.id === compte.equippedWeaponId) ?? null;
 }
 
 /* ---------- Une manche ---------- */
@@ -243,6 +242,11 @@ for (;;) {
 
   if (destination === 'equipe') {
     await ouvrirEquipe(account);
+    continue;
+  }
+
+  if (destination === 'armes') {
+    await ouvrirArmes(account);
     continue;
   }
 
