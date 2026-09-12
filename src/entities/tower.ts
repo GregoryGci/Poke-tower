@@ -7,8 +7,8 @@
  */
 
 import { Object3D } from 'three';
-import type { OwnedPokemon, Species } from '@/data/types';
-import { RARITY_MULTIPLIER, multiplicateurEtoiles } from '@/data/types';
+import type { Move, OwnedPokemon, Species } from '@/data/types';
+import { RARITY_MULTIPLIER, STYLES, multiplicateurEtoiles, type StyleProfil } from '@/data/types';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -22,6 +22,24 @@ import type { SpatialGrid } from '@/world/spatial';
  */
 const FACTEUR_DEGATS = 0.3;
 
+/**
+ * Stat de reference.
+ *
+ * Les degats d'un Pokemon doivent dependre de ses vraies stats du Pokedex,
+ * sinon deux especes portant la meme attaque frappent pareil et le roster
+ * n'a aucun relief. Une stat de 50 laisse le calcul inchange.
+ */
+const STAT_REFERENCE = 50;
+
+/** Retient l'attaque au meilleur rendement, en ignorant les attaques de statut. */
+function choisirAttaque(owned: OwnedPokemon): Move {
+  const offensives = owned.moves.filter((candidat) => candidat.power > 0);
+  const pool = offensives.length ? offensives : owned.moves;
+  return pool.reduce((meilleure, candidat) =>
+    candidat.power / candidat.cooldown > meilleure.power / meilleure.cooldown ? candidat : meilleure
+  );
+}
+
 export class Tower {
   object: Object3D | null = null;
   /** Cercle de portée, affiché à la sélection. */
@@ -32,6 +50,8 @@ export class Tower {
   range: number;
   damage: number;
   cooldown: number;
+  /** Profil de frappe, lu par le jeu pour appliquer les degats. */
+  readonly style: StyleProfil;
   private timer = 0;
   target: Enemy | null = null;
 
@@ -41,12 +61,22 @@ export class Tower {
   ) {
     const rarity = RARITY_MULTIPLIER[owned.rarity];
     this.range = species.range * (1 + this.traitBonus('range'));
-    // Une seule des quatre attaques pour l'instant : la rotation du movepool
-    // arrive avec le système d'attaques complet (phase 2).
-    const move = owned.moves[0];
+    // On retient la plus efficace des quatre, pas la premiere : un tirage
+    // pouvait placer une attaque de statut en tete, et l'unite ne faisait alors
+    // aucun degat. La rotation complete du movepool viendra plus tard.
+    const move = choisirAttaque(owned);
     const etoiles = multiplicateurEtoiles(owned.stars);
-    this.damage = move.power * FACTEUR_DEGATS * rarity * etoiles * (1 + this.traitBonus('stat'));
-    this.cooldown = move.cooldown * (1 - Math.min(0.6, this.traitBonus('cooldown')));
+    this.style = STYLES[species.style];
+
+    // Physique ou special : l'attaque puise dans la stat correspondante.
+    const puissance =
+      move.category === 'special' ? species.baseStats.atkSpe : species.baseStats.atk;
+    const affinite = puissance / STAT_REFERENCE;
+
+    this.damage =
+      move.power * FACTEUR_DEGATS * affinite * rarity * etoiles * this.style.degats * (1 + this.traitBonus('stat'));
+    this.cooldown =
+      move.cooldown * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
   }
 
   private traitBonus(kind: 'stat' | 'range' | 'cooldown'): number {

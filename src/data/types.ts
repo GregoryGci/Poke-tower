@@ -64,6 +64,38 @@ export interface SubStat {
 /** Stats de base d'une espèce, façon Pokédex. */
 export type BaseStats = Record<StatType, number>;
 
+/**
+ * Maniere de frapper d'une espece.
+ *
+ * C'est ce qui rend un Pokemon situationnel plutot qu'un simple paquet de
+ * chiffres : un tireur longue portee et un cogneur de melee ne se posent pas
+ * au meme endroit, meme a puissance egale.
+ */
+export type AttackStyle = 'unique' | 'ligne' | 'zone' | 'cac';
+
+export interface StyleProfil {
+  /** Multiplicateur de degats propre au style. */
+  degats: number;
+  /** Multiplicateur de cadence : sous 1, l'unite tire plus vite. */
+  cadence: number;
+  /** Rayon touche autour de l'impact, pour le style « zone ». */
+  rayon: number;
+  /** Demi-largeur du couloir touche, pour le style « ligne ». */
+  couloir: number;
+  libelle: string;
+}
+
+export const STYLES: Record<AttackStyle, StyleProfil> = {
+  // Touche une cible. L'etalon auquel les autres se comparent.
+  unique: { degats: 1, cadence: 1, rayon: 0, couloir: 0, libelle: 'Cible unique' },
+  // Traverse la file : redoutable sur une ligne droite, quelconque ailleurs.
+  ligne: { degats: 0.7, cadence: 1.15, rayon: 0, couloir: 0.9, libelle: 'Transperce' },
+  // Frappe un groupe, mais moins fort chacun.
+  zone: { degats: 0.62, cadence: 1.2, rayon: 2, couloir: 0, libelle: 'Zone' },
+  // Courte portee, mais frappe vite et tres fort.
+  cac: { degats: 1.5, cadence: 0.75, rayon: 0, couloir: 0, libelle: 'Corps a corps' },
+};
+
 /** Définition d'une espèce : partagée, jamais modifiée par le joueur. */
 export interface Species {
   id: string;
@@ -73,6 +105,8 @@ export interface Species {
   baseStats: BaseStats;
   /** Portée de base en unités monde (1 unité = 1 case). */
   range: number;
+  /** Manière de frapper : décide du placement autant que la portée. */
+  style: AttackStyle;
   /** Identifiants des attaques réellement apprenables par l'espèce. */
   movepool: string[];
   /** Nom du fichier .glb dans public/models, sans extension. */

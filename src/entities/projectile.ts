@@ -8,6 +8,7 @@
 import { Object3D } from 'three';
 import type { Poolable } from '@/core/pool';
 import type { Enemy } from './enemy';
+import type { StyleProfil } from '@/data/types';
 
 export class Projectile implements Poolable {
   object: Object3D | null = null;
@@ -18,6 +19,11 @@ export class Projectile implements Poolable {
   speed = 12;
   damage = 0;
   alive = false;
+  /** Profil de frappe, pour savoir qui encaisser a l'impact. */
+  style: StyleProfil | null = null;
+  /** Point de depart, necessaire pour tracer le couloir d'un tir transperçant. */
+  fromX = 0;
+  fromZ = 0;
   /** Cible visée : sert à appliquer les dégâts si elle est encore là. */
   target: Enemy | null = null;
 
@@ -28,11 +34,24 @@ export class Projectile implements Poolable {
     this.damage = 0;
     this.alive = false;
     this.target = null;
+    this.style = null;
+    this.fromX = 0;
+    this.fromZ = 0;
   }
 
-  launch(fromX: number, fromZ: number, target: Enemy, damage: number, speed: number): void {
+  launch(
+    fromX: number,
+    fromZ: number,
+    target: Enemy,
+    damage: number,
+    speed: number,
+    style: StyleProfil
+  ): void {
     this.x = fromX;
     this.z = fromZ;
+    this.fromX = fromX;
+    this.fromZ = fromZ;
+    this.style = style;
     this.target = target;
     this.targetX = target.x;
     this.targetZ = target.z;

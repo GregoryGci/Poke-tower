@@ -393,13 +393,13 @@ export class Game {
       const tower = this.towers[i]!;
       const target = tower.update(dt, this.enemyGrid);
       if (!target || this.projectiles.activeCount >= MAX_PROJECTILES) continue;
-      this.projectiles.acquire().launch(tower.x, tower.z, target, tower.damage, 14);
+      this.projectiles.acquire().launch(tower.x, tower.z, target, tower.damage, 14, tower.style);
       this.playAttack(this.towerVisuals[i]);
     }
 
     this.projectiles.forEach((shot) => {
       if (!shot.update(dt)) return;
-      if (shot.target?.active) shot.target.damage(shot.damage);
+      this.appliquerImpact(shot);
       this.projectiles.release(shot);
     });
 
@@ -410,6 +410,52 @@ export class Game {
     for (const { crowd } of this.crowds.values()) crowd.advance(dt);
 
     this.updatePointer();
+  }
+
+  /**
+   * Distribue les degats d'un tir arrive a destination.
+   *
+   * Le style decide de qui encaisse : la cible seule, tout un couloir, ou
+   * tout ce qui se trouve autour du point d'impact.
+   */
+  private appliquerImpact(shot: Projectile): void {
+    const style = shot.style;
+    if (!style) return;
+
+    if (style.rayon > 0) {
+      this.enemyGrid.queryRadius(shot.x, shot.z, style.rayon, (enemy) => {
+        if (!enemy.active) return;
+        const dx = enemy.x - shot.x;
+        const dz = enemy.z - shot.z;
+        if (dx * dx + dz * dz <= style.rayon * style.rayon) enemy.damage(shot.damage);
+      });
+      return;
+    }
+
+    if (style.couloir > 0) {
+      // Tout ce qui se trouve entre le tireur et le point d'impact est touche.
+      const dx = shot.x - shot.fromX;
+      const dz = shot.z - shot.fromZ;
+      const longueur = Math.hypot(dx, dz);
+      if (longueur < 1e-3) return;
+      const ux = dx / longueur;
+      const uz = dz / longueur;
+      const milieuX = (shot.fromX + shot.x) / 2;
+      const milieuZ = (shot.fromZ + shot.z) / 2;
+
+      this.enemyGrid.queryRadius(milieuX, milieuZ, longueur / 2 + style.couloir, (enemy) => {
+        if (!enemy.active) return;
+        const rx = enemy.x - shot.fromX;
+        const rz = enemy.z - shot.fromZ;
+        const avance = rx * ux + rz * uz;
+        if (avance < 0 || avance > longueur) return;
+        const ecart = Math.abs(rx * -uz + rz * ux);
+        if (ecart <= style.couloir) enemy.damage(shot.damage);
+      });
+      return;
+    }
+
+    if (shot.target?.active) shot.target.damage(shot.damage);
   }
 
   private countMarching(): number {
