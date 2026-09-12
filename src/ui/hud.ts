@@ -54,6 +54,7 @@ export class Hud {
   private readonly appels = mesure('Draw calls');
 
   private selection: string | null = null;
+  private deployes: readonly string[] = [];
   private roster: readonly OwnedPokemon[] = [];
 
   constructor(
@@ -111,6 +112,7 @@ export class Hud {
       bouton.type = 'button';
       bouton.id = `unite-${owned.id}`;
       bouton.setAttribute('aria-pressed', String(this.selection === owned.id));
+      bouton.setAttribute('aria-disabled', String(this.deployes.includes(owned.id)));
 
       const pastille = elem('span', 'pastille', species.name.slice(0, 1));
       pastille.dataset['type'] = species.types[0];
@@ -128,6 +130,7 @@ export class Hud {
   }
 
   private basculer(owned: OwnedPokemon): void {
+    if (this.deployes.includes(owned.id)) return;
     this.selection = this.selection === owned.id ? null : owned.id;
     this.rafraichirSelection();
     this.options.onSelection(this.selection ? owned : null);
@@ -138,6 +141,13 @@ export class Hud {
     if (!this.selection) return;
     this.selection = null;
     this.rafraichirSelection();
+  }
+
+  private rafraichirDisponibilite(): void {
+    for (const owned of this.roster) {
+      const bouton = this.unites.querySelector(`#unite-${CSS.escape(owned.id)}`);
+      bouton?.setAttribute('aria-disabled', String(this.deployes.includes(owned.id)));
+    }
   }
 
   private rafraichirSelection(): void {
@@ -155,6 +165,12 @@ export class Hud {
 
     this.restants.valeur.textContent = String(status.alive);
     this.vies.valeur.textContent = String(status.lives);
+
+    // La barre reflète ce qui reste disponible, sans se reconstruire.
+    if (status.deployed.length !== this.deployes.length) {
+      this.deployes = status.deployed;
+      this.rafraichirDisponibilite();
+    }
     this.cristaux.valeur.textContent = String(status.crystals);
     this.appels.valeur.textContent = String(status.drawCalls);
 

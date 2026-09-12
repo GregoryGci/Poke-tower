@@ -1115,3 +1115,14 @@
 }
 
 .solde-vivant b { color: var(--encre); font-weight: 500; }
+
+/* Une unité déjà sur le terrain n'est plus posable. */
+.unite[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.unite[aria-disabled='true']:hover {
+  transform: none;
+  border-color: var(--ligne);
+}

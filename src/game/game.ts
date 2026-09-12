@@ -108,6 +108,8 @@ export interface GameStatus {
   /** Points de vie restants de la tour. */
   lives: number;
   outcome: Outcome;
+  /** Identifiants des Pokémon déjà sur le terrain. */
+  deployed: readonly string[];
   /** Ennemis capturés pendant la manche. */
   captures: number;
   /** Une capture est-elle possible ici et maintenant ? */
@@ -148,6 +150,14 @@ export class Game {
   private readonly enemies = new Pool<Enemy>(() => new Enemy(), 64);
   private readonly projectiles = new Pool<Projectile>(() => new Projectile(), 128);
   private readonly towers: Tower[] = [];
+  /**
+   * Pokémon déjà posés.
+   *
+   * Un membre de l'équipe est une unité, pas un modèle à dupliquer : sans
+   * cette garde, un seul starter suffisait à couvrir toute la carte et ni la
+   * capture ni l'invocation n'avaient d'intérêt.
+   */
+  private readonly deployes = new Set<string>();
   private readonly trainer = new Trainer();
 
   /** Une foule par espèce d'ennemi, construite au chargement. */
@@ -311,6 +321,7 @@ export class Game {
       crystals: this.crystals,
       placed: this.towers.length,
       lives: Math.max(0, VIES - this.leaked),
+      deployed: [...this.deployes],
       captures: this.captures,
       captureOffered: this.cibleCapturable() !== null,
       outcome: this.outcome,
@@ -492,6 +503,11 @@ export class Game {
     const pending = this.pendingPlacement;
     if (!pending || !this.pointerValid) return;
 
+    if (this.deployes.has(pending.id)) {
+      this.notify('Déjà sur le terrain');
+      return;
+    }
+
     const check = canPlace(this.pointerWorld.x, this.pointerWorld.z, LEVEL_PATH, this.towers, PLACEMENT_RULES);
     if (!check.ok) {
       this.notify(REJECTION_LABELS[check.reason]);
@@ -502,6 +518,9 @@ export class Game {
     const x = this.pointerWorld.x;
     const z = this.pointerWorld.z;
     this.pendingPlacement = null;
+    // Réservé tout de suite : le chargement du modèle est asynchrone, et deux
+    // clics rapides passeraient sinon tous les deux.
+    this.deployes.add(pending.id);
 
     const tower = new Tower(pending, species);
     const holder = new Group();
