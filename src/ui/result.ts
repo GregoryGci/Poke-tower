@@ -43,7 +43,13 @@ interface GainPokemon {
   kills: number;
   xp: number;
   niveauxPris: number;
+  /** État d'avant la manche : c'est de là que part l'animation. */
+  niveauAvant: number;
+  xpAvant: number;
 }
+
+/** Durée de remplissage d'une barre d'expérience, en millisecondes. */
+const DUREE_GAIN = 620;
 
 /**
  * Attribue l'expérience de la manche.
@@ -62,46 +68,141 @@ function distribuerXp(
     const owned = compte.roster.find((membre) => membre.id === contribution.ownedId);
     if (!owned) continue;
     const xp = Math.round(contribution.degats * XP_PAR_DEGAT + (victoire ? XP_VICTOIRE : 0));
+    const niveauAvant = owned.level;
+    const xpAvant = owned.xp;
     const niveauxPris = ajouterXp(owned, xp);
-    gains.push({ owned, degats: contribution.degats, kills: contribution.kills, xp, niveauxPris });
+    gains.push({
+      owned,
+      degats: contribution.degats,
+      kills: contribution.kills,
+      xp,
+      niveauxPris,
+      niveauAvant,
+      xpAvant,
+    });
   }
   return gains;
 }
 
-/** Ligne d'un Pokémon : identité, gain d'XP, barre de progression. */
-function ligneGain(gain: GainPokemon): HTMLDivElement {
+/**
+ * Ligne d'un Pokémon : identité, gain d'XP, barre de progression.
+ *
+ * La ligne est rendue dans son état d'avant la manche, et l'animation la
+ * fait avancer jusqu'à l'état réel. Le gain est déjà acquis dans le compte à
+ * ce moment-là : l'animation ne décide de rien, elle raconte.
+ */
+function ligneGain(gain: GainPokemon, retard: number): HTMLDivElement {
   const species = getSpecies(gain.owned.speciesId);
   const ligne = elem('div', 'gain');
 
   const pastille = elem('span', 'pastille', species.name.slice(0, 1));
   pastille.dataset['type'] = species.types[0];
 
+  const valeurXp = elem('span', 'gain-xp', '+0 XP');
   const centre = elem('div', 'gain-centre');
   const tete = elem('div', 'gain-tete');
-  tete.append(
-    elem('span', 'gain-nom', species.name),
-    elem('span', 'gain-xp', `+${gain.xp} XP`)
-  );
+  tete.append(elem('span', 'gain-nom', species.name), valeurXp);
 
-  const requis = xpRequise(gain.owned.level);
+  const requisAvant = xpRequise(gain.niveauAvant);
   const jauge = elem('div', 'jauge');
   const remplissage = elem('i');
-  remplissage.style.width = `${Math.min(100, (gain.owned.xp / requis) * 100)}%`;
+  remplissage.style.width = `${Math.min(100, (gain.xpAvant / requisAvant) * 100)}%`;
   jauge.appendChild(remplissage);
 
+  const niveauTexte = elem('span', undefined, `Niveau ${gain.niveauAvant}`);
+  const xpTexte = elem('span', undefined, `${gain.xpAvant} / ${requisAvant}`);
   const pied = elem('div', 'gain-pied');
-  pied.append(
-    elem('span', undefined, `Niveau ${gain.owned.level}`),
-    elem('span', undefined, `${gain.owned.xp} / ${requis}`)
-  );
+  pied.append(niveauTexte, xpTexte);
 
   centre.append(tete, jauge, pied);
   ligne.append(pastille, centre);
 
-  if (gain.niveauxPris > 0) {
-    ligne.appendChild(elem('span', 'badge-niveau', `Niveau +${gain.niveauxPris}`));
+  const badge =
+    gain.niveauxPris > 0
+      ? elem('span', 'badge-niveau', `Niveau +${gain.niveauxPris}`)
+      : null;
+  if (badge) {
+    badge.dataset['visible'] = 'false';
+    ligne.appendChild(badge);
   }
+
+  animerGain(gain, { valeurXp, remplissage, niveauTexte, xpTexte, badge, retard });
   return ligne;
+}
+
+interface PiecesGain {
+  valeurXp: HTMLElement;
+  remplissage: HTMLElement;
+  niveauTexte: HTMLElement;
+  xpTexte: HTMLElement;
+  badge: HTMLElement | null;
+  /** Retard avant que cette barre ne démarre, en millisecondes. */
+  retard: number;
+}
+
+/**
+ * Fait monter la barre d'expérience.
+ *
+ * L'XP versée est interpolée, et les paliers franchis sont rejoués au
+ * passage : la barre saute donc d’un cran chaque fois qu’un niveau tombe,
+ * au lieu de glisser vers une valeur finale qui ne voudrait rien dire.
+ *
+ * L'état final est reposé tel quel à la fin, jamais calculé : c'est le
+ * compte qui fait foi, pas l’interpolation.
+ */
+function animerGain(gain: GainPokemon, pieces: PiecesGain): void {
+  const reduit =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const poser = (niveau: number, xp: number, gagne: number): void => {
+    const requis = xpRequise(niveau);
+    pieces.remplissage.style.width = `${Math.min(100, (xp / requis) * 100)}%`;
+    pieces.niveauTexte.textContent = `Niveau ${niveau}`;
+    pieces.xpTexte.textContent = `${Math.round(xp)} / ${requis}`;
+    pieces.valeurXp.textContent = `+${Math.round(gagne)} XP`;
+  };
+
+  const conclure = (): void => {
+    poser(gain.owned.level, gain.owned.xp, gain.xp);
+    if (pieces.badge) pieces.badge.dataset['visible'] = 'true';
+  };
+
+  if (reduit || gain.xp <= 0) {
+    conclure();
+    return;
+  }
+
+  let debut = 0;
+  const pas = (maintenant: number): void => {
+    if (!debut) debut = maintenant;
+    const ecoule = maintenant - debut - pieces.retard;
+    if (ecoule < 0) {
+      requestAnimationFrame(pas);
+      return;
+    }
+
+    const avancee = Math.min(1, ecoule / DUREE_GAIN);
+    // Sortie amortie : la barre ralentit en arrivant, ce qui laisse le temps
+    // de lire le chiffre final.
+    const verse = gain.xp * (1 - Math.pow(1 - avancee, 3));
+
+    let niveau = gain.niveauAvant;
+    let xp = gain.xpAvant + verse;
+    for (;;) {
+      const requis = xpRequise(niveau);
+      if (xp < requis || niveau >= gain.niveauAvant + gain.niveauxPris) break;
+      xp -= requis;
+      niveau += 1;
+    }
+    poser(niveau, xp, verse);
+
+    if (avancee >= 1) {
+      conclure();
+      return;
+    }
+    requestAnimationFrame(pas);
+  };
+  requestAnimationFrame(pas);
 }
 
 /** Onglet chiffré : dégâts par Pokémon, puis par élément. */
@@ -206,7 +307,9 @@ export function afficherBilan(
   if (gains.length === 0) {
     vueEquipe.appendChild(elem('p', 'bilan-sous', 'Aucun Pokémon n’a combattu.'));
   } else {
-    for (const gain of gains) vueEquipe.appendChild(ligneGain(gain));
+    // Cascade : les barres partent l'une après l'autre, ce qui donne un ordre
+    // de lecture au lieu de six barres qui montent ensemble.
+    gains.forEach((gain, index) => vueEquipe.appendChild(ligneGain(gain, index * 130)));
   }
 
   // Butin : les cristaux sont toujours là, les objets viendront des raids.

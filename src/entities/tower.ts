@@ -57,6 +57,16 @@ export class Tower {
   private timer = 0;
   target: Enemy | null = null;
 
+  /** Secondes restantes avant le prochain tir. */
+  get recharge(): number {
+    return Math.max(0, this.timer);
+  }
+
+  /** Part de recharge restante, de 0 (prete a tirer) a 1 (vient de tirer). */
+  get rechargePart(): number {
+    return this.cooldown <= 0 ? 0 : Math.min(1, Math.max(0, this.timer / this.cooldown));
+  }
+
   constructor(
     readonly owned: OwnedPokemon,
     readonly species: Species

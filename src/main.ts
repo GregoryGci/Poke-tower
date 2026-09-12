@@ -184,6 +184,7 @@ async function jouerManche(): Promise<void> {
       stage.suivre(game.positionDresseur, 1 / 60);
       stage.renderer.render(stage.scene, stage.camera);
       hud.update(game.status);
+      hud.afficherSurvol(game.survol);
     },
   });
 

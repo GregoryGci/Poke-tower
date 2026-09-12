@@ -16,13 +16,16 @@ import {
   type AnimationAction,
   Color,
   CapsuleGeometry,
+  CircleGeometry,
   CylinderGeometry,
   DynamicDrawUsage,
   Group,
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
@@ -55,6 +58,16 @@ import { STYLES } from '@/data/types';
 const TERRAIN_SIZE = 34;
 const PATH_WIDTH = 2.4;
 const MAX_PROJECTILES = 512;
+/** Apercus d'attaque affiches simultanement. */
+const MAX_APERCUS = 24;
+/**
+ * Rayon de saisie du survol, en unites monde.
+ *
+ * Genereux a dessein : viser un modele de deux unites de haut depuis une
+ * camera plongeante est plus dur qu'il n'y parait, et rater le survol donne
+ * l'impression que la fonction ne marche pas.
+ */
+const RAYON_SURVOL = 1.3;
 /** Capacité d'une foule, par espèce. */
 const CROWD_CAPACITY = 128;
 /** Pokémon simultanément sur le terrain, doublons compris. */
@@ -150,6 +163,41 @@ export interface GameStatus {
   message: string | null;
 }
 
+/**
+ * Ce que le joueur lit en survolant un Pokemon pose.
+ *
+ * Le survol repond a une question precise : pourquoi celui-la ne tire pas ?
+ * On donne donc l'attaque retenue, les degats reels — pas la puissance du
+ * Pokedex — et l'etat de la recharge, qui est presque toujours la reponse.
+ */
+export interface SurvolTour {
+  ownedId: string;
+  nom: string;
+  attaque: string;
+  typeAttaque: PokemonType;
+  style: string;
+  /** Degats par tir, tous multiplicateurs appliques. */
+  degats: number;
+  cooldown: number;
+  recharge: number;
+  /** Part de recharge restante, de 0 a 1. */
+  rechargePart: number;
+  portee: number;
+  /** Vrai si l'unite tient une cible a portee. */
+  enAction: boolean;
+  degatsInfliges: number;
+  kills: number;
+  /** Position du sujet en coordonnees ecran normalisees, de -1 a 1. */
+  ndcX: number;
+  ndcY: number;
+}
+
+/** Un apercu d'attaque : une forme rouge posee au sol, le temps d'un tir. */
+interface Apercu {
+  mesh: Mesh;
+  restant: number;
+}
+
 interface TowerVisual {
   object: Object3D;
   mixer: AnimationMixer | null;
@@ -205,6 +253,19 @@ export class Game {
   private readonly raycaster = new Raycaster();
   private readonly pointerWorld = new Vector3();
   private pointerValid = false;
+  /** Pokemon pose sous le curseur, quand aucun placement n'est en cours. */
+  private survolTour: Tower | null = null;
+
+  /**
+   * Apercus d'attaque.
+   *
+   * Trois formes suffisent a dire ce qui va etre touche : un disque pour la
+   * zone et le corps a corps, un couloir pour ce qui transperce, un trait
+   * pour la cible unique. Volontairement sans effet : c'est une lecture de
+   * portee, pas une animation de sort.
+   */
+  private readonly apercus: Apercu[] = [];
+  private readonly apercusGroup = new Group();
 
   private phase: Phase = 'preparation';
   /** Dégâts et éliminations par Pokémon posé, pour le bilan de fin. */
@@ -258,6 +319,9 @@ export class Game {
     this.ghostRange.rotation.x = -Math.PI / 2;
     this.ghostRange.visible = false;
     this.root.add(this.ghostRange);
+
+    this.construireApercus();
+    this.root.add(this.apercusGroup);
 
     const trainerHolder = new Group();
     this.trainerMesh = construireDresseur();
@@ -430,6 +494,7 @@ export class Game {
       tir.launch(tower.x, tower.z, target, tower.damage, 14, tower.style);
       tir.ownerId = tower.owned.id;
       tir.moveType = tower.move.type;
+      this.montrerApercu(tower, target, tir.dureeVol);
       this.playAttack(this.towerVisuals[i]);
     }
 
@@ -446,6 +511,7 @@ export class Game {
       if (visual.lunge > 0) visual.lunge = Math.max(0, visual.lunge - dt * 3.5);
     }
     for (const { crowd } of this.crowds.values()) crowd.advance(dt);
+    this.avancerApercus(dt);
 
     this.updatePointer();
   }
@@ -588,12 +654,116 @@ export class Game {
     this.enemies.acquire().spawn(speciesId, LEVEL_PATH, hp, speed, offset);
   }
 
+  /* ---------- Apercu des attaques ---------- */
+
+  /**
+   * Prepare les formes une fois pour toutes.
+   *
+   * Un apercu apparait a chaque tir, soit plusieurs fois par seconde : creer
+   * la geometrie au moment du tir ferait un a-coup visible a chaque fois.
+   */
+  private construireApercus(): void {
+    const matiere = new MeshBasicMaterial({
+      color: 0xd0342c,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+    });
+    const plan = new PlaneGeometry(1, 1);
+
+    for (let i = 0; i < MAX_APERCUS; i++) {
+      // Un plan unitaire couvre les trois formes : le couloir et le trait sont
+      // des rectangles, le disque est obtenu par une geometrie a part.
+      const mesh = new Mesh(i % 2 === 0 ? plan : new CircleGeometry(1, 28), matiere);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.visible = false;
+      mesh.renderOrder = 2;
+      this.apercusGroup.add(mesh);
+      this.apercus.push({ mesh, restant: 0 });
+    }
+  }
+
+  /** Un apercu libre, de la forme voulue. Null si le budget est plein. */
+  private prendreApercu(disque: boolean): Apercu | null {
+    for (const apercu of this.apercus) {
+      if (apercu.restant > 0) continue;
+      const estDisque = (apercu.mesh.geometry as { type?: string }).type === 'CircleGeometry';
+      if (estDisque === disque) return apercu;
+    }
+    return null;
+  }
+
+  /**
+   * Dessine ce que le tir va toucher.
+   *
+   * L'apercu vit le temps du vol du projectile : il montre donc la zone avant
+   * l'impact, ce qui est exactement l'information utile — ou ca va tomber.
+   */
+  private montrerApercu(tower: Tower, cible: Enemy, duree: number): void {
+    const style = tower.style;
+
+    if (style.rayon > 0) {
+      const apercu = this.prendreApercu(true);
+      if (!apercu) return;
+      apercu.mesh.position.set(cible.x, 0.05, cible.z);
+      apercu.mesh.scale.setScalar(style.rayon);
+      apercu.mesh.rotation.z = 0;
+      apercu.restant = duree;
+      apercu.mesh.visible = true;
+      return;
+    }
+
+    // Corps a corps : pas de projectile qui parte loin, c'est la portee elle
+    // meme qui est la zone d'effet.
+    if (tower.species.style === 'cac') {
+      const apercu = this.prendreApercu(true);
+      if (!apercu) return;
+      apercu.mesh.position.set(tower.x, 0.05, tower.z);
+      apercu.mesh.scale.setScalar(tower.range);
+      apercu.restant = duree;
+      apercu.mesh.visible = true;
+      return;
+    }
+
+    const apercu = this.prendreApercu(false);
+    if (!apercu) return;
+
+    const dx = cible.x - tower.x;
+    const dz = cible.z - tower.z;
+    const longueur = Math.hypot(dx, dz);
+    if (longueur < 1e-3) return;
+
+    // Le plan est couche par la rotation en X, et c'est la rotation en Z qui
+    // lui donne son cap. Avec l'ordre d'Euler par defaut, Z s'applique dans le
+    // repere du quad avant le couchage : l'axe long (0,1,0) devient donc
+    // (-sin z, 0, -cos z), d'ou l'angle ci-dessous. Mesure plutot que deduite —
+    // la version evidente, -atan2(dx, dz), tombait a cote hors des axes.
+    const largeur = style.couloir > 0 ? style.couloir * 2 : 0.14;
+    apercu.mesh.scale.set(largeur, longueur, 1);
+    apercu.mesh.position.set(tower.x + dx / 2, 0.05, tower.z + dz / 2);
+    apercu.mesh.rotation.z = Math.atan2(-dx, -dz);
+    apercu.restant = duree;
+    apercu.mesh.visible = true;
+  }
+
+  private avancerApercus(dt: number): void {
+    for (const apercu of this.apercus) {
+      if (apercu.restant <= 0) continue;
+      apercu.restant -= dt;
+      if (apercu.restant <= 0) apercu.mesh.visible = false;
+    }
+  }
+
   /* ---------- Interaction ---------- */
 
   private updatePointer(): void {
     const pending = this.pendingPlacement;
     if (!this.input.pointerInside) {
       this.pointerValid = false;
+      // Le survol doit tomber avec le curseur : sans cette remise a zero,
+      // l'infobulle restait accrochee au dernier Pokemon survole des que la
+      // souris passait sur le HUD.
+      this.survolTour = null;
       this.hideGhost();
       return;
     }
@@ -601,6 +771,12 @@ export class Game {
     this.raycaster.setFromCamera(this.input.pointer, this.camera);
     const hit = this.raycaster.intersectObject(this.terrain.groundMesh, false)[0];
     this.pointerValid = Boolean(hit);
+
+    // Le survol se lit sur la projection au sol et non sur les maillages : les
+    // modeles n'ont pas tous la meme silhouette, et une saisie au sol donne un
+    // comportement identique d'une espece a l'autre.
+    this.survolTour = hit && !pending ? this.tourSous(hit.point.x, hit.point.z) : null;
+
     if (!hit || !pending) {
       this.hideGhost();
       return;
@@ -627,6 +803,55 @@ export class Game {
         material.color.set(check.ok ? '#8fd6a0' : '#e09a92');
       });
     }
+  }
+
+  /** Le Pokemon pose le plus proche du point donne, dans le rayon de saisie. */
+  private tourSous(x: number, z: number): Tower | null {
+    let meilleure: Tower | null = null;
+    let meilleurEcart = RAYON_SURVOL * RAYON_SURVOL;
+    for (const tower of this.towers) {
+      const dx = tower.x - x;
+      const dz = tower.z - z;
+      const ecart = dx * dx + dz * dz;
+      if (ecart <= meilleurEcart) {
+        meilleurEcart = ecart;
+        meilleure = tower;
+      }
+    }
+    return meilleure;
+  }
+
+  /**
+   * Fiche du Pokemon survole, ou null.
+   *
+   * Les degats infliges sont pris dans les contributions de la manche : c'est
+   * la meme source que le bilan de fin, donc les deux chiffres ne peuvent pas
+   * se contredire.
+   */
+  get survol(): SurvolTour | null {
+    const tower = this.survolTour;
+    if (!tower) return null;
+
+    const contribution = this.contributions.get(tower.owned.id);
+    this.tmpVec.set(tower.x, tower.species.height * 0.9, tower.z).project(this.camera);
+
+    return {
+      ownedId: tower.owned.id,
+      nom: tower.species.name,
+      attaque: tower.move.name,
+      typeAttaque: tower.move.type,
+      style: tower.style.libelle,
+      degats: tower.damage,
+      cooldown: tower.cooldown,
+      recharge: tower.recharge,
+      rechargePart: tower.rechargePart,
+      portee: tower.range,
+      enAction: tower.target !== null,
+      degatsInfliges: contribution?.degats ?? 0,
+      kills: contribution?.kills ?? 0,
+      ndcX: this.tmpVec.x,
+      ndcY: this.tmpVec.y,
+    };
   }
 
   /** Le fantôme est le vrai modèle, translucide : le placement libre demande de voir l'encombrement réel. */

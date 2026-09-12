@@ -66,6 +66,17 @@ export class Projectile implements Poolable {
     this.alive = true;
   }
 
+  /**
+   * Duree de vol estimee, en secondes.
+   *
+   * Un minimum est impose : un tir a bout portant durerait sinon une image,
+   * et son apercu ne serait jamais vu.
+   */
+  get dureeVol(): number {
+    const distance = Math.hypot(this.targetX - this.fromX, this.targetZ - this.fromZ);
+    return this.speed > 0 ? Math.max(0.14, distance / this.speed) : 0.14;
+  }
+
   /** Retourne true quand le projectile a touché ou expiré. */
   update(dt: number): boolean {
     if (!this.alive) return true;

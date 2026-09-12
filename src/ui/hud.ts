@@ -10,7 +10,7 @@
  */
 
 import { getSpecies } from '@/data/content';
-import type { GameStatus } from '@/game/game';
+import type { GameStatus, SurvolTour } from '@/game/game';
 import type { OwnedPokemon } from '@/data/types';
 import { ecrire, type Typewriter } from './typewriter';
 
@@ -68,6 +68,27 @@ export class Hud {
   private selection: string | null = null;
   private terrainPlein = false;
   private roster: readonly OwnedPokemon[] = [];
+
+  /**
+   * Infobulle de survol.
+   *
+   * Elle est construite une fois et seulement remplie ensuite : reconstruire
+   * son contenu a chaque image la ferait clignoter, et ce contenu change
+   * soixante fois par seconde a cause de la recharge.
+   */
+  private readonly infobulle = elem('div', 'infobulle');
+  private readonly bulleNom = elem('span', 'infobulle-nom');
+  private readonly bulleStyle = elem('span', 'infobulle-style');
+  private readonly bulleAttaque = elem('span', 'infobulle-attaque');
+  private readonly bulleType = elem('span', 'type');
+  private readonly bulleDegats = elem('b');
+  private readonly bullePortee = elem('b');
+  private readonly bulleEtat = elem('span', 'infobulle-etat');
+  private readonly bulleRecharge = elem('i');
+  private readonly bulleRechargeTexte = elem('span', 'infobulle-chiffre');
+  private readonly bulleBilan = elem('span', 'infobulle-bilan');
+  private bulleSujet: string | null = null;
+  private readonly parent: HTMLElement;
 
   constructor(
     parent: HTMLElement,
@@ -131,9 +152,85 @@ export class Hud {
 
     this.controles.appendChild(this.lancer);
 
+    this.construireInfobulle();
+
     this.racine.append(haut, this.message, bas);
-    parent.append(this.racine, retour, this.controles);
+    parent.append(this.racine, retour, this.controles, this.infobulle);
+    this.parent = parent;
     this.retour = retour;
+  }
+
+  private construireInfobulle(): void {
+    const tete = elem('div', 'infobulle-tete');
+    tete.append(this.bulleNom, this.bulleStyle);
+
+    const attaque = elem('div', 'infobulle-ligne');
+    attaque.append(this.bulleAttaque, this.bulleType);
+
+    const chiffres = elem('div', 'infobulle-chiffres');
+    const degats = elem('div', 'infobulle-chiffre');
+    degats.append(document.createTextNode('Dégâts '), this.bulleDegats);
+    const portee = elem('div', 'infobulle-chiffre');
+    portee.append(document.createTextNode('Portée '), this.bullePortee);
+    chiffres.append(degats, portee);
+
+    // La jauge se vide en avancant vers le tir : elle se lit comme un compte a
+    // rebours, sans avoir a comparer deux chiffres.
+    const jauge = elem('div', 'jauge infobulle-jauge');
+    jauge.appendChild(this.bulleRecharge);
+
+    const pied = elem('div', 'infobulle-pied');
+    pied.append(this.bulleEtat, this.bulleRechargeTexte);
+
+    this.infobulle.append(tete, attaque, chiffres, jauge, pied, this.bulleBilan);
+    this.infobulle.dataset['visible'] = 'false';
+  }
+
+  /**
+   * Place et remplit l'infobulle, ou la cache.
+   *
+   * Appelee a chaque image depuis la boucle de rendu : la recharge n'aurait
+   * aucun interet si elle ne bougeait pas.
+   */
+  afficherSurvol(survol: SurvolTour | null): void {
+    if (!survol) {
+      this.infobulle.dataset['visible'] = 'false';
+      this.bulleSujet = null;
+      return;
+    }
+
+    // Ce qui ne depend pas du temps ne se reecrit qu'au changement de sujet.
+    if (survol.ownedId !== this.bulleSujet) {
+      this.bulleSujet = survol.ownedId;
+      this.bulleNom.textContent = survol.nom;
+      this.bulleStyle.textContent = survol.style;
+      this.bulleAttaque.textContent = survol.attaque;
+      this.bulleType.textContent = survol.typeAttaque;
+      this.bulleType.dataset['type'] = survol.typeAttaque;
+      this.bulleDegats.textContent = survol.degats.toFixed(1);
+      this.bullePortee.textContent = survol.portee.toFixed(1);
+    }
+
+    this.bulleRecharge.style.width = ((1 - survol.rechargePart) * 100).toFixed(0) + '%';
+    this.bulleRechargeTexte.textContent =
+      survol.recharge > 0.02
+        ? 'Recharge ' + survol.recharge.toFixed(1) + 's / ' + survol.cooldown.toFixed(1) + 's'
+        : 'Prêt · ' + survol.cooldown.toFixed(1) + 's par tir';
+    this.bulleEtat.textContent = survol.enAction ? 'Cible en vue' : 'Aucune cible';
+    this.bulleEtat.dataset['actif'] = String(survol.enAction);
+    this.bulleBilan.textContent =
+      Math.round(survol.degatsInfliges) + ' dégâts cumulés · ' + survol.kills + ' K.O.';
+
+    const rect = this.parent.getBoundingClientRect();
+    const x = (survol.ndcX * 0.5 + 0.5) * rect.width;
+    const y = (1 - (survol.ndcY * 0.5 + 0.5)) * rect.height;
+    // On garde la bulle dans le cadre : un survol au bord de l'ecran la
+    // poussait hors du viewport.
+    const largeur = this.infobulle.offsetWidth || 220;
+    const hauteur = this.infobulle.offsetHeight || 150;
+    this.infobulle.style.left = Math.min(Math.max(8, x + 18), rect.width - largeur - 8) + 'px';
+    this.infobulle.style.top = Math.min(Math.max(8, y - hauteur - 10), rect.height - hauteur - 8) + 'px';
+    this.infobulle.dataset['visible'] = 'true';
   }
 
   /** Reconstruit la barre d'unités. À n'appeler que lorsque le roster change. */
@@ -236,6 +333,7 @@ export class Hud {
   }
 
   dispose(): void {
+    this.infobulle.remove();
     this.racine.remove();
     this.retour.remove();
     this.controles.remove();

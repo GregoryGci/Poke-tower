@@ -2079,3 +2079,141 @@
 .equipe-corps:has(.collection-grille) {
   grid-template-columns: 340px minmax(0, 1fr);
 }
+
+/* ==========================================================================
+   Infobulle de survol d'un Pokemon pose
+   --------------------------------------------------------------------------
+   Elle repond a « pourquoi celui-la ne tire pas ? ». La jauge de recharge est
+   donc l'element le plus large du bloc, et les degats affiches sont les vrais,
+   pas la puissance du Pokedex.
+   ========================================================================== */
+
+.infobulle {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 232px;
+  padding: 10px 12px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  box-shadow: var(--ombre-douce);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.infobulle[data-visible='true'] { opacity: 1; }
+
+.infobulle-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.infobulle-nom {
+  font-family: var(--titre);
+  font-size: 15px;
+  color: var(--encre);
+}
+
+.infobulle-style {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+
+.infobulle-ligne {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.infobulle-attaque {
+  font-family: var(--ui);
+  font-size: 13px;
+  color: var(--encre);
+}
+
+.infobulle-chiffres {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.infobulle-chiffre {
+  font-family: var(--ui);
+  font-size: 11px;
+  color: var(--gris);
+}
+
+.infobulle-chiffre b {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--encre);
+}
+
+.infobulle-jauge { height: 7px; }
+
+.infobulle-pied {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.infobulle-etat {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gris-clair);
+}
+
+/* Vert quand l'unite tient une cible : c'est l'etat qu'on cherche, il doit se
+   voir sans lire. */
+.infobulle-etat[data-actif='true'] { color: var(--emeraude); }
+
+.infobulle-bilan {
+  font-family: var(--corps);
+  font-size: 11px;
+  color: var(--gris);
+  border-top: 2px solid var(--ligne-douce);
+  padding-top: 5px;
+}
+
+/* ---- Gain d'experience : le remplissage est anime en JS, le CSS ne fait que
+   l'adoucir et faire apparaitre le badge de niveau au bon moment. ---- */
+
+.gain .jauge i {
+  transition: width 90ms linear;
+}
+
+.gain-xp {
+  font-variant-numeric: tabular-nums;
+}
+
+.badge-niveau[data-visible='false'] {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.badge-niveau[data-visible='true'] {
+  animation: badge-niveau-entree 260ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes badge-niveau-entree {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gain .jauge i { transition: none; }
+  .badge-niveau[data-visible='true'] { animation: none; }
+  .badge-niveau[data-visible='false'] { opacity: 1; transform: none; }
+}
