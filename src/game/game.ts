@@ -57,11 +57,15 @@ const CROWD_CAPACITY = 128;
 const LURE_TICKS = 90;
 
 /**
- * Les modèles convertis regardent déjà dans le sens de `atan2(dx, dz)`.
- * Constante gardée pour pouvoir corriger une espèce mal orientée sans
- * toucher au code de rendu.
+ * Les modèles Bedrock sont sculptés face à -Z, alors que `atan2(dx, dz)`
+ * oriente vers +Z. D'où ce demi-tour.
+ *
+ * Il ne doit être appliqué qu'à UN seul niveau de la hiérarchie : le porteur.
+ * L'avoir aussi sur le modèle enfant le comptait deux fois, ce qui annulait
+ * la correction sur les Pokémon posés pendant qu'elle restait juste sur les
+ * ennemis — les deux paraissaient donc fautifs à tour de rôle.
  */
-const MODEL_FACING = 0;
+const MODEL_FACING = Math.PI;
 
 const UP = new Vector3(0, 1, 0);
 const IDENTITY_QUAT = new Quaternion();
@@ -403,7 +407,6 @@ export class Game {
     holder.add(base);
 
     const { object, clips } = await instantiate(species.model);
-    object.rotation.y = MODEL_FACING;
     holder.add(object);
 
     const idle = pickClip(clips, 'ground_idle', 'battle_idle', 'ground_walk');
@@ -419,6 +422,7 @@ export class Game {
       console.info(`${species.name} n'a pas d'animation de repos : respiration procédurale.`);
     }
 
+    holder.rotation.y = MODEL_FACING;
     tower.object = holder;
     tower.place(x, z);
     this.root.add(holder);

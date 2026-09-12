@@ -70,9 +70,6 @@ export class Tower {
     if (!this.target) {
       this.target = enemies.nearest(this.x, this.z, this.range, (e) => e.state !== 'mort' && e.state !== 'arrive');
     }
-    if (this.target && this.object) {
-      this.object.rotation.y = Math.atan2(this.target.x - this.x, this.target.z - this.z);
-    }
     if (this.timer > 0 || !this.target) return null;
 
     this.timer = this.cooldown;
