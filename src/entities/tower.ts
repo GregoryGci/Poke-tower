@@ -12,6 +12,16 @@ import { RARITY_MULTIPLIER } from '@/data/types';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
+/**
+ * Convertit la puissance d'une attaque du Pokédex en dégâts par tir.
+ *
+ * Calibré par la mesure, une fois le ciblage réparé : à 0,3, un Pokémon abat
+ * un Rattata en deux tirs. Une tour seule tient alors la vague d'ouverture
+ * mais tombe sur la deuxième, en ayant récolté de quoi invoquer un renfort.
+ * C'est la tension recherchée — élargir son équipe, pas rejouer la même.
+ */
+const FACTEUR_DEGATS = 0.3;
+
 export class Tower {
   object: Object3D | null = null;
   /** Cercle de portée, affiché à la sélection. */
@@ -34,7 +44,7 @@ export class Tower {
     // Une seule des quatre attaques pour l'instant : la rotation du movepool
     // arrive avec le système d'attaques complet (phase 2).
     const move = owned.moves[0];
-    this.damage = move.power * 0.1 * rarity * (1 + this.traitBonus('stat'));
+    this.damage = move.power * FACTEUR_DEGATS * rarity * (1 + this.traitBonus('stat'));
     this.cooldown = move.cooldown * (1 - Math.min(0.6, this.traitBonus('cooldown')));
   }
 
@@ -64,11 +74,16 @@ export class Tower {
 
     // On garde la cible tant qu'elle est vivante et à portée : sans ça, la tour
     // change de cible à chaque tick et ne tue jamais rien.
-    if (this.target && (this.target.state === 'mort' || this.outOfRange(this.target))) {
+    //
+    // Le test porte sur `active` et non sur le seul état « mort » : une unité
+    // en agonie ou déjà sortie du terrain reste un objet valide, à sa dernière
+    // position. S'y accrocher revient à tirer indéfiniment sur un cadavre
+    // pendant que les vivants défilent à côté.
+    if (this.target && (!this.target.active || this.outOfRange(this.target))) {
       this.target = null;
     }
     if (!this.target) {
-      this.target = enemies.nearest(this.x, this.z, this.range, (e) => e.state !== 'mort' && e.state !== 'arrive');
+      this.target = enemies.nearest(this.x, this.z, this.range, (e) => e.active);
     }
     if (this.timer > 0 || !this.target) return null;
 
