@@ -212,12 +212,20 @@ export class Hud {
     }
 
     this.bulleRecharge.style.width = ((1 - survol.rechargePart) * 100).toFixed(0) + '%';
-    this.bulleRechargeTexte.textContent =
-      survol.recharge > 0.02
+    // Trois messages pour trois situations, jamais deux à la fois : c'est ce
+    // qui fait que la bulle répond à « pourquoi il ne tire pas ? ».
+    this.bulleRechargeTexte.textContent = survol.enIncantation
+      ? 'Incantation ' + survol.recharge.toFixed(1) + 's / ' + survol.cast.toFixed(1) + 's'
+      : survol.recharge > 0.02
         ? 'Recharge ' + survol.recharge.toFixed(1) + 's / ' + survol.cooldown.toFixed(1) + 's'
         : 'Prêt · ' + survol.cooldown.toFixed(1) + 's par tir';
-    this.bulleEtat.textContent = survol.enAction ? 'Cible en vue' : 'Aucune cible';
+    this.bulleEtat.textContent = survol.enIncantation
+      ? 'Incantation'
+      : survol.enAction
+        ? 'Cible en vue'
+        : 'Aucune cible';
     this.bulleEtat.dataset['actif'] = String(survol.enAction);
+    this.bulleEtat.dataset['cast'] = String(survol.enIncantation);
     this.bulleBilan.textContent =
       Math.round(survol.degatsInfliges) + ' dégâts cumulés · ' + survol.kills + ' K.O.';
 

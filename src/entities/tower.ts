@@ -40,6 +40,21 @@ function choisirAttaque(owned: OwnedPokemon): Move {
   );
 }
 
+/**
+ * Ce qu'une tour décide sur un tick.
+ *
+ * Trois issues seulement, et elles sont exclusives : rien, le début d'une
+ * incantation, ou le tir. Renvoyer un ennemi nu ne suffisait plus — le jeu
+ * doit savoir distinguer « je me prépare » de « je frappe » pour afficher la
+ * zone visée pendant la préparation.
+ */
+export type ActionTour =
+  | { kind: 'rien' }
+  | { kind: 'cast'; cible: Enemy; duree: number }
+  | { kind: 'tir'; cible: Enemy };
+
+const RIEN: ActionTour = { kind: 'rien' };
+
 export class Tower {
   object: Object3D | null = null;
   /** Cercle de portée, affiché à la sélection. */
@@ -50,20 +65,38 @@ export class Tower {
   range: number;
   damage: number;
   cooldown: number;
+  /** Temps d'incantation avant le tir, en secondes. */
+  cast: number;
   /** Profil de frappe, lu par le jeu pour appliquer les degats. */
   readonly style: StyleProfil;
   /** Attaque retenue, pour la répartition par élément du bilan. */
   readonly move: Move;
   private timer = 0;
+  /** Temps d'incantation restant. Zéro quand l'unité ne s'incante pas. */
+  private castRestant = 0;
   target: Enemy | null = null;
 
-  /** Secondes restantes avant le prochain tir. */
-  get recharge(): number {
-    return Math.max(0, this.timer);
+  /** Vrai pendant l'incantation : l'unité est engagée, pas encore à l'oeuvre. */
+  get enIncantation(): boolean {
+    return this.castRestant > 0;
   }
 
-  /** Part de recharge restante, de 0 (prete a tirer) a 1 (vient de tirer). */
+  /** Secondes restantes avant le prochain tir, incantation comprise. */
+  get recharge(): number {
+    return Math.max(0, this.castRestant > 0 ? this.castRestant : this.timer);
+  }
+
+  /**
+   * Part d'attente restante, de 0 (sur le point de frapper) à 1.
+   *
+   * La même jauge sert aux deux temps : pendant l'incantation elle se vide sur
+   * la durée du cast, sinon sur celle de la recharge. Deux jauges distinctes
+   * demanderaient au joueur de savoir laquelle regarder.
+   */
   get rechargePart(): number {
+    if (this.castRestant > 0) {
+      return this.cast <= 0 ? 0 : Math.min(1, Math.max(0, this.castRestant / this.cast));
+    }
     return this.cooldown <= 0 ? 0 : Math.min(1, Math.max(0, this.timer / this.cooldown));
   }
 
@@ -90,6 +123,12 @@ export class Tower {
       move.power * FACTEUR_DEGATS * affinite * rarity * etoiles * this.style.degats * (1 + this.traitBonus('stat'));
     this.cooldown =
       move.cooldown * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
+    // L'incantation suit la cadence du style : le corps à corps, qui frappe
+    // vite, se prépare vite. Les traits de recharge la raccourcissent aussi —
+    // sinon « Cadence infernale » n'aurait plus d'effet sur les grosses
+    // attaques, qui sont justement celles qui s'incantent.
+    this.cast =
+      move.cast * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
   }
 
   private traitBonus(kind: 'stat' | 'range' | 'cooldown'): number {
@@ -112,8 +151,14 @@ export class Tower {
     }
   }
 
-  /** Retourne l'ennemi à tirer dessus, ou null. */
-  update(dt: number, enemies: SpatialGrid<Enemy>): Enemy | null {
+  /**
+   * Fait avancer l'unité d'un tick.
+   *
+   * La recharge ne part qu'au tir, jamais au début de l'incantation : sinon
+   * le cast serait gratuit passé le premier coup, et une grosse attaque
+   * n'aurait aucun coût en cadence.
+   */
+  update(dt: number, enemies: SpatialGrid<Enemy>): ActionTour {
     this.timer -= dt;
 
     // On garde la cible tant qu'elle est vivante et à portée : sans ça, la tour
@@ -125,14 +170,33 @@ export class Tower {
     // pendant que les vivants défilent à côté.
     if (this.target && (!this.target.active || this.outOfRange(this.target))) {
       this.target = null;
+      // Incantation interrompue : la cible visée n'est plus là. On ne reporte
+      // pas le cast sur le voisin — viser quelqu'un d'autre demande de
+      // recommencer, ce qui donne du prix à la survie des gros ennemis.
+      this.castRestant = 0;
     }
     if (!this.target) {
       this.target = enemies.nearest(this.x, this.z, this.range, (e) => e.active);
     }
-    if (this.timer > 0 || !this.target) return null;
+    if (!this.target) return RIEN;
 
-    this.timer = this.cooldown;
-    return this.target;
+    if (this.castRestant > 0) {
+      this.castRestant -= dt;
+      if (this.castRestant > 0) return RIEN;
+      this.castRestant = 0;
+      this.timer = this.cooldown;
+      return { kind: 'tir', cible: this.target };
+    }
+
+    if (this.timer > 0) return RIEN;
+
+    if (this.cast <= 0) {
+      this.timer = this.cooldown;
+      return { kind: 'tir', cible: this.target };
+    }
+
+    this.castRestant = this.cast;
+    return { kind: 'cast', cible: this.target, duree: this.cast };
   }
 
   private outOfRange(enemy: Enemy): boolean {

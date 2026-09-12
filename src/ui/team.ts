@@ -141,7 +141,12 @@ function remplirDetail(
     gauche.appendChild(puce);
     ligne.append(
       gauche,
-      elem('code', undefined, move.power > 0 ? `${move.power} · ${move.cooldown}s` : `statut · ${move.cooldown}s`)
+      elem(
+        'code',
+        undefined,
+        (move.power > 0 ? `${move.power} · ${move.cooldown}s` : `statut · ${move.cooldown}s`) +
+          (move.cast > 0 ? ` · cast ${move.cast}s` : '')
+      )
     );
     attaques.appendChild(ligne);
   }

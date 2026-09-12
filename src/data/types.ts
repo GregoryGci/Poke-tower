@@ -35,6 +35,14 @@ export interface Move {
   accuracy: number;
   /** Secondes entre deux utilisations, propre à l'attaque. */
   cooldown: number;
+  /**
+   * Temps d'incantation, en secondes.
+   *
+   * L'unité se prépare avant de frapper, et la zone visée s'affiche pendant
+   * ce temps : c'est ce qui rend une grosse attaque lisible — on voit où elle
+   * va tomber avant qu'elle tombe. Les attaques rapides gardent 0.
+   */
+  cast: number;
 }
 
 export type TraitEffect =

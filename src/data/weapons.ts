@@ -21,6 +21,8 @@ export interface WeaponModel {
   damage: number;
   /** Secondes entre deux tirs. */
   cooldown: number;
+  /** Temps de visée avant le tir, en secondes. Zéro pour les armes légères. */
+  cast: number;
   range: number;
   style: AttackStyle;
   description: string;
@@ -40,6 +42,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'normal',
     damage: 9,
     cooldown: 0.55,
+    cast: 0,
     range: 6,
     style: 'unique',
     description: 'Fiable, sans surprise. Le point de comparaison.',
@@ -50,6 +53,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'rare',
     damage: 6,
     cooldown: 0.18,
+    cast: 0,
     range: 5,
     style: 'unique',
     description: 'Crache vite et court. Redoutable collé au chemin.',
@@ -60,6 +64,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'rare',
     damage: 22,
     cooldown: 1.1,
+    cast: 0.12,
     range: 3.6,
     style: 'zone',
     description: 'Arrose un groupe serré, à condition de s’en approcher.',
@@ -70,6 +75,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'epique',
     damage: 48,
     cooldown: 1.6,
+    cast: 0.45,
     range: 14,
     style: 'unique',
     description: 'Couvre presque toute la carte. Un tir, une cible.',
@@ -80,6 +86,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'legendaire',
     damage: 42,
     cooldown: 2.1,
+    cast: 0.35,
     range: 9,
     style: 'zone',
     description: 'Souffle large. À ne pas gâcher sur un traînard.',
@@ -90,6 +97,7 @@ export const WEAPONS: Record<string, WeaponModel> = {
     rarity: 'prismatique',
     damage: 70,
     cooldown: 2.4,
+    cast: 0.7,
     range: 16,
     style: 'ligne',
     description: 'Transperce une file entière d’un bout à l’autre.',

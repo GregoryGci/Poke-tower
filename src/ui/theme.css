@@ -2279,3 +2279,7 @@
   text-transform: uppercase;
   color: var(--gris-clair);
 }
+
+/* L'incantation se distingue de la simple mise en joue : ambre, pas vert. */
+.infobulle-etat[data-cast='true'] { color: var(--or); }
+.infobulle[data-visible='true'] .jauge i { background: var(--emeraude); }

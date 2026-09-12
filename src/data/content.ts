@@ -9,22 +9,22 @@
 import type { Move, Species, Trait } from './types';
 
 export const MOVES: Record<string, Move> = {
-  charge: { id: 'charge', name: 'Charge', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 1 },
-  griffe: { id: 'griffe', name: 'Griffe', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 0.9 },
-  vive_attaque: { id: 'vive_attaque', name: 'Vive-Attaque', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 0.7 },
-  ecras_face: { id: 'ecras_face', name: 'Écras’Face', type: 'normal', category: 'physique', power: 80, accuracy: 1, cooldown: 1.8 },
-  morsure: { id: 'morsure', name: 'Morsure', type: 'tenebres', category: 'physique', power: 60, accuracy: 1, cooldown: 1.4 },
-  fouet_lianes: { id: 'fouet_lianes', name: 'Fouet Lianes', type: 'plante', category: 'physique', power: 45, accuracy: 1, cooldown: 1.1 },
-  tranch_herbe: { id: 'tranch_herbe', name: 'Tranch’Herbe', type: 'plante', category: 'special', power: 55, accuracy: 0.95, cooldown: 1.3 },
-  flammeche: { id: 'flammeche', name: 'Flammèche', type: 'feu', category: 'special', power: 40, accuracy: 1, cooldown: 1 },
-  pistolet_a_o: { id: 'pistolet_a_o', name: 'Pistolet à O', type: 'eau', category: 'special', power: 40, accuracy: 1, cooldown: 1 },
-  piqure: { id: 'piqure', name: 'Piqûre', type: 'insecte', category: 'physique', power: 60, accuracy: 1, cooldown: 1.2 },
-  dard_venin: { id: 'dard_venin', name: 'Dard-Venin', type: 'poison', category: 'physique', power: 15, accuracy: 1, cooldown: 0.6 },
-  tornade: { id: 'tornade', name: 'Tornade', type: 'vol', category: 'special', power: 40, accuracy: 1, cooldown: 1 },
-  jet_de_sable: { id: 'jet_de_sable', name: 'Jet de Sable', type: 'sol', category: 'statut', power: 0, accuracy: 1, cooldown: 2 },
-  eclate_roc: { id: 'eclate_roc', name: 'Éclate-Roc', type: 'combat', category: 'physique', power: 40, accuracy: 1, cooldown: 1.1 },
-  jet_pierres: { id: 'jet_pierres', name: 'Jet-Pierres', type: 'roche', category: 'physique', power: 50, accuracy: 0.9, cooldown: 1.3 },
-  balayage: { id: 'balayage', name: 'Balayage', type: 'combat', category: 'physique', power: 60, accuracy: 1, cooldown: 1.5 },
+  charge: { id: 'charge', name: 'Charge', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 1, cast: 0.15 },
+  griffe: { id: 'griffe', name: 'Griffe', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 0.9, cast: 0.12 },
+  vive_attaque: { id: 'vive_attaque', name: 'Vive-Attaque', type: 'normal', category: 'physique', power: 40, accuracy: 1, cooldown: 0.7, cast: 0 },
+  ecras_face: { id: 'ecras_face', name: 'Écras’Face', type: 'normal', category: 'physique', power: 80, accuracy: 1, cooldown: 1.8, cast: 0.55 },
+  morsure: { id: 'morsure', name: 'Morsure', type: 'tenebres', category: 'physique', power: 60, accuracy: 1, cooldown: 1.4, cast: 0.3 },
+  fouet_lianes: { id: 'fouet_lianes', name: 'Fouet Lianes', type: 'plante', category: 'physique', power: 45, accuracy: 1, cooldown: 1.1, cast: 0.2 },
+  tranch_herbe: { id: 'tranch_herbe', name: 'Tranch’Herbe', type: 'plante', category: 'special', power: 55, accuracy: 0.95, cooldown: 1.3, cast: 0.3 },
+  flammeche: { id: 'flammeche', name: 'Flammèche', type: 'feu', category: 'special', power: 40, accuracy: 1, cooldown: 1, cast: 0.25 },
+  pistolet_a_o: { id: 'pistolet_a_o', name: 'Pistolet à O', type: 'eau', category: 'special', power: 40, accuracy: 1, cooldown: 1, cast: 0.25 },
+  piqure: { id: 'piqure', name: 'Piqûre', type: 'insecte', category: 'physique', power: 60, accuracy: 1, cooldown: 1.2, cast: 0.3 },
+  dard_venin: { id: 'dard_venin', name: 'Dard-Venin', type: 'poison', category: 'physique', power: 15, accuracy: 1, cooldown: 0.6, cast: 0 },
+  tornade: { id: 'tornade', name: 'Tornade', type: 'vol', category: 'special', power: 40, accuracy: 1, cooldown: 1, cast: 0.22 },
+  jet_de_sable: { id: 'jet_de_sable', name: 'Jet de Sable', type: 'sol', category: 'statut', power: 0, accuracy: 1, cooldown: 2, cast: 0.2 },
+  eclate_roc: { id: 'eclate_roc', name: 'Éclate-Roc', type: 'combat', category: 'physique', power: 40, accuracy: 1, cooldown: 1.1, cast: 0.25 },
+  jet_pierres: { id: 'jet_pierres', name: 'Jet-Pierres', type: 'roche', category: 'physique', power: 50, accuracy: 0.9, cooldown: 1.3, cast: 0.35 },
+  balayage: { id: 'balayage', name: 'Balayage', type: 'combat', category: 'physique', power: 60, accuracy: 1, cooldown: 1.5, cast: 0.3 },
 };
 
 export const TRAITS: Trait[] = [

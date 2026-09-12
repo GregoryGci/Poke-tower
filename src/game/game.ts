@@ -179,9 +179,13 @@ export interface SurvolTour {
   /** Degats par tir, tous multiplicateurs appliques. */
   degats: number;
   cooldown: number;
+  /** Temps d'incantation de l'attaque retenue, en secondes. */
+  cast: number;
   recharge: number;
-  /** Part de recharge restante, de 0 a 1. */
+  /** Part d'attente restante, de 0 a 1 : incantation ou recharge. */
   rechargePart: number;
+  /** Vrai si l'unite est en train de s'incanter. */
+  enIncantation: boolean;
   portee: number;
   /** Vrai si l'unite tient une cible a portee. */
   enAction: boolean;
@@ -232,6 +236,8 @@ export class Game {
   /** Arme portee par le dresseur. Il tire seul sur ce qui passe a portee. */
   private arme: WeaponModel | null = null;
   private armeTimer = 0;
+  /** Temps de visée restant avant le tir du dresseur. */
+  private armeCast = 0;
 
   /** Une foule par espèce d'ennemi, construite au chargement. */
   private readonly crowds = new Map<string, SpeciesCrowd>();
@@ -488,13 +494,22 @@ export class Game {
 
     for (let i = 0; i < this.towers.length; i++) {
       const tower = this.towers[i]!;
-      const target = tower.update(dt, this.enemyGrid);
-      if (!target || this.projectiles.activeCount >= MAX_PROJECTILES) continue;
+      const action = tower.update(dt, this.enemyGrid);
+
+      // L'incantation n'envoie rien : elle annonce. La zone visée s'affiche
+      // pendant toute sa durée, ce qui laisse le temps de la lire.
+      if (action.kind === 'cast') {
+        this.montrerApercu(tower, action.cible, action.duree);
+        continue;
+      }
+      if (action.kind === 'rien') continue;
+      if (this.projectiles.activeCount >= MAX_PROJECTILES) continue;
+
       const tir = this.projectiles.acquire();
-      tir.launch(tower.x, tower.z, target, tower.damage, 14, tower.style);
+      tir.launch(tower.x, tower.z, action.cible, tower.damage, 14, tower.style);
       tir.ownerId = tower.owned.id;
       tir.moveType = tower.move.type;
-      this.montrerApercu(tower, target, tir.dureeVol);
+      this.montrerApercu(tower, action.cible, tir.dureeVol);
       this.playAttack(this.towerVisuals[i]);
     }
 
@@ -622,7 +637,6 @@ export class Game {
   private tirerAvecArme(dt: number): void {
     if (!this.arme || this.phase !== 'en_cours') return;
     this.armeTimer -= dt;
-    if (this.armeTimer > 0) return;
 
     const cible = this.enemyGrid.nearest(
       this.trainer.x,
@@ -630,9 +644,27 @@ export class Game {
       this.arme.range,
       (enemy) => enemy.active
     );
-    if (!cible) return;
+    // Plus personne à portée : la visée en cours est abandonnée, comme pour
+    // les Pokémon.
+    if (!cible) {
+      this.armeCast = 0;
+      return;
+    }
 
-    this.armeTimer = this.arme.cooldown;
+    if (this.armeCast > 0) {
+      this.armeCast -= dt;
+      if (this.armeCast > 0) return;
+      this.armeCast = 0;
+      this.armeTimer = this.arme.cooldown;
+    } else {
+      if (this.armeTimer > 0) return;
+      if (this.arme.cast > 0) {
+        this.armeCast = this.arme.cast;
+        return;
+      }
+      this.armeTimer = this.arme.cooldown;
+    }
+
     if (this.projectiles.activeCount >= MAX_PROJECTILES) return;
 
     const tir = this.projectiles.acquire();
@@ -843,8 +875,10 @@ export class Game {
       style: tower.style.libelle,
       degats: tower.damage,
       cooldown: tower.cooldown,
+      cast: tower.cast,
       recharge: tower.recharge,
       rechargePart: tower.rechargePart,
+      enIncantation: tower.enIncantation,
       portee: tower.range,
       enAction: tower.target !== null,
       degatsInfliges: contribution?.degats ?? 0,
