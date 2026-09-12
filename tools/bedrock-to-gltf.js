@@ -12,6 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { convertAnimations } = require('./bedrock-anim');
 
 const UNIT = 1 / 16;   // 16 unités Bedrock = 1 bloc
 const DEG = Math.PI / 180;
@@ -143,6 +144,27 @@ const FACES = [
   { key: 'north', n: [0, 0, -1], corners: [[0, 1, 0], [1, 1, 0], [1, 0, 0], [0, 0, 0]] },
 ];
 
+
+/**
+ * Retrouve le fichier voisin d'un modèle.
+ *
+ * Cobblemon décline certaines espèces () alors que
+ * l'animation et la texture restent au nom de base. On remonte donc les
+ * suffixes connus jusqu'à trouver le fichier.
+ */
+function findCompanion(geoFile, extension) {
+  const base = geoFile.replace(/.geo.json$/i, '');
+  const candidates = [base];
+  for (const suffix of ['_male', '_female', '_form', '_normal']) {
+    if (base.toLowerCase().endsWith(suffix)) candidates.push(base.slice(0, -suffix.length));
+  }
+  for (const candidate of candidates) {
+    const file = candidate + extension;
+    if (fs.existsSync(file)) return file;
+  }
+  return null;
+}
+
 /* ---------- Conversion ---------- */
 
 function convert(geoFile, outputFile) {
@@ -245,81 +267,17 @@ function convert(geoFile, outputFile) {
 
   /* ---------- Animations ---------- */
 
-  const animFile = geoFile.replace(/\.geo\.json$/i, '.animation.json');
-  const animations = [];
+  const animFile = findCompanion(geoFile, '.animation.json') ?? '';
   const warnings = [];
-  let molangSkipped = 0;
-
-  if (fs.existsSync(animFile)) {
-    const doc = JSON.parse(fs.readFileSync(animFile, 'utf8'));
-    for (const [fullName, anim] of Object.entries(doc.animations || {})) {
-      const length = anim.animation_length || 1;
-      const channels = [];
-
-      for (const [boneName, tracks] of Object.entries(anim.bones || {})) {
-        const bi = byName.get(boneName);
-        if (bi === undefined) {
-          warnings.push(`os inconnu dans « ${fullName} » : ${boneName}`);
-          continue;
-        }
-
-        for (const [kind, raw] of Object.entries(tracks)) {
-          if (!['rotation', 'position', 'scale'].includes(kind)) continue;
-
-          // Une valeur peut être : constante, objet temps -> valeur, ou expression Molang.
-          let keyframes;
-          if (Array.isArray(raw) || typeof raw === 'number') {
-            keyframes = { 0: raw, [length]: raw };
-          } else if (raw && typeof raw === 'object') {
-            keyframes = {};
-            for (const [time, value] of Object.entries(raw)) {
-              keyframes[time] = value?.post ?? value?.pre ?? value;
-            }
-          } else continue;
-
-          const times = [], values = [];
-          let skipped = false;
-
-          for (const time of Object.keys(keyframes).sort((a, b) => parseFloat(a) - parseFloat(b))) {
-            let v = keyframes[time];
-            if (typeof v === 'number') v = [v, v, v];
-            if (!Array.isArray(v) || v.some((x) => typeof x === 'string')) { skipped = true; break; }
-
-            times.push(parseFloat(time));
-            if (kind === 'rotation') {
-              // Les rotations d'animation s'ajoutent à la pose de repos de l'os.
-              values.push(...quatMultiply(restLocal[bi].q, quatFromBedrock(v)));
-            } else if (kind === 'position') {
-              values.push(
-                restLocal[bi].t[0] + v[0] * UNIT,
-                restLocal[bi].t[1] + v[1] * UNIT,
-                restLocal[bi].t[2] + v[2] * UNIT
-              );
-            } else {
-              values.push(v[0], v[1], v[2]);
-            }
-          }
-
-          if (skipped) { molangSkipped++; continue; }
-          if (times.length < 2) {
-            times.push(times[0] + length);
-            values.push(...values.slice(-(kind === 'rotation' ? 4 : 3)));
-          }
-
-          channels.push({
-            node: bi,
-            path: kind === 'rotation' ? 'rotation' : kind === 'position' ? 'translation' : 'scale',
-            times,
-            values,
-          });
-        }
-      }
-
-      if (channels.length) {
-        animations.push({ name: fullName, channels, loop: anim.loop !== false });
-      }
-    }
-  }
+  const { animations, sampled, unknownBones, broken } = convertAnimations(animFile, {
+    byName,
+    restLocal,
+    unit: UNIT,
+    quatFromBedrock,
+    quatMultiply,
+  });
+  for (const bone of unknownBones.slice(0, 4)) warnings.push(`os inconnu : ${bone}`);
+  for (const track of broken.slice(0, 4)) warnings.push(`piste illisible dans la source : ${track}`);
 
   /* ---------- Écriture du GLB ---------- */
 
@@ -387,9 +345,9 @@ function convert(geoFile, outputFile) {
   const accIbm = pushAccessor({ bufferView: pushView(f32(ibm)), componentType: 5126, type: 'MAT4', count: bones.length });
 
   // Texture : reprise du PNG voisin s'il existe.
-  const pngFile = geoFile.replace(/\.geo\.json$/i, '.png');
+  const pngFile = findCompanion(geoFile, '.png');
   let materialIndex;
-  if (fs.existsSync(pngFile)) {
+  if (pngFile) {
     const view = pushView(fs.readFileSync(pngFile));
     gltf.images = [{ name: path.basename(pngFile, '.png'), mimeType: 'image/png', bufferView: view }];
     // NEAREST : sans ça, le pixel art devient une bouillie floue.
@@ -404,7 +362,7 @@ function convert(geoFile, outputFile) {
   } else {
     gltf.materials = [{ name: 'sans_texture', pbrMetallicRoughness: { baseColorFactor: [0.8, 0.8, 0.8, 1], metallicFactor: 0, roughnessFactor: 1 } }];
     materialIndex = 0;
-    warnings.push(`texture absente : ${path.basename(pngFile)}`);
+    warnings.push('texture introuvable à côté du modèle');
   }
 
   gltf.meshes = [{
@@ -457,8 +415,8 @@ function convert(geoFile, outputFile) {
 
   return {
     bones: bones.length, cubes: cubeCount, vertexCount, triangles: indices.length / 3,
-    animations: animations.length, molangSkipped, warnings,
-    size: fs.statSync(outputFile).size, texture: fs.existsSync(pngFile) ? `${texW}×${texH}` : 'aucune',
+    animations: animations.length, sampled, warnings,
+    size: fs.statSync(outputFile).size, texture: pngFile ? `${texW}×${texH}` : 'aucune',
     min, max,
   };
 }
@@ -479,7 +437,7 @@ console.log(`  Os              ${fmt(r.bones)}`);
 console.log(`  Cubes           ${fmt(r.cubes)}`);
 console.log(`  Triangles       ${fmt(r.triangles)}   (${fmt(r.vertexCount)} sommets)`);
 console.log(`  Draw calls      1`);
-console.log(`  Animations      ${fmt(r.animations)}${r.molangSkipped ? `  (${r.molangSkipped} pistes Molang ignorées)` : ''}`);
+console.log(`  Animations      ${fmt(r.animations)}${r.sampled ? `  (${r.sampled} pistes Molang échantillonnées)` : ''}`);
 console.log(`  Texture         ${r.texture}`);
 console.log(`  Taille          ${(r.size / 1024).toFixed(0)} Ko`);
 console.log(`  Emprise         [${r.min.map((v) => v.toFixed(2)).join(', ')}] .. [${r.max.map((v) => v.toFixed(2)).join(', ')}]`);
