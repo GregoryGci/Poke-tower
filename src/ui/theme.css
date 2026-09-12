@@ -1069,3 +1069,49 @@
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Dépenses dans l'écran d'équipe ---------- */
+
+.bloc-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bouton-cout {
+  font: 600 11.5px var(--ui);
+  color: var(--emeraude);
+  background: var(--emeraude-clair);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.bouton-cout:hover:not(:disabled) { background: #d5e9de; }
+
+.bouton-cout:disabled {
+  background: var(--argent-clair);
+  color: var(--gris-clair);
+  cursor: not-allowed;
+}
+
+.bouton-cout:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* La sub-stat devient cliquable : le palier suivant s'achète sur place. */
+.paire.achetable { cursor: pointer; transition: border-color 0.14s ease; }
+.paire.achetable:hover { border-color: var(--emeraude); }
+.paire.achetable:disabled { cursor: not-allowed; }
+.paire.achetable:disabled:hover { border-color: var(--ligne); }
+
+.solde-vivant {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--gris);
+  font-variant-numeric: tabular-nums;
+}
+
+.solde-vivant b { color: var(--encre); font-weight: 500; }

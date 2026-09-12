@@ -5,11 +5,22 @@
  * ses deux traits, ses quatre sub-stats. C'est là que le joueur ira vérifier
  * ce qu'un reroll lui a donné, donc rien n'est caché derrière un onglet.
  *
- * L'écran est en lecture seule : dépenser des cristaux viendra avec le reroll.
+ * C'est aussi là que se dépensent les cristaux : relancer les attaques, les
+ * traits, ou monter une sub-stat d'un palier. Les règles et les coûts vivent
+ * dans data/upgrades, l'écran ne fait qu'appeler et réafficher.
  */
 
 import { getSpecies } from '@/data/content';
 import { SUBSTAT_MAX_STACK, type OwnedPokemon, type PlayerAccount, type StatType } from '@/data/types';
+import type { AccountManager } from '@/save';
+import {
+  COUT_REROLL_ATTAQUES,
+  COUT_REROLL_TRAITS,
+  coutProchainPalier,
+  monterSubStat,
+  rerollAttaques,
+  rerollTraits,
+} from '@/data/upgrades';
 
 const NOM_STAT: Record<StatType, string> = {
   pv: 'PV',
@@ -37,14 +48,35 @@ function paire(gauche: string, droite: string): HTMLDivElement {
   return bloc;
 }
 
-function bloc(titre: string, contenu: HTMLElement): HTMLDivElement {
+function bloc(titre: string, contenu: HTMLElement, action?: HTMLElement): HTMLDivElement {
   const section = elem('div', 'bloc');
-  section.append(elem('p', 'etiquette', titre), contenu);
+  const tete = elem('div', 'bloc-tete');
+  tete.append(elem('p', 'etiquette', titre));
+  if (action) tete.appendChild(action);
+  section.append(tete, contenu);
   return section;
 }
 
-/** Rend le détail d'un Pokémon dans le panneau. */
-function remplirDetail(panneau: HTMLElement, owned: OwnedPokemon): void {
+function boutonCout(libelle: string, cout: number, solde: number): HTMLButtonElement {
+  const bouton = elem('button', 'bouton-cout', `${libelle} — ${cout} cristaux`);
+  bouton.type = 'button';
+  bouton.disabled = solde < cout;
+  return bouton;
+}
+
+/**
+ * Rend le détail d'un Pokémon.
+ *
+ * Le panneau est reconstruit après chaque dépense plutôt que modifié en
+ * place : c'est l'assurance que ce qui s'affiche est bien l'état du compte,
+ * jamais une vue qui aurait dérivé.
+ */
+function remplirDetail(
+  panneau: HTMLElement,
+  owned: OwnedPokemon,
+  compte: PlayerAccount,
+  surChangement: () => void
+): void {
   const species = getSpecies(owned.speciesId);
   panneau.innerHTML = '';
 
@@ -108,17 +140,33 @@ function remplirDetail(panneau: HTMLElement, owned: OwnedPokemon): void {
 
   // --- Sub-stats
   const subs = elem('div', 'grille-paires');
-  for (const sub of owned.subStats) {
-    const ligne = elem('div', 'paire');
+  owned.subStats.forEach((sub, index) => {
+    const cout = coutProchainPalier(sub.stack);
+    const ligne = elem('button', 'paire achetable');
+    ligne.type = 'button';
+    ligne.id = `substat-${index}`;
+    ligne.disabled = cout === null || compte.crystals < cout;
+    ligne.title = cout === null ? 'Palier maximum atteint' : `Palier suivant : ${cout} cristaux`;
+
     const paliers = elem('div', 'paliers');
     for (let i = 0; i < SUBSTAT_MAX_STACK; i++) {
       const palier = elem('span', 'palier');
       palier.dataset['plein'] = String(i < sub.stack);
       paliers.appendChild(palier);
     }
-    ligne.append(elem('b', undefined, NOM_STAT[sub.statType]), paliers);
+
+    const gauche = elem('div');
+    gauche.append(elem('b', undefined, NOM_STAT[sub.statType]));
+    const cote = elem('code', undefined, cout === null ? 'max' : `+1 · ${cout}`);
+    cote.style.marginLeft = '8px';
+    gauche.appendChild(cote);
+
+    ligne.append(gauche, paliers);
+    ligne.addEventListener('click', () => {
+      if (monterSubStat(compte, owned, index).ok) surChangement();
+    });
     subs.appendChild(ligne);
-  }
+  });
 
   // --- Stats de base
   const base = elem('div', 'grille-paires');
@@ -126,17 +174,33 @@ function remplirDetail(panneau: HTMLElement, owned: OwnedPokemon): void {
     base.appendChild(paire(NOM_STAT[stat as StatType], String(valeur)));
   }
 
+  const relancerAttaques = boutonCout('Relancer', COUT_REROLL_ATTAQUES, compte.crystals);
+  relancerAttaques.id = 'reroll-attaques';
+  relancerAttaques.addEventListener('click', () => {
+    if (rerollAttaques(compte, owned).ok) surChangement();
+  });
+
+  const relancerTraits = boutonCout('Relancer', COUT_REROLL_TRAITS, compte.crystals);
+  relancerTraits.id = 'reroll-traits';
+  relancerTraits.addEventListener('click', () => {
+    if (rerollTraits(compte, owned).ok) surChangement();
+  });
+
+  const solde = elem('span', 'solde-vivant');
+  solde.append(document.createTextNode('Solde '), elem('b', undefined, String(compte.crystals)));
+
   panneau.append(
     tete,
-    bloc('Attaques', attaques),
-    bloc('Traits', traits),
-    bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs),
+    bloc('Attaques', attaques, relancerAttaques),
+    bloc('Traits', traits, relancerTraits),
+    bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
     bloc('Stats de base', base)
   );
 }
 
 /** Affiche l'équipe et rend la main au retour. */
-export function ouvrirEquipe(compte: PlayerAccount): Promise<void> {
+export function ouvrirEquipe(account: AccountManager): Promise<void> {
+  const compte = account.account;
   const racine = elem('div', 'ecran-equipe');
 
   const titre = elem('div');
@@ -164,7 +228,18 @@ export function ouvrirEquipe(compte: PlayerAccount): Promise<void> {
     for (const vignette of liste.querySelectorAll('.equipe-vignette')) {
       vignette.setAttribute('aria-pressed', String(vignette.id === `equipe-${owned.id}`));
     }
-    remplirDetail(detail, owned);
+    rafraichir();
+  };
+
+  const rafraichir = (): void => {
+    if (choisi) remplirDetail(detail, choisi, compte, apresDepense);
+  };
+
+  // Toute dépense est sauvegardée : le joueur ne doit pas perdre un reroll
+  // parce qu'il a fermé l'onglet juste après.
+  const apresDepense = (): void => {
+    account.touch();
+    rafraichir();
   };
 
   for (const owned of compte.roster) {
@@ -188,7 +263,7 @@ export function ouvrirEquipe(compte: PlayerAccount): Promise<void> {
     liste.appendChild(vignette);
   }
 
-  if (choisi) remplirDetail(detail, choisi);
+  if (choisi) rafraichir();
   else detail.appendChild(elem('p', 'sous-titre', 'Ton équipe est vide.'));
 
   racine.append(haut, corps);

@@ -202,7 +202,7 @@ for (;;) {
   }
 
   if (destination === 'equipe') {
-    await ouvrirEquipe(account.account);
+    await ouvrirEquipe(account);
     continue;
   }
 
