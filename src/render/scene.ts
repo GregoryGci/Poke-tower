@@ -25,8 +25,17 @@ import {
 
 /** Angle de plongée, en degrés. 50° donne le rendu « Clash Royale » demandé. */
 const PITCH = 50;
-/** Rotation autour de l'axe vertical : décale la vue pour éviter le plein axe. */
-const YAW = 35;
+/**
+ * Cap initial, en degrés.
+ *
+ * Il n'est plus constant : le joueur peut tourner la vue, parce qu'un décor
+ * ou un relief finit toujours par masquer un coin de la carte sous un seul
+ * angle. Seule la plongée reste fixe — c'est elle qui porte le rendu
+ * « Clash Royale » et le cadrage d'une seule shadow map.
+ */
+const YAW_DEFAUT = 35;
+/** Pas de rotation, en degrés, pour un appui ou un cran de bouton. */
+const PAS_ROTATION = 15;
 
 /** Distance au point visé, en unités monde. */
 const DISTANCE_MIN = 26;
@@ -54,6 +63,12 @@ export interface Stage {
   readonly suit: boolean;
   /** Recule (positif) ou rapproche (négatif) la caméra. */
   zoom(delta: number): void;
+  /** Fait tourner la vue autour du point visé, en degrés. */
+  pivoter(degres: number): void;
+  /** Remet le cap d'origine. */
+  reinitialiserCap(): void;
+  /** Cap courant, en degrés. */
+  readonly cap: number;
   /** Distance courante, pour l'afficher ou la sauvegarder. */
   readonly distance: number;
   resize(): void;
@@ -76,20 +91,26 @@ export function createStage(container: HTMLElement): Stage {
   const camera = new PerspectiveCamera(32, 1, 1, DISTANCE_MAX * 4);
 
   let distance = DISTANCE_DEFAUT;
+  let yaw = YAW_DEFAUT;
   let suit = true;
   const focusPoint = new Vector3(0, 0, 0);
   const voulu = new Vector3(0, 0, 0);
 
-  /** Direction caméra -> cible, indépendante de la distance. */
-  const direction = (() => {
+  /**
+   * Direction caméra -> cible, indépendante de la distance.
+   *
+   * Recalculée à chaque changement de cap plutôt que figée : c'est elle qui
+   * place la caméra, donc la garder constante annulait la rotation.
+   */
+  const direction = new Vector3();
+  const recalculerDirection = (): void => {
     const pitch = (PITCH * Math.PI) / 180;
-    const yaw = (YAW * Math.PI) / 180;
-    return new Vector3(
-      Math.sin(yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      Math.cos(yaw) * Math.cos(pitch)
-    ).normalize();
-  })();
+    const rad = (yaw * Math.PI) / 180;
+    direction
+      .set(Math.sin(rad) * Math.cos(pitch), Math.sin(pitch), Math.cos(rad) * Math.cos(pitch))
+      .normalize();
+  };
+  recalculerDirection();
 
   const appliquer = (): void => {
     camera.position.copy(focusPoint).addScaledVector(direction, distance);
@@ -130,16 +151,29 @@ export function createStage(container: HTMLElement): Stage {
     suit = true;
   }
 
+  function pivoter(degres: number): void {
+    yaw = (yaw + degres) % 360;
+    recalculerDirection();
+    appliquer();
+  }
+
+  function reinitialiserCap(): void {
+    yaw = YAW_DEFAUT;
+    recalculerDirection();
+    appliquer();
+  }
+
   /** Deplacement libre : le glisser fait glisser le terrain sous la camera. */
   function deplacer(dxEcran: number, dyEcran: number): void {
-    // Le plan du sol vu par une camera fixe : on projette le geste souris sur
-    // les deux axes de l'ecran ramenes au sol.
+    // Le plan du sol vu par la camera : on projette le geste souris sur les
+    // deux axes de l'ecran ramenes au sol, au cap courant. Utiliser le cap
+    // d'origine ferait glisser le terrain de travers des qu'on a tourne.
     const facteur = distance * 0.0016;
-    const yaw = (YAW * Math.PI) / 180;
-    const droiteX = Math.cos(yaw);
-    const droiteZ = -Math.sin(yaw);
-    const avantX = Math.sin(yaw);
-    const avantZ = Math.cos(yaw);
+    const rad = (yaw * Math.PI) / 180;
+    const droiteX = Math.cos(rad);
+    const droiteZ = -Math.sin(rad);
+    const avantX = Math.sin(rad);
+    const avantZ = Math.cos(rad);
     focusPoint.x -= (dxEcran * droiteX + dyEcran * avantX) * facteur;
     focusPoint.z -= (dxEcran * droiteZ + dyEcran * avantZ) * facteur;
     appliquer();
@@ -207,6 +241,15 @@ export function createStage(container: HTMLElement): Stage {
   };
   renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
+  // A et E tournent la vue, R la remet d'aplomb. Le clavier plutot que le
+  // clic droit : celui-ci annule deja une pose en cours.
+  const onKey = (event: KeyboardEvent): void => {
+    if (event.code === 'KeyA') pivoter(-PAS_ROTATION);
+    else if (event.code === 'KeyE') pivoter(PAS_ROTATION);
+    else if (event.code === 'KeyR') reinitialiserCap();
+  };
+  window.addEventListener('keydown', onKey);
+
   function resize(): void {
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -233,6 +276,11 @@ export function createStage(container: HTMLElement): Stage {
       return suit;
     },
     zoom,
+    pivoter,
+    reinitialiserCap,
+    get cap(): number {
+      return yaw;
+    },
     get distance(): number {
       return distance;
     },
@@ -240,6 +288,7 @@ export function createStage(container: HTMLElement): Stage {
     dispose(): void {
       observer.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKey);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);

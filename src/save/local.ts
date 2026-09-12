@@ -1,3 +1,4 @@
+import { potentielNeutre } from '@/data/stats';
 import { CURRENT_SCHEMA_VERSION, type PlayerAccount } from '@/data/types';
 import { SaveError, type SaveStore } from './store';
 
@@ -44,6 +45,10 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     xp: membre.xp ?? 0,
     stars: membre.stars ?? 1,
     shiny: membre.shiny ?? false,
+    // Potentiel nul plutot qu'un tirage : re-tirer a la lecture donnerait une
+    // feuille de stats differente a chaque ouverture du jeu.
+    potentiel: membre.potentiel ?? potentielNeutre(),
+    favori: membre.favori ?? false,
   }));
 
   // Armes, equipe et nom sont arrives apres les premieres sauvegardes.
@@ -55,6 +60,7 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     // de stats : elles repartent nues plutot que d'etre jetees.
     weapons: (account.weapons ?? []).map((arme) => ({
       ...arme,
+      favori: arme.favori ?? false,
       niveau: arme.niveau ?? 0,
       innee: arme.innee ?? null,
       subStats: arme.subStats ?? [],

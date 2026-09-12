@@ -9,7 +9,7 @@
  * appliqué, soit rien ne bouge.
  */
 
-import { rollMoves, rollTraits } from './roll';
+import { rollMove, rollMoves, rollTrait, rollTraits } from './roll';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -21,6 +21,15 @@ import {
 
 export const COUT_REROLL_ATTAQUES = 5;
 export const COUT_REROLL_TRAITS = 8;
+/**
+ * Relancer une seule case.
+ *
+ * Plus cher a l'unite que la relance complete rapportee au nombre de cases,
+ * et c'est voulu : on paie le droit de **garder** ce qui est bon. Relancer
+ * les quatre reste le choix economique quand tout est a jeter.
+ */
+export const COUT_REROLL_ATTAQUE_UNITE = 3;
+export const COUT_REROLL_TRAIT_UNITE = 5;
 /** Monter une sub-stat coûte de plus en plus cher à mesure qu'elle grimpe. */
 export const COUT_SUBSTAT_BASE = 3;
 
@@ -95,6 +104,41 @@ export function rerollAttaques(compte: PlayerAccount, owned: OwnedPokemon): Depe
 export function rerollTraits(compte: PlayerAccount, owned: OwnedPokemon): Depense {
   if (!debiter(compte, COUT_REROLL_TRAITS)) return { ok: false, raison: 'cristaux' };
   owned.traits = rollTraits(Math.random);
+  return { ok: true };
+}
+
+/**
+ * Relance une seule attaque.
+ *
+ * Les trois autres sont exclues du tirage : sans cela, relancer une case
+ * pouvait rendre le doublon qu'on cherchait justement a supprimer.
+ */
+export function rerollAttaque(
+  compte: PlayerAccount,
+  owned: OwnedPokemon,
+  index: number
+): Depense {
+  const actuelle = owned.moves[index];
+  if (!actuelle) return { ok: false, raison: 'maximum' };
+  if (!debiter(compte, COUT_REROLL_ATTAQUE_UNITE)) return { ok: false, raison: 'cristaux' };
+
+  const autres = owned.moves.filter((_, i) => i !== index).map((move) => move.id);
+  owned.moves[index] = rollMove(owned.speciesId, autres, Math.random);
+  return { ok: true };
+}
+
+/** Relance un seul trait, l'autre etant exclu du tirage. */
+export function rerollTrait(
+  compte: PlayerAccount,
+  owned: OwnedPokemon,
+  index: number
+): Depense {
+  const actuel = owned.traits[index];
+  if (!actuel) return { ok: false, raison: 'maximum' };
+  if (!debiter(compte, COUT_REROLL_TRAIT_UNITE)) return { ok: false, raison: 'cristaux' };
+
+  const autres = owned.traits.filter((_, i) => i !== index).map((trait) => trait.id);
+  owned.traits[index] = rollTrait(autres, Math.random);
   return { ok: true };
 }
 

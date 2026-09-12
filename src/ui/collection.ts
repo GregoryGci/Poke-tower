@@ -21,6 +21,8 @@ import {
   type StatType,
 } from '@/data/types';
 import { STYLES } from '@/data/types';
+import { notePotentiel } from '@/data/stats';
+import { boutonFavori } from './tri';
 
 const NOM_STAT: Record<StatType, string> = {
   pv: 'PV',
@@ -107,7 +109,11 @@ function etoiles(nombre: number, shiny: boolean, classe = 'etoiles'): HTMLDivEle
 }
 
 /** Panneau de droite : la fiche d'une espèce, possédée ou non. */
-function remplirFiche(panneau: HTMLElement, entree: Entree): void {
+function remplirFiche(
+  panneau: HTMLElement,
+  entree: Entree,
+  surFavori: () => void
+): void {
   const species = getSpecies(entree.speciesId);
   panneau.innerHTML = '';
 
@@ -164,16 +170,36 @@ function remplirFiche(panneau: HTMLElement, entree: Entree): void {
     badge.dataset['rarete'] = copie.rarity;
     gauche.append(
       badge,
-      elem('span', 'unite-detail', `Niveau ${copie.level} · stats ×${multiplicateurEtoiles(copie.stars).toFixed(2)}`)
+      elem(
+        'span',
+        'unite-detail',
+        `Niveau ${copie.level} · ×${multiplicateurEtoiles(copie.stars).toFixed(2)} · potentiel ${notePotentiel(copie)} %`
+      )
     );
-    ligne.append(gauche, etoiles(copie.stars, copie.shiny, 'vignette-etoiles'));
+
+    const droite = elem('div', 'collection-copie-texte');
+    droite.appendChild(etoiles(copie.stars, copie.shiny, 'vignette-etoiles'));
+    // Le favori se marque ici aussi : c'est là qu'on compare ses doublons,
+    // donc là qu'on décide lequel garder.
+    droite.appendChild(
+      boutonFavori(copie.favori, () => {
+        copie.favori = !copie.favori;
+        surFavori();
+        remplirFiche(panneau, entree, surFavori);
+      })
+    );
+
+    ligne.append(gauche, droite);
     copies.appendChild(ligne);
   }
   panneau.appendChild(bloc(`Exemplaires — ${entree.copies.length}`, copies));
 }
 
 /** Affiche la collection et rend la main au retour. */
-export function ouvrirCollection(compte: PlayerAccount): Promise<void> {
+export function ouvrirCollection(
+  compte: PlayerAccount,
+  surFavori: () => void
+): Promise<void> {
   const entrees = inventaire(compte);
   const possedees = entrees.filter((entree) => entree.copies.length > 0).length;
 
@@ -204,7 +230,7 @@ export function ouvrirCollection(compte: PlayerAccount): Promise<void> {
     for (const vignette of liste.querySelectorAll('.collection-vignette')) {
       vignette.setAttribute('aria-pressed', String(vignette.id === `collection-${entree.speciesId}`));
     }
-    remplirFiche(fiche, entree);
+    remplirFiche(fiche, entree, surFavori);
   };
 
   for (const entree of entrees) {
@@ -231,7 +257,7 @@ export function ouvrirCollection(compte: PlayerAccount): Promise<void> {
     liste.appendChild(vignette);
   }
 
-  if (choisie) remplirFiche(fiche, choisie);
+  if (choisie) remplirFiche(fiche, choisie, surFavori);
 
   racine.append(haut, corps);
   document.body.appendChild(racine);

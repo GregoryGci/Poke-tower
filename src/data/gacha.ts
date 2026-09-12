@@ -106,7 +106,7 @@ export function armeNeuve(
   rng: () => number = Math.random
 ): OwnedWeapon {
   return initialiserArme(
-    { id: crypto.randomUUID(), weaponId, rarity, niveau: 0, innee: null, subStats: [] },
+    { id: crypto.randomUUID(), weaponId, rarity, favori: false, niveau: 0, innee: null, subStats: [] },
     rng
   );
 }

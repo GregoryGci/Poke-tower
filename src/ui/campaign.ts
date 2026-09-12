@@ -35,7 +35,6 @@ function elem<K extends keyof HTMLElementTagNameMap>(
 
 const MARQUE: Record<Niveau['sorte'], string> = {
   normal: '',
-  mini_boss: '✦',
   boss: '☠',
 };
 
@@ -50,10 +49,8 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
 
   const titre = elem('div');
   const compteur = elem('h1', 'titre titre-xl', 'Campagne');
-  titre.append(
-    elem('p', 'etiquette', `${faits.size} niveaux terminés sur ${MONDES.length * NIVEAUX_PAR_MONDE}`),
-    compteur
-  );
+  const sousEtiquette = elem('p', 'etiquette');
+  titre.append(sousEtiquette, compteur);
 
   const retour = elem('button', 'bouton-discret', 'Retour au menu');
   retour.type = 'button';
@@ -84,6 +81,8 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
     const afficherMonde = (monde: Monde): void => {
       mondeCourant = monde;
       compteur.textContent = monde.nom;
+      const faitsIci = niveauxDuMonde(monde.id).filter((n) => faits.has(n.id)).length;
+      sousEtiquette.textContent = `Génération ${monde.generation} · ${faitsIci}/${NIVEAUX_PAR_MONDE} · ${faits.size} au total`;
       // La description s'écrit à la machine : c'est le seul texte de l'écran,
       // il peut se permettre d'être joué.
       ecrire(pitch, monde.sousTitre);
@@ -104,13 +103,19 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<Niveau | null> {
         case_.type = 'button';
         case_.id = `niveau-${niveau.id}`;
         case_.dataset['sorte'] = niveau.sorte;
+        case_.dataset['palier'] = String(niveau.palierBoss);
         case_.dataset['etat'] = ouvert ? (fait ? 'fait' : 'ouvert') : 'ferme';
         case_.disabled = !ouvert;
         case_.title = ouvert
-          ? `${niveau.nom}${fait ? ' · terminé' : ''}`
+          ? `${niveau.rang}. ${niveau.nom}${niveau.palierBoss ? ` · boss palier ${niveau.palierBoss}` : ''}${fait ? ' · terminé' : ''}`
           : 'Termine le niveau précédent';
 
-        case_.append(elem('span', 'campagne-rang', String(niveau.rang)));
+        // Le lieu est le nom du niveau : c'est ce qui le rend memorable, alors
+        // qu'un numero ne dit rien. Le rang reste, en petit, pour se reperer.
+        case_.append(
+          elem('span', 'campagne-rang', String(niveau.rang)),
+          elem('span', 'campagne-lieu', ouvert ? niveau.nom : '???')
+        );
         if (MARQUE[niveau.sorte]) {
           case_.appendChild(elem('span', 'campagne-marque', MARQUE[niveau.sorte]));
         }

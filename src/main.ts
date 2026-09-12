@@ -186,6 +186,10 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
     render(alpha) {
       game.render(alpha);
       // La camera colle au dresseur, sauf si le joueur l a saisie.
+      // Bouger le dresseur recolle la camera : lacher le suivi pour regarder
+      // ailleurs est utile, mais devoir appuyer sur une touche pour le reprendre
+      // alors qu on vient de se deplacer ne l est pas.
+      if (game.dresseurEnMouvement && !stage.suit) stage.reprendreSuivi();
       stage.suivre(game.positionDresseur, 1 / 60);
       stage.renderer.render(stage.scene, stage.camera);
       hud.update(game.status);
@@ -282,7 +286,7 @@ for (;;) {
   }
 
   if (destination === 'collection') {
-    await ouvrirCollection(account.account);
+    await ouvrirCollection(account.account, () => account.touch());
     continue;
   }
 

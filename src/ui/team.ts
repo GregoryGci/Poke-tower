@@ -17,6 +17,8 @@
 
 import { getSpecies } from '@/data/content';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
+import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
+import { boutonFavori, selecteurTri, trier } from './tri';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -31,11 +33,15 @@ import type { AccountManager } from '@/save';
 import {
   doublonsDisponibles,
   fusionner,
+  COUT_REROLL_ATTAQUE_UNITE,
   COUT_REROLL_ATTAQUES,
+  COUT_REROLL_TRAIT_UNITE,
   COUT_REROLL_TRAITS,
   coutProchainPalier,
   monterSubStat,
+  rerollAttaque,
   rerollAttaques,
+  rerollTrait,
   rerollTraits,
 } from '@/data/upgrades';
 
@@ -69,12 +75,6 @@ function rangeeEtoiles(etoiles: number, shiny: boolean, classe = 'etoiles'): HTM
     rangee.appendChild(etoile);
   }
   return rangee;
-}
-
-function paire(gauche: string, droite: string): HTMLDivElement {
-  const bloc = elem('div', 'paire');
-  bloc.append(elem('b', undefined, gauche), elem('code', undefined, droite));
-  return bloc;
 }
 
 function bloc(titre: string, contenu: HTMLElement, action?: HTMLElement): HTMLDivElement {
@@ -123,13 +123,21 @@ function remplirDetail(
   }
   identite.appendChild(types);
 
+  const cote = elem('div', 'detail-cote');
   const rarete = elem('span', 'rarete', owned.rarity);
   rarete.dataset['rarete'] = owned.rarity;
-  tete.append(identite, rarete);
+  // La note de potentiel resume la part de hasard du tirage : c'est ce qu'on
+  // regarde avant de sacrifier un doublon.
+  cote.append(rarete, elem('span', 'note-potentiel', `Potentiel ${notePotentiel(owned)} %`));
+  tete.append(identite, cote);
 
   // --- Attaques
+  //
+  // Chaque case se relance seule. Relancer les quatre pour corriger une seule
+  // mauvaise attaque faisait perdre les trois bonnes, et c'etait le vrai
+  // reproche fait au reroll global.
   const attaques = elem('div', 'grille-paires');
-  for (const move of owned.moves) {
+  owned.moves.forEach((move, index) => {
     const ligne = elem('div', 'paire');
     const gauche = elem('div');
     gauche.append(elem('b', undefined, move.name));
@@ -137,8 +145,9 @@ function remplirDetail(
     puce.dataset['type'] = move.type;
     puce.style.marginLeft = '8px';
     gauche.appendChild(puce);
-    ligne.append(
-      gauche,
+
+    const droite = elem('div', 'paire-droite');
+    droite.appendChild(
       elem(
         'code',
         undefined,
@@ -146,12 +155,24 @@ function remplirDetail(
           (move.cast > 0 ? ` · cast ${move.cast}s` : '')
       )
     );
+
+    const relancer = elem('button', 'bouton-cout', `↻ ${COUT_REROLL_ATTAQUE_UNITE}`);
+    relancer.type = 'button';
+    relancer.id = `reroll-attaque-${index}`;
+    relancer.title = `Relancer cette attaque — ${COUT_REROLL_ATTAQUE_UNITE} cristaux`;
+    relancer.disabled = compte.crystals < COUT_REROLL_ATTAQUE_UNITE;
+    relancer.addEventListener('click', () => {
+      if (rerollAttaque(compte, owned, index).ok) surChangement();
+    });
+    droite.appendChild(relancer);
+
+    ligne.append(gauche, droite);
     attaques.appendChild(ligne);
-  }
+  });
 
   // --- Traits
   const traits = elem('div', 'grille-paires');
-  for (const trait of owned.traits) {
+  owned.traits.forEach((trait, index) => {
     const effet = trait.effect;
     const description =
       effet.kind === 'onKill'
@@ -168,9 +189,23 @@ function remplirDetail(
     badge.dataset['rarete'] = trait.rarity;
     badge.style.marginLeft = '8px';
     gauche.appendChild(badge);
-    ligne.append(gauche, elem('code', undefined, description));
+
+    const droite = elem('div', 'paire-droite');
+    droite.appendChild(elem('code', undefined, description));
+
+    const relancer = elem('button', 'bouton-cout', `↻ ${COUT_REROLL_TRAIT_UNITE}`);
+    relancer.type = 'button';
+    relancer.id = `reroll-trait-${index}`;
+    relancer.title = `Relancer ce trait — ${COUT_REROLL_TRAIT_UNITE} cristaux`;
+    relancer.disabled = compte.crystals < COUT_REROLL_TRAIT_UNITE;
+    relancer.addEventListener('click', () => {
+      if (rerollTrait(compte, owned, index).ok) surChangement();
+    });
+    droite.appendChild(relancer);
+
+    ligne.append(gauche, droite);
     traits.appendChild(ligne);
-  }
+  });
 
   // --- Sub-stats
   const subs = elem('div', 'grille-paires');
@@ -202,10 +237,36 @@ function remplirDetail(
     subs.appendChild(ligne);
   });
 
-  // --- Stats de base
+  // --- Stats reelles
+  //
+  // Le Pokedex brut ne bougeait ni au niveau, ni au palier de sub-stat, ni a
+  // l'etoile : la fiche donnait donc l'impression qu'investir ne servait a
+  // rien. Chaque ligne montre maintenant la valeur utilisee, le socle, et
+  // d'ou vient l'ecart.
   const base = elem('div', 'grille-paires');
-  for (const [stat, valeur] of Object.entries(species.baseStats)) {
-    base.appendChild(paire(NOM_STAT[stat as StatType], String(valeur)));
+  for (const stat of Object.keys(species.baseStats) as StatType[]) {
+    const detail = detailStat(owned, stat);
+    const ligne = elem('div', 'paire');
+
+    const gauche = elem('div');
+    gauche.append(elem('b', undefined, NOM_STAT[stat]));
+    const socle = elem('span', 'stat-socle', `socle ${detail.base}`);
+    gauche.appendChild(socle);
+
+    const droite = elem('div', 'paire-droite');
+    droite.appendChild(elem('code', undefined, detail.valeur.toFixed(1)));
+    const parts: string[] = [];
+    if (detail.potentiel > 0) parts.push(`potentiel +${detail.potentiel.toFixed(1)} %`);
+    if (detail.etoiles > 0) parts.push(`étoiles +${Math.round(detail.etoiles)} %`);
+    if (detail.niveau > 0) parts.push(`niveau +${Math.round(detail.niveau)} %`);
+    if (detail.subStats > 0) parts.push(`sub-stats +${Math.round(detail.subStats)} %`);
+    if (parts.length) {
+      const note = elem('span', 'stat-detail', parts.join(' · '));
+      droite.appendChild(note);
+    }
+
+    ligne.append(gauche, droite);
+    base.appendChild(ligne);
   }
 
   // --- Étoiles
@@ -270,7 +331,7 @@ function remplirDetail(
     bloc('Attaques', attaques, relancerAttaques),
     bloc('Traits', traits, relancerTraits),
     bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
-    bloc('Stats de base', base)
+    bloc('Stats réelles', base)
   );
 }
 
@@ -290,10 +351,18 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
   const haut = elem('div', 'equipe-haut');
   haut.append(titre, retour);
 
+  // Le tri n'est pas sauvegarde : il repond a une question du moment, alors
+  // que le favori est un choix qu'on veut retrouver.
+  let triCourant = 'equipe';
+  const barre = elem('div', 'barre-outils');
+
   const liste = elem('div', 'equipe-liste');
   const detail = elem('div', 'equipe-detail');
+  const colonne = elem('div', 'equipe-colonne');
+  colonne.append(barre, liste);
+
   const corps = elem('div', 'equipe-corps');
-  corps.append(liste, detail);
+  corps.append(colonne, detail);
 
   let choisi = compte.roster[0] ?? null;
 
@@ -326,10 +395,30 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
     liste.innerHTML = '';
     compteurTitre.textContent = `Mon équipe — ${compte.team.length}/${EQUIPE_MAX}`;
 
-    const ordonne = [...compte.roster].sort((a, b) => {
-      const da = dansEquipe(compte, a) ? 0 : 1;
-      const db = dansEquipe(compte, b) ? 0 : 1;
-      return da - db;
+    barre.innerHTML = '';
+    barre.appendChild(
+      selecteurTri(
+        [{ id: 'equipe', libelle: 'Équipe d’abord', comparer: () => 0 }, ...TRIS_POKEMON],
+        triCourant,
+        (id) => {
+          triCourant = id;
+          construireListe();
+        }
+      )
+    );
+
+    // « Équipe d'abord » reste le tri par défaut : c'est la question que
+    // l'écran pose, les autres critères servent à composer.
+    const option = TRIS_POKEMON.find((tri) => tri.id === triCourant);
+    const ordonne = trier(compte.roster, {
+      id: triCourant,
+      libelle: '',
+      comparer: (a, b) => {
+        if (option) return option.comparer(a, b);
+        const da = dansEquipe(compte, a) ? 0 : 1;
+        const db = dansEquipe(compte, b) ? 0 : 1;
+        return da - db;
+      },
     });
 
     for (const owned of ordonne) {
@@ -355,6 +444,17 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
       );
 
       vignette.append(pastille, texte);
+      vignette.appendChild(
+        boutonFavori(
+          owned.favori,
+          () => {
+            owned.favori = !owned.favori;
+            account.touch();
+            construireListe();
+          },
+          `favori-${owned.id}`
+        )
+      );
       vignette.addEventListener('click', () => selectionner(owned));
 
       const bascule = elem('button', 'equipe-bascule', engage ? '−' : '+');

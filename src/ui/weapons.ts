@@ -28,7 +28,9 @@ import {
   meuler,
   sertirGemme,
   statsArme,
+  TRIS_ARMES,
 } from '@/data/weapon-upgrade';
+import { boutonFavori, selecteurTri, trier } from './tri';
 import type { OwnedWeapon, PlayerAccount, WeaponStat } from '@/data/types';
 import type { AccountManager } from '@/save';
 import { ecrire } from './typewriter';
@@ -295,10 +297,19 @@ export function ouvrirArmes(account: AccountManager): Promise<void> {
   const haut = elem('div', 'equipe-haut');
   haut.append(titre, retour);
 
+  // Le tri n'est pas sauvegarde ; le favori l'est. L'un explore, l'autre
+  // ramene a ce qu'on travaille.
+  let triCourant = 'portee';
+  const barre = elem('div', 'barre-outils');
+
   const liste = elem('div', 'equipe-liste');
   const fiche = elem('div', 'equipe-detail');
+
+  const colonne = elem('div', 'equipe-colonne');
+  colonne.append(barre, liste);
+
   const corps = elem('div', 'equipe-corps');
-  corps.append(liste, fiche);
+  corps.append(colonne, fiche);
 
   let choisie: OwnedWeapon | null =
     compte.weapons.find((arme) => arme.id === compte.equippedWeaponId) ?? compte.weapons[0] ?? null;
@@ -344,10 +355,28 @@ export function ouvrirArmes(account: AccountManager): Promise<void> {
     liste.innerHTML = '';
     compteur.textContent = `Armes — ${compte.weapons.length} · ${compte.crystals} ◆`;
 
-    const ordonnees = [...compte.weapons].sort((a, b) => {
-      const pa = a.id === compte.equippedWeaponId ? 0 : 1;
-      const pb = b.id === compte.equippedWeaponId ? 0 : 1;
-      return pa - pb || b.niveau - a.niveau;
+    barre.innerHTML = '';
+    barre.appendChild(
+      selecteurTri(
+        [{ id: 'portee', libelle: 'Arme portée d’abord', comparer: () => 0 }, ...TRIS_ARMES],
+        triCourant,
+        (id) => {
+          triCourant = id;
+          construireListe();
+        }
+      )
+    );
+
+    const option = TRIS_ARMES.find((tri) => tri.id === triCourant);
+    const ordonnees = trier(compte.weapons, {
+      id: triCourant,
+      libelle: '',
+      comparer: (a, b) => {
+        if (option) return option.comparer(a, b);
+        const pa = a.id === compte.equippedWeaponId ? 0 : 1;
+        const pb = b.id === compte.equippedWeaponId ? 0 : 1;
+        return pa - pb || b.niveau - a.niveau;
+      },
     });
 
     for (const arme of ordonnees) {
@@ -376,6 +405,17 @@ export function ouvrirArmes(account: AccountManager): Promise<void> {
       );
 
       vignette.append(pastille, texte);
+      vignette.appendChild(
+        boutonFavori(
+          arme.favori,
+          () => {
+            arme.favori = !arme.favori;
+            account.touch();
+            construireListe();
+          },
+          `favori-${arme.id}`
+        )
+      );
       vignette.addEventListener('click', () => selectionner(arme));
       rangee.appendChild(vignette);
       liste.appendChild(rangee);

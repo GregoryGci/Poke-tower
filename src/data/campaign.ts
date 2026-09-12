@@ -1,33 +1,42 @@
 /**
  * Campagne.
  *
- * Deux mondes de vingt niveaux. Le rythme est fixe et annoncé : mini-boss aux
- * niveaux 5 et 15, gros boss aux niveaux 10 et 20. Le joueur sait donc où il
- * va, ce qui lui permet de préparer plutôt que de subir — c'est la différence
- * entre une difficulté et un piège.
+ * Deux mondes de vingt niveaux, nommés d'après les régions du Pokédex dans
+ * l'ordre des générations — Kanto d'abord, puis Johto — et chaque niveau
+ * d'après un lieu de cette région. Un numéro ne dit rien ; « Mont Sélénite »
+ * dit où l'on est, et c'est ce qui fait qu'on se souvient d'un niveau.
+ *
+ * Le rythme est fixe et annoncé : **un boss tous les cinq niveaux**, de plus
+ * en plus coriace. Le joueur sait donc où il va, ce qui lui permet de
+ * préparer plutôt que de subir — c'est la différence entre une difficulté et
+ * un piège.
  *
  * Un monde n'est pas qu'une liste de niveaux : c'est aussi une palette et un
- * jeu de décors, parce que vingt manches sur le même fond se confondent. La
- * Route de la Prairie est claire et herbeuse ; le Mont Braise est sombre,
- * cendreux et minéral.
+ * jeu de décors, parce que vingt manches sur le même fond se confondent.
  *
- * Le niveau est identifié par une chaîne (`m1-07`) et non par son index : cet
- * identifiant sert de graine à la génération de la carte, donc il doit rester
- * stable même si l'on insère un monde plus tard.
+ * Le niveau est identifié par une chaîne (`kanto-07`) et non par son index :
+ * cet identifiant sert de graine à la génération de la carte, donc il doit
+ * rester stable même si l'on insère une région plus tard.
  */
 
 /** Niveaux par monde. */
 export const NIVEAUX_PAR_MONDE = 20;
 
-/** Rangs où se dressent les mini-boss. */
-export const RANGS_MINI_BOSS = [5, 15] as const;
-/** Rangs où se dressent les gros boss. */
-export const RANGS_BOSS = [10, 20] as const;
+/** Tous les cinq rangs se dresse un boss. */
+export const PAS_BOSS = 5;
 
-export type SorteNiveau = 'normal' | 'mini_boss' | 'boss';
+/**
+ * Sorte d'un niveau.
+ *
+ * Un seul type de boss, mais quatre paliers par région : le rendez-vous
+ * revient tous les cinq niveaux, et c'est sa dureté qui monte. Distinguer
+ * « mini-boss » et « boss » n'avait plus de sens dès lors que chaque palier
+ * est plus dur que le précédent.
+ */
+export type SorteNiveau = 'normal' | 'boss';
 
 export interface Niveau {
-  /** Identifiant stable, graine de la carte : `m1-07`. */
+  /** Identifiant stable, graine de la carte : `kanto-07`. */
   id: string;
   mondeId: string;
   /** Rang dans le monde, de 1 à 20. */
@@ -35,7 +44,15 @@ export interface Niveau {
   /** Index global, de 1 à 40 : c'est lui que suit la progression. */
   index: number;
   sorte: SorteNiveau;
+  /** Nom du lieu. */
   nom: string;
+  /**
+   * Palier de boss, de 1 à 4, ou 0 pour un niveau ordinaire.
+   *
+   * C'est lui qui décide de la dureté : le quatrième d'une région doit être un
+   * mur, le premier une leçon.
+   */
+  palierBoss: number;
 }
 
 /** Palette et mobilier d'un monde. */
@@ -58,8 +75,8 @@ export interface ThemeMonde {
    * Toit de la tour à défendre.
    *
    * Distinct de l'accent : peindre le toit avec la couleur des fleurs donnait
-   * une tour jaune en Prairie et orange au Mont Braise, alors que c'est le
-   * seul repère qui doit rester reconnaissable d'un monde à l'autre.
+   * une tour jaune à Kanto et orange à Johto, alors que c'est le seul repère
+   * qui doit rester reconnaissable d'un monde à l'autre.
    */
   toit: string;
   /**
@@ -82,23 +99,33 @@ export interface ThemeMonde {
 
 export interface Monde {
   id: string;
+  /** Nom de la région. */
   nom: string;
+  /** Génération dont la région est issue. */
+  generation: number;
   sousTitre: string;
   theme: ThemeMonde;
   /** Espèces qui composent les vagues de ce monde. */
   bestiaire: string[];
-  /** Espèce du mini-boss, et celle du boss. */
-  miniBoss: string;
-  boss: string;
+  /** Espèce du boss, du premier palier au quatrième. */
+  boss: [string, string, string, string];
   /** Multiplicateur de points de vie appliqué à tout le monde. */
   durete: number;
+  /**
+   * Lieux de la région, un par niveau.
+   *
+   * Exactement vingt : c'est vérifié au chargement plutôt qu'espéré, parce
+   * qu'un lieu manquant laisserait un niveau sans nom.
+   */
+  lieux: string[];
 }
 
 export const MONDES: Monde[] = [
   {
-    id: 'm1',
-    nom: 'Route de la Prairie',
-    sousTitre: 'Vingt manches pour apprendre à tenir une route.',
+    id: 'kanto',
+    nom: 'Kanto',
+    generation: 1,
+    sousTitre: 'De Bourg Palette au Plateau Indigo. Vingt lieux pour apprendre à tenir une ligne.',
     theme: {
       sol: '#d7e6cd',
       route: '#c6a878',
@@ -111,15 +138,37 @@ export const MONDES: Monde[] = [
       mobilier: ['arbre', 'buisson', 'rocher', 'souche', 'fleurs'],
       densite: 0.17,
     },
-    bestiaire: ['rattata', 'weedle', 'zigzagoon', 'caterpie', 'wurmple'],
-    miniBoss: 'poochyena',
-    boss: 'machop',
+    bestiaire: ['rattata', 'weedle', 'caterpie', 'pidgey', 'zigzagoon'],
+    boss: ['pidgey', 'geodude', 'poochyena', 'machop'],
     durete: 1,
+    lieux: [
+      'Bourg Palette',
+      'Route 1',
+      'Jadielle',
+      'Forêt de Jade',
+      'Argenta',
+      'Mont Sélénite',
+      'Azuria',
+      'Pont Pépite',
+      'Carmin sur Mer',
+      'Chenal 5',
+      'Lavanville',
+      'Tour Pokémon',
+      'Parmanie',
+      'Safrania',
+      'Sylphe SARL',
+      'Cramois’Île',
+      'Manoir Pokémon',
+      'Îles Écume',
+      'Route Victoire',
+      'Plateau Indigo',
+    ],
   },
   {
-    id: 'm2',
-    nom: 'Mont Braise',
-    sousTitre: 'La cendre étouffe les pas : ils arrivent plus vite qu’on ne croit.',
+    id: 'johto',
+    nom: 'Johto',
+    generation: 2,
+    sousTitre: 'Les cendres du Mont Argenté. Ils arrivent plus vite qu’on ne croit.',
     theme: {
       sol: '#b8ada6',
       route: '#7d6a60',
@@ -133,39 +182,65 @@ export const MONDES: Monde[] = [
       densite: 0.19,
     },
     bestiaire: ['poochyena', 'geodude', 'rattata', 'zigzagoon', 'machop'],
-    miniBoss: 'geodude',
-    boss: 'machop',
+    boss: ['geodude', 'machop', 'geodude', 'machop'],
     durete: 2.4,
+    lieux: [
+      'Bourg Geon',
+      'Ville Griotte',
+      'Bois aux Chênes',
+      'Écorcia',
+      'Puits Gobe-Mouche',
+      'Mauville',
+      'Phare de Mauville',
+      'Route Souterraine',
+      'Doublonville',
+      'Route 37',
+      'Rosalia',
+      'Tour Chétiflor',
+      'Irisia',
+      'Antre Noir',
+      'Acajou',
+      'Lac de Rage',
+      'Ébènelle',
+      'Route Victoire',
+      'Mont Argenté',
+      'Sommet Argenté',
+    ],
   },
 ];
 
 export function sorteDuRang(rang: number): SorteNiveau {
-  if ((RANGS_BOSS as readonly number[]).includes(rang)) return 'boss';
-  if ((RANGS_MINI_BOSS as readonly number[]).includes(rang)) return 'mini_boss';
-  return 'normal';
+  return rang % PAS_BOSS === 0 ? 'boss' : 'normal';
 }
 
-const NOM_SORTE: Record<SorteNiveau, string> = {
-  normal: 'Manche',
-  mini_boss: 'Mini-boss',
-  boss: 'Boss',
-};
+/** Palier de boss d'un rang : 1 au rang 5, 4 au rang 20. Zéro sinon. */
+export function palierBossDuRang(rang: number): number {
+  return rang % PAS_BOSS === 0 ? rang / PAS_BOSS : 0;
+}
 
 /** Tous les niveaux, dans l'ordre. */
-export const NIVEAUX: Niveau[] = MONDES.flatMap((monde, indexMonde) =>
-  Array.from({ length: NIVEAUX_PAR_MONDE }, (_, i) => {
+export const NIVEAUX: Niveau[] = MONDES.flatMap((monde, indexMonde) => {
+  // Un lieu manquant laisserait un niveau sans nom : on le voit au chargement
+  // plutôt qu'en jeu.
+  if (monde.lieux.length !== NIVEAUX_PAR_MONDE) {
+    throw new Error(
+      `${monde.nom} : ${monde.lieux.length} lieux pour ${NIVEAUX_PAR_MONDE} niveaux`
+    );
+  }
+
+  return monde.lieux.map((lieu, i) => {
     const rang = i + 1;
-    const sorte = sorteDuRang(rang);
     return {
       id: `${monde.id}-${String(rang).padStart(2, '0')}`,
       mondeId: monde.id,
       rang,
       index: indexMonde * NIVEAUX_PAR_MONDE + rang,
-      sorte,
-      nom: `${NOM_SORTE[sorte]} ${rang}`,
+      sorte: sorteDuRang(rang),
+      nom: lieu,
+      palierBoss: palierBossDuRang(rang),
     };
-  })
-);
+  });
+});
 
 export function getMonde(mondeId: string): Monde {
   const monde = MONDES.find((candidat) => candidat.id === mondeId);

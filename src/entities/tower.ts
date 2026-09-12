@@ -8,7 +8,8 @@
 
 import { Object3D } from 'three';
 import type { Move, OwnedPokemon, Species } from '@/data/types';
-import { RARITY_MULTIPLIER, STYLES, multiplicateurEtoiles, type StyleProfil } from '@/data/types';
+import { RARITY_MULTIPLIER, STYLES, type StyleProfil } from '@/data/types';
+import { statsEffectives } from '@/data/stats';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -111,16 +112,20 @@ export class Tower {
     // aucun degat. La rotation complete du movepool viendra plus tard.
     const move = choisirAttaque(owned);
     this.move = move;
-    const etoiles = multiplicateurEtoiles(owned.stars);
     this.style = STYLES[species.style];
 
     // Physique ou special : l'attaque puise dans la stat correspondante.
-    const puissance =
-      move.category === 'special' ? species.baseStats.atkSpe : species.baseStats.atk;
+    //
+    // Ce sont les stats REELLES, pas celles du Pokedex : niveau, etoiles,
+    // potentiel et paliers de sub-stats y sont deja. Les etoiles ne sont donc
+    // plus appliquees ici — elles l'etaient deux fois dans le calcul
+    // precedent une fois les stats centralisees.
+    const stats = statsEffectives(owned);
+    const puissance = move.category === 'special' ? stats.atkSpe : stats.atk;
     const affinite = puissance / STAT_REFERENCE;
 
     this.damage =
-      move.power * FACTEUR_DEGATS * affinite * rarity * etoiles * this.style.degats * (1 + this.traitBonus('stat'));
+      move.power * FACTEUR_DEGATS * affinite * rarity * this.style.degats * (1 + this.traitBonus('stat'));
     this.cooldown =
       move.cooldown * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
     // L'incantation suit la cadence du style : le corps à corps, qui frappe

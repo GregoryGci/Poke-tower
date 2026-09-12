@@ -333,6 +333,35 @@ export function statsArme(arme: OwnedWeapon): StatsArme {
   };
 }
 
+/**
+ * Critères de tri d'un arsenal.
+ *
+ * Comme pour les Pokémon : « la plus forte » est une question de règles, pas
+ * d'affichage, donc le critère vit avec les règles.
+ */
+export const TRIS_ARMES: ReadonlyArray<{
+  id: string;
+  libelle: string;
+  comparer(a: OwnedWeapon, b: OwnedWeapon): number;
+}> = [
+  {
+    id: 'degats',
+    libelle: 'Dégâts',
+    comparer: (a, b) => statsArme(b).damage - statsArme(a).damage,
+  },
+  { id: 'palier', libelle: 'Palier', comparer: (a, b) => b.niveau - a.niveau },
+  {
+    id: 'substats',
+    libelle: 'Sub-stats ouvertes',
+    comparer: (a, b) => b.subStats.length - a.subStats.length || b.niveau - a.niveau,
+  },
+  {
+    id: 'modele',
+    libelle: 'Modèle',
+    comparer: (a, b) => getWeapon(a.weaponId).name.localeCompare(getWeapon(b.weaponId).name),
+  },
+];
+
 /** Toutes les lignes de stats d'une arme, innée d'abord. */
 export function lignesStats(arme: OwnedWeapon): WeaponStat[] {
   return arme.innee ? [arme.innee, ...arme.subStats] : [...arme.subStats];

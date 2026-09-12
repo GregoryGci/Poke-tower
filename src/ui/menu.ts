@@ -13,6 +13,7 @@ import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
 import type { PlayerAccount } from '@/data/types';
 
 export type Destination =
+  | 'arene'
   | 'histoire'
   | 'equipe'
   | 'collection'
@@ -37,12 +38,12 @@ const CARTES: Carte[] = [
     etiquette: 'Mode principal',
     titre: 'Défendre la tour',
     description:
-      'Deux mondes, vingt niveaux chacun, un boss tous les cinq. Chaque niveau a sa carte et son tracé.',
+      'Kanto puis Johto, vingt lieux chacun, un boss tous les cinq. Chaque lieu a sa carte et son tracé.',
     principale: true,
     pied: (compte) => {
       const atteint = Math.min(compte.progression.storyLevel, NIVEAUX.length);
       const niveau = niveauParIndex(atteint);
-      return `${getMonde(niveau.mondeId).nom} · ${niveau.rang}/20`;
+      return `${getMonde(niveau.mondeId).nom} · ${niveau.nom}`;
     },
   },
   {
@@ -78,6 +79,14 @@ const CARTES: Carte[] = [
     description: 'Dépense tes cristaux pour agrandir ton équipe.',
     pied: (compte) => `${compte.crystals} cristaux`,
 
+  },
+  {
+    id: 'arene',
+    etiquette: 'Compétitif',
+    titre: 'Arène',
+    description:
+      'Ton équipe affronte celle d’un autre dresseur, sans route ni vagues. Posé pour ne pas perdre l’idée : rien n’est encore jouable.',
+    verrou: () => 'À construire',
   },
   {
     id: 'raid',

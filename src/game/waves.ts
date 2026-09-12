@@ -43,6 +43,19 @@ export interface SpawnRequest {
   boss: boolean;
 }
 
+/**
+ * Les quatre paliers de boss d'une region.
+ *
+ * Les points de vie quadruplent du premier au quatrieme, et la taille suit :
+ * c'est la silhouette qui previent le joueur avant la barre de vie.
+ */
+const PALIERS_BOSS: ReadonlyArray<{ pv: number; taille: number; vitesse: number }> = [
+  { pv: 260, taille: 1.6, vitesse: 0.62 },
+  { pv: 620, taille: 1.95, vitesse: 0.55 },
+  { pv: 1150, taille: 2.25, vitesse: 0.5 },
+  { pv: 2000, taille: 2.6, vitesse: 0.45 },
+];
+
 /** Lot ordinaire : taille normale, pas un boss. */
 function lot(
   speciesId: string,
@@ -109,6 +122,7 @@ export function vaguesTutoriel(): Wave[] {
 export function vaguesDuNiveau(niveau: Niveau): Wave[] {
   const monde = getMonde(niveau.mondeId);
   const palier = niveau.rang - 1;
+  const boss = niveau.palierBoss;
 
   // Progression a l'interieur du monde, puis durete propre au monde : le
   // premier niveau du Mont Braise doit etre plus dur que le dernier de la
@@ -122,9 +136,11 @@ export function vaguesDuNiveau(niveau: Niveau): Wave[] {
     monde.bestiaire[rang % monde.bestiaire.length] ?? monde.bestiaire[0]!;
 
   const vagues: Wave[] = [];
-  const nombreVagues = niveau.sorte === 'normal' ? 3 : 4;
+  // Une vague d'echauffement de plus avant un boss : elle sert a poser et a
+  // recolter de quoi renforcer avant le vrai rendez-vous.
+  const vaguesOrdinaires = boss > 0 ? 3 : 3;
 
-  for (let i = 0; i < nombreVagues - (niveau.sorte === 'boss' ? 1 : 0); i++) {
+  for (let i = 0; i < vaguesOrdinaires; i++) {
     const batches: SpawnBatch[] = [
       lot(
         espece(i),
@@ -147,34 +163,31 @@ export function vaguesDuNiveau(niveau: Niveau): Wave[] {
         )
       );
     }
-    // Le mini-boss escorte la derniere vague ordinaire.
-    if (niveau.sorte === 'mini_boss' && i === nombreVagues - 1) {
-      batches.push({
-        speciesId: monde.miniBoss,
-        count: 1,
-        interval: 1,
-        hp: Math.round(220 * vie),
-        speed: vitesse * 0.6,
-        scale: 1.55,
-        boss: true,
-      });
-    }
     vagues.push({ batches, restAfter: 6 });
   }
 
-  if (niveau.sorte === 'boss') {
+  if (boss > 0) {
+    // Le boss occupe sa propre vague finale, avec une escorte maigre : noye
+    // dans trente Rattata, il ne se verrait pas.
+    //
+    // Quatre paliers par region, chacun nettement plus dur que le precedent :
+    // le premier est une lecon, le quatrieme un mur. Sans cet ecart, un
+    // rendez-vous tous les cinq niveaux deviendrait une formalite repetee.
+    const durete = PALIERS_BOSS[boss - 1] ?? PALIERS_BOSS[PALIERS_BOSS.length - 1]!;
+    const especeBoss = monde.boss[Math.min(boss, monde.boss.length) - 1] ?? monde.boss[0];
+
     vagues.push({
       batches: [
         {
-          speciesId: monde.boss,
+          speciesId: especeBoss,
           count: 1,
           interval: 1,
-          hp: Math.round(620 * vie),
-          speed: vitesse * 0.5,
-          scale: 2.3,
+          hp: Math.round(durete.pv * vie),
+          speed: vitesse * durete.vitesse,
+          scale: durete.taille,
           boss: true,
         },
-        lot(espece(1), 6 + renfort, 0.7, Math.round(24 * vie), vitesse),
+        lot(espece(1), 5 + renfort + boss * 2, 0.7, Math.round(24 * vie), vitesse),
       ],
       restAfter: 0,
     });
@@ -188,7 +201,7 @@ export function vaguesDuNiveau(niveau: Niveau): Wave[] {
 /** Toutes les especes qu'un niveau peut faire apparaitre. */
 export function especesDuNiveau(niveau: Niveau): string[] {
   const monde = getMonde(niveau.mondeId);
-  return [...new Set([...monde.bestiaire, monde.miniBoss, monde.boss])];
+  return [...new Set([...monde.bestiaire, ...monde.boss])];
 }
 
 export type WaveEvent =

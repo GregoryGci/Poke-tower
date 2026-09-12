@@ -50,6 +50,7 @@ import { createTerrain, type Terrain } from '@/world/terrain';
 import { genererCarte, type ElementDecor } from '@/world/level-gen';
 import { construireDecor, type Decor } from '@/world/decor';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
+import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, especesDuNiveau, vaguesDuNiveau, vaguesTutoriel } from './waves';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
@@ -268,6 +269,13 @@ export class Game {
    */
   private readonly towerVisuals: TowerVisual[] = [];
 
+  /**
+   * Barres de vie de tous les ennemis.
+   *
+   * Deux appels de rendu pour cent unites : sans instanciation, elles
+   * couteraient plus cher que les ennemis qu'elles surmontent.
+   */
+  private readonly barresVie = new BarresVie({ capacite: 256 });
   private readonly projectileMesh: InstancedMesh;
   private readonly ghostRange: Mesh;
   private ghostModel: Object3D | null = null;
@@ -370,6 +378,7 @@ export class Game {
 
     this.construireApercus();
     this.root.add(this.apercusGroup);
+    this.root.add(this.barresVie.fond, this.barresVie.jauge);
 
     const trainerHolder = new Group();
     this.trainerMesh = construireDresseur();
@@ -636,6 +645,17 @@ export class Game {
       const inflige = Math.min(shot.damage, shot.target.hp);
       this.crediter(shot, inflige, shot.target.damage(shot.damage));
     }
+  }
+
+  /**
+   * Vrai si le joueur a bouge son dresseur a ce tick.
+   *
+   * Sert a recoller la camera : lacher le suivi pour regarder ailleurs est
+   * utile, mais devoir appuyer sur une touche pour le reprendre alors qu'on
+   * vient de se deplacer ne l'est pas.
+   */
+  get dresseurEnMouvement(): boolean {
+    return this.input.move.lengthSq() > 0.01;
   }
 
   /** Position du dresseur, cible du suivi de camera. */
@@ -1127,6 +1147,7 @@ export class Game {
 
   render(alpha: number): void {
     for (const { crowd } of this.crowds.values()) crowd.begin();
+    this.barresVie.begin(this.camera);
 
     this.enemies.forEach((enemy) => {
       if (enemy.state === 'mort') return;
@@ -1137,9 +1158,25 @@ export class Game {
       const clip = enemy.state === 'ko' ? entry.faint : enemy.active ? entry.walk : entry.idle;
       if (!clip) return;
       entry.crowd.add(this.tmpVec2.x, this.tmpVec2.y, angle, enemy.scale, clip, enemy.phase);
+
+      // Une barre au-dessus de chaque vivant. Pas sur les agonisants : leur
+      // barre resterait a zero le temps de la chute, ce qui se lit comme un
+      // ennemi encore debout.
+      if (!enemy.active) return;
+      const hauteur = getSpecies(enemy.speciesId).height * enemy.scale + 0.45;
+      this.barresVie.add(
+        this.tmpVec2.x,
+        hauteur,
+        this.tmpVec2.y,
+        enemy.maxHp > 0 ? enemy.hp / enemy.maxHp : 0,
+        // Un boss recoit une barre plus large : la barre ordinaire disparait
+        // au-dessus d'une silhouette deux fois plus grosse.
+        enemy.boss ? 2.2 : 1
+      );
     });
 
     for (const { crowd } of this.crowds.values()) crowd.end();
+    this.barresVie.end();
 
     let shotIndex = 0;
     this.projectiles.forEach((shot) => {
@@ -1181,6 +1218,7 @@ export class Game {
   dispose(): void {
     this.terrain.dispose();
     this.decor?.dispose();
+    this.barresVie.dispose();
     this.projectileMesh.dispose();
     for (const { crowd } of this.crowds.values()) crowd.dispose();
     this.scene.remove(this.root);

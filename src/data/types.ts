@@ -177,6 +177,16 @@ export interface OwnedPokemon {
   stars: number;
   /** Obtenu a la sixieme etoile. */
   shiny: boolean;
+  /**
+   * Potentiel, en pourcentage par stat.
+   *
+   * L'equivalent des IV : deux exemplaires de la meme espece n'ont pas la
+   * meme feuille, ce qui donne une raison de regarder un doublon avant de le
+   * sacrifier. Tire a l'obtention, jamais modifiable.
+   */
+  potentiel: BaseStats;
+  /** Marque de favori : remonte l'exemplaire en tete des listes. */
+  favori: boolean;
   /** Exactement 4 attaques, tirées du movepool de l'espèce. */
   moves: [Move, Move, Move, Move];
   /** Exactement 2 traits. */
@@ -190,6 +200,8 @@ export interface OwnedWeapon {
   id: string;
   weaponId: string;
   rarity: Rarity;
+  /** Marque de favori : remonte l'arme en tete de l'arsenal. */
+  favori: boolean;
   /** Palier d'amélioration, de 0 à 15. */
   niveau: number;
   /** Stat innée, tirée à l'obtention et jamais modifiable. */

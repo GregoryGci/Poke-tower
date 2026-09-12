@@ -2482,3 +2482,136 @@
 }
 
 .campagne-case:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* ==========================================================================
+   Tri, favoris, et lignes de stats detaillees
+   ========================================================================== */
+
+.equipe-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 0;
+}
+
+.barre-outils {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tri {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.tri-champ {
+  flex: 1;
+  font-family: var(--ui);
+  font-size: 12px;
+  padding: 5px 7px;
+  color: var(--encre);
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+}
+
+.tri-champ:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* L'etoile est pleine ou creuse, jamais absente : un bouton qui n'apparait
+   qu'au survol se cherche. */
+.favori {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--gris-clair);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.favori[aria-pressed='true'] { color: var(--or); }
+.favori:hover { color: var(--or); }
+.favori:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 1px; }
+
+/* Cote droit d'une paire : la valeur, son detail, et le bouton de relance. */
+.paire-droite {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stat-socle {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gris-clair);
+}
+
+.stat-detail {
+  font-family: var(--corps);
+  font-size: 10px;
+  color: var(--gris-clair);
+}
+
+.detail-cote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.note-potentiel {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--emeraude);
+}
+
+/* ---- Campagne : le lieu prime sur le rang, et le palier de boss se lit ---- */
+
+.campagne-case {
+  aspect-ratio: auto;
+  min-height: 76px;
+  padding: 7px 5px 6px;
+  gap: 3px;
+  align-content: center;
+}
+
+.campagne-rang {
+  font-size: 11px;
+  color: var(--gris-clair);
+}
+
+.campagne-lieu {
+  font-family: var(--ui);
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+  hyphens: auto;
+}
+
+/* Quatre paliers de boss : plus le palier est haut, plus la bordure est
+   franche. Le joueur voit d'un coup lequel est un mur. */
+.campagne-case[data-palier='1'] { border-color: var(--or); }
+.campagne-case[data-palier='2'] { border-color: #d98b2b; }
+.campagne-case[data-palier='3'] { border-color: #cf6330; }
+.campagne-case[data-palier='4'] { border-color: var(--rouge); border-width: 4px; }
+
+.campagne-case[data-palier='1'] .campagne-marque { color: var(--or); }
+.campagne-case[data-palier='2'] .campagne-marque { color: #d98b2b; }
+.campagne-case[data-palier='3'] .campagne-marque { color: #cf6330; }
+.campagne-case[data-palier='4'] .campagne-marque { color: var(--rouge); }
+
+.campagne-case[data-etat='ferme'] { border-color: var(--ligne-douce); }
+.campagne-case[data-etat='ferme'] .campagne-lieu { color: var(--gris-clair); }
