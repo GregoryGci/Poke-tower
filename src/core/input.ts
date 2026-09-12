@@ -47,6 +47,19 @@ export class InputState {
     this.clickListeners.push(fn);
   }
 
+  /**
+   * Oublie les abonnés sans lâcher le clavier.
+   *
+   * Entre deux manches, le jeu est détruit et recréé : sans cela, l'ancienne
+   * partie continuerait de recevoir les clics.
+   */
+  reset(): void {
+    this.actionListeners = [];
+    this.clickListeners = [];
+    this.pressed.clear();
+    this.move.set(0, 0);
+  }
+
   dispose(): void {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);

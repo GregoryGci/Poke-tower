@@ -34,12 +34,15 @@ function mesure(etiquette: string): { bloc: HTMLDivElement; valeur: HTMLElement 
 export interface HudOptions {
   /** Appelée quand le joueur choisit — ou déselectionne — une unité. */
   onSelection(owned: OwnedPokemon | null): void;
+  /** Appelée quand le joueur veut revenir au menu. */
+  onQuit(): void;
 }
 
 export class Hud {
   private readonly racine = elem('div', 'hud');
   private readonly unites = elem('div', 'unites');
   private readonly message = elem('div', 'hud-message');
+  private readonly retour: HTMLButtonElement;
 
   private readonly vagueNumero = elem('strong');
   private readonly vagueTotal = elem('span');
@@ -82,13 +85,19 @@ export class Hud {
     const haut = elem('div', 'hud-haut');
     haut.append(gauche, droite);
 
+    const retour = elem('button', 'hud-retour', 'Quitter la manche');
+    retour.type = 'button';
+    retour.id = 'quitter-manche';
+    retour.addEventListener('click', () => options.onQuit());
+
     /* ---- Bas : unités posables ---- */
 
     const bas = elem('div', 'hud-bas');
     bas.appendChild(this.unites);
 
     this.racine.append(haut, this.message, bas);
-    parent.appendChild(this.racine);
+    parent.append(this.racine, retour);
+    this.retour = retour;
   }
 
   /** Reconstruit la barre d'unités. À n'appeler que lorsque le roster change. */
@@ -162,5 +171,6 @@ export class Hud {
 
   dispose(): void {
     this.racine.remove();
+    this.retour.remove();
   }
 }

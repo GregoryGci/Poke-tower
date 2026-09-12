@@ -577,3 +577,161 @@
 @media (max-width: 720px) {
   .tuto { bottom: 92px; padding: 11px 14px; gap: 10px; }
 }
+
+/* ---------- Menu principal ---------- */
+
+.menu {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 22px;
+  padding: clamp(26px, 5vh, 56px) clamp(18px, 5vw, 64px);
+  box-sizing: border-box;
+  background: var(--ivoire);
+  font-family: var(--ui);
+  color: var(--encre);
+  overflow-y: auto;
+  animation: apparition 0.35s ease both;
+}
+
+.menu-haut {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.menu-solde {
+  display: flex;
+  gap: 22px;
+  padding: 12px 20px;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+}
+
+/* Les destinations : une grande carte pour l'action principale, trois petites. */
+.menu-grille {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 14px;
+  align-content: start;
+}
+
+.destination {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 150px;
+  padding: 20px 22px;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.destination:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--ombre-portee);
+  border-color: var(--argent);
+}
+
+.destination:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 3px; }
+
+/* L'action principale occupe la hauteur des deux rangées. */
+.destination.principale {
+  grid-row: span 2;
+  background: linear-gradient(160deg, #0e7a57 0%, #0a5f44 100%);
+  border-color: transparent;
+  color: var(--blanc);
+  box-shadow: 0 3px 14px rgba(14, 122, 87, 0.28);
+}
+
+.destination.principale .destination-desc { color: rgba(255, 255, 255, 0.76); }
+.destination.principale .etiquette { color: rgba(255, 255, 255, 0.6); }
+
+.destination[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.destination[aria-disabled='true']:hover { transform: none; border-color: var(--ligne); }
+
+.destination-titre {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: clamp(20px, 2vw, 27px);
+  letter-spacing: -0.02em;
+  margin: 6px 0 0;
+}
+
+.destination.principale .destination-titre { font-size: clamp(28px, 3.2vw, 42px); }
+
+.destination-desc { font-size: 13.5px; line-height: 1.5; color: var(--gris); }
+
+.destination-pied {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--argent-clair);
+  color: var(--gris);
+}
+
+.menu-bas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--gris-clair);
+}
+
+/* ---------- Retour au menu depuis la manche ---------- */
+
+.hud-retour {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 500 12.5px var(--ui);
+  color: var(--gris);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ligne);
+  border-radius: 999px;
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: var(--ombre-douce);
+  z-index: 4;
+}
+
+.hud-retour:hover { color: var(--encre); border-color: var(--argent); }
+.hud-retour:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+@media (max-width: 860px) {
+  .menu-grille { grid-template-columns: 1fr; }
+  .destination.principale { grid-row: auto; min-height: 128px; }
+}
