@@ -40,6 +40,8 @@ export interface Stage {
   camera: PerspectiveCamera;
   /** Recadre la vue autour d'un point du terrain, sans amorti. */
   focus(target: Vector3): void;
+  /** Repeint le fond et le brouillard aux couleurs du monde courant. */
+  appliquerCiel(couleur: string): void;
   /**
    * Suit une cible en douceur, tant que la camera n'a pas ete liberee.
    * A appeler a chaque image.
@@ -97,6 +99,13 @@ export function createStage(container: HTMLElement): Stage {
   function focus(target: Vector3): void {
     focusPoint.copy(target);
     appliquer();
+  }
+
+  function appliquerCiel(couleur: string): void {
+    // Le fond et le brouillard doivent rester identiques : un brouillard d'une
+    // autre teinte que le fond dessine un halo autour du terrain.
+    (scene.background as Color).set(couleur);
+    (scene.fog as Fog).color.set(couleur);
   }
 
   /**
@@ -216,6 +225,7 @@ export function createStage(container: HTMLElement): Stage {
     scene,
     camera,
     focus,
+    appliquerCiel,
     suivre,
     libererSuivi,
     reprendreSuivi,

@@ -9,6 +9,7 @@
  */
 
 import { getSpecies } from '@/data/content';
+import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
 import type { PlayerAccount } from '@/data/types';
 
 export type Destination =
@@ -36,9 +37,13 @@ const CARTES: Carte[] = [
     etiquette: 'Mode principal',
     titre: 'Défendre la tour',
     description:
-      'Trois vagues à contenir. Pose tes Pokémon le long de la route, déplace ton dresseur, et récolte les cristaux de ceux qui tombent.',
+      'Deux mondes, vingt niveaux chacun, un boss tous les cinq. Chaque niveau a sa carte et son tracé.',
     principale: true,
-    pied: (compte) => `Niveau ${compte.progression.storyLevel}`,
+    pied: (compte) => {
+      const atteint = Math.min(compte.progression.storyLevel, NIVEAUX.length);
+      const niveau = niveauParIndex(atteint);
+      return `${getMonde(niveau.mondeId).nom} · ${niveau.rang}/20`;
+    },
   },
   {
     id: 'equipe',
@@ -119,7 +124,7 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
   soldes.append(
     solde('Cristaux', String(compte.crystals)),
     solde('Équipe', `${compte.team.length}/6`),
-    solde('Niveau', String(compte.progression.storyLevel))
+    solde('Campagne', `${compte.progression.clearedLevels.length}/${NIVEAUX.length}`)
   );
 
   const haut = elem('div', 'menu-haut');

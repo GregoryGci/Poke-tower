@@ -36,6 +36,10 @@ export class Enemy implements Poolable, SpatialItem {
   maxHp = 10;
   /** Décalage latéral, pour éviter la file indienne. */
   offset = 0;
+  /** Échelle du modèle : un boss est plus gros avant d'être plus coriace. */
+  scale = 1;
+  /** Vrai pour un mini-boss ou un boss. */
+  boss = false;
   state: EnemyState = 'marche';
   /** Secondes restantes d'agonie avant de rendre l'unité au réservoir. */
   corpseTimer = 0;
@@ -51,12 +55,24 @@ export class Enemy implements Poolable, SpatialItem {
     this.speed = 2.2;
     this.hp = this.maxHp = 10;
     this.offset = 0;
+    this.scale = 1;
+    this.boss = false;
     this.state = 'marche';
     this.corpseTimer = 0;
   }
 
-  spawn(speciesId: string, path: EnemyPath, hp: number, speed: number, offset: number): void {
+  spawn(
+    speciesId: string,
+    path: EnemyPath,
+    hp: number,
+    speed: number,
+    offset: number,
+    scale = 1,
+    boss = false
+  ): void {
     this.speciesId = speciesId;
+    this.scale = scale;
+    this.boss = boss;
     this.phase = Math.random() * 4;
     this.path = path;
     this.hp = this.maxHp = hp;

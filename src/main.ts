@@ -23,6 +23,8 @@ import { ouvrirEquipe } from '@/ui/team';
 import { ouvrirInvocation } from '@/ui/summon';
 import { ouvrirCollection } from '@/ui/collection';
 import { ouvrirArmes } from '@/ui/weapons';
+import { ouvrirCampagne } from '@/ui/campaign';
+import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
 import { demanderNomDresseur } from '@/ui/creation';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
@@ -101,8 +103,12 @@ function armeEquipee(compte: typeof account.account): OwnedWeapon | null {
 /* ---------- Une manche ---------- */
 
 /** Joue une manche et rend la main quand le joueur la quitte. */
-async function jouerManche(): Promise<void> {
+async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
   input.reset();
+
+  // Le ciel suit le monde : le Mont Braise ne peut pas avoir le fond clair de
+  // la Prairie, sinon son sol cendreux paraît sale au lieu de volcanique.
+  stage.appliquerCiel(getMonde(niveau.mondeId).theme.ciel);
 
   // Seule l'équipe part au combat : les modèles chargés sont les siens, pas
   // ceux de toute la collection.
@@ -114,8 +120,8 @@ async function jouerManche(): Promise<void> {
     stage.camera,
     input,
     rosterSpecies,
-    account.account.progression.storyLevel,
-    !account.account.progression.tutorialDone,
+    niveau,
+    tutoriel,
     armeEquipee(account.account)
   );
 
@@ -148,7 +154,7 @@ async function jouerManche(): Promise<void> {
 
 
   // Première run : les consignes s'effacent d'elles-mêmes dès que le geste est fait.
-  const tutorial = account.account.progression.tutorialDone
+  const tutorial = !tutoriel
     ? null
     : new Tutorial(container!, () => {
         account.account.progression.tutorialDone = true;
@@ -213,9 +219,17 @@ async function jouerManche(): Promise<void> {
   game.dispose();
   input.reset();
 
-  // Une manche gagnée fait progresser l'histoire.
-  if (bilanFinal.outcome === 'victoire') {
-    account.account.progression.storyLevel += 1;
+  // Une manche gagnée marque le niveau et ouvre le suivant. Rejouer un
+  // niveau déjà fait ne repousse donc pas la frontière — c'est le seul moyen
+  // de laisser farmer les niveaux faciles sans casser la progression.
+  if (bilanFinal.outcome === 'victoire' && !tutoriel) {
+    const progression = account.account.progression;
+    if (!progression.clearedLevels.includes(niveau.id)) {
+      progression.clearedLevels.push(niveau.id);
+    }
+    if (niveau.index >= progression.storyLevel) {
+      progression.storyLevel = niveau.index + 1;
+    }
   }
   await account.flush();
 }
@@ -236,7 +250,14 @@ for (;;) {
   const destination = await ouvrirMenu(account.account);
 
   if (destination === 'histoire') {
-    await jouerManche();
+    // La première run reste une introduction : on ne montre pas quarante
+    // niveaux à quelqu'un qui n'a pas encore posé un Pokémon.
+    if (!account.account.progression.tutorialDone) {
+      await jouerManche(niveauParIndex(1), true);
+      continue;
+    }
+    const choix = await ouvrirCampagne(account.account);
+    if (choix) await jouerManche(choix, false);
     continue;
   }
 

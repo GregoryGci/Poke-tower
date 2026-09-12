@@ -2387,3 +2387,98 @@
 
 .arme-journal[data-issue='echec'] { color: var(--rouge); }
 .arme-journal[data-issue='reussite'] { color: var(--emeraude); }
+
+/* ==========================================================================
+   Campagne
+   --------------------------------------------------------------------------
+   Vingt cases par monde, vues d'un coup. Les boss sont marques a leur place :
+   le joueur doit pouvoir preparer, pas decouvrir.
+   ========================================================================== */
+
+.campagne-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.campagne-pitch {
+  margin: 0;
+  min-height: 22px;
+  font-family: var(--ui);
+  font-size: 14px;
+  color: var(--gris);
+}
+
+.campagne-grille {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .campagne-grille { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+.campagne-case {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.campagne-rang {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+/* Un niveau ferme reste a sa place, en creux : on voit ce qui vient. */
+.campagne-case[data-etat='ferme'] {
+  background: var(--ivoire);
+  border-color: var(--ligne-douce);
+  border-style: dashed;
+  color: var(--gris-clair);
+  cursor: not-allowed;
+}
+
+.campagne-case[data-etat='fait'] {
+  background: var(--emeraude-clair);
+  border-color: var(--emeraude);
+}
+
+.campagne-case[data-etat='ouvert'] {
+  box-shadow: var(--ombre-douce);
+}
+
+/* Les deux sortes de boss se lisent a la bordure, avant meme la marque. */
+.campagne-case[data-sorte='mini_boss'] { border-width: 3px; border-color: var(--or); }
+.campagne-case[data-sorte='boss'] { border-width: 3px; border-color: var(--rouge); }
+.campagne-case[data-sorte='boss'][data-etat='ferme'],
+.campagne-case[data-sorte='mini_boss'][data-etat='ferme'] { border-color: var(--ligne-douce); }
+
+.campagne-marque {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--rouge);
+}
+
+.campagne-case[data-sorte='mini_boss'] .campagne-marque { color: var(--or); }
+
+.campagne-fait {
+  position: absolute;
+  bottom: 1px;
+  right: 4px;
+  font-size: 10px;
+  color: var(--emeraude);
+}
+
+.campagne-case:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }

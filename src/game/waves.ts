@@ -8,6 +8,7 @@
 
 import type { Species } from '@/data/types';
 import { getSpecies } from '@/data/content';
+import { getMonde, type Niveau } from '@/data/campaign';
 
 export interface SpawnBatch {
   speciesId: string;
@@ -16,6 +17,16 @@ export interface SpawnBatch {
   interval: number;
   hp: number;
   speed: number;
+  /**
+   * Échelle du modèle.
+   *
+   * Un boss doit se voir avant d'être compris : le premier signal est sa
+   * taille, pas sa barre de vie. Les foules instanciées acceptent une échelle
+   * par instance, donc cela ne coûte aucun appel de rendu de plus.
+   */
+  scale: number;
+  /** Vrai pour un mini-boss ou un boss : le HUD et le bilan s'en servent. */
+  boss: boolean;
 }
 
 export interface Wave {
@@ -28,22 +39,35 @@ export interface SpawnRequest {
   species: Species;
   hp: number;
   speed: number;
+  scale: number;
+  boss: boolean;
 }
 
+/** Lot ordinaire : taille normale, pas un boss. */
+function lot(
+  speciesId: string,
+  count: number,
+  interval: number,
+  hp: number,
+  speed: number
+): SpawnBatch {
+  return { speciesId, count, interval, hp, speed, scale: 1, boss: false };
+}
+
+/**
+ * Vagues de reference.
+ *
+ * Elles ne servent plus qu'au prechargement des modeles d'ennemis : les
+ * vagues reellement jouees sont construites par niveau.
+ */
 export const WAVES: Wave[] = [
-  { batches: [{ speciesId: 'rattata', count: 8, interval: 0.9, hp: 20, speed: 2 }], restAfter: 6 },
+  { batches: [lot('rattata', 8, 0.9, 20, 2)], restAfter: 6 },
   {
-    batches: [
-      { speciesId: 'rattata', count: 10, interval: 0.7, hp: 24, speed: 2.1 },
-      { speciesId: 'weedle', count: 6, interval: 0.9, hp: 34, speed: 1.6 },
-    ],
+    batches: [lot('rattata', 10, 0.7, 24, 2.1), lot('weedle', 6, 0.9, 34, 1.6)],
     restAfter: 6,
   },
   {
-    batches: [
-      { speciesId: 'zigzagoon', count: 14, interval: 0.5, hp: 30, speed: 2.4 },
-      { speciesId: 'weedle', count: 10, interval: 0.6, hp: 40, speed: 1.7 },
-    ],
+    batches: [lot('zigzagoon', 14, 0.5, 30, 2.4), lot('weedle', 10, 0.6, 40, 1.7)],
     restAfter: 8,
   },
 ];
@@ -65,26 +89,106 @@ export const WAVES: Wave[] = [
  */
 export function vaguesTutoriel(): Wave[] {
   return [
-    { batches: [{ speciesId: 'rattata', count: 4, interval: 1.6, hp: 12, speed: 1.7 }], restAfter: 4 },
-    { batches: [{ speciesId: 'rattata', count: 5, interval: 1.4, hp: 14, speed: 1.8 }], restAfter: 0 },
+    { batches: [lot('rattata', 4, 1.6, 12, 1.7)], restAfter: 4 },
+    { batches: [lot('rattata', 5, 1.4, 14, 1.8)], restAfter: 0 },
   ];
 }
 
-export function vaguesPourNiveau(niveau: number): Wave[] {
-  const palier = Math.max(0, niveau - 1);
-  const vie = 1 + palier * 0.4;
-  const renfort = Math.floor(palier * 0.75);
+/**
+ * Vagues d'un niveau de campagne.
+ *
+ * Le bestiaire vient du monde, la difficulte du rang, et la forme de la sorte
+ * de niveau. Les points de vie montent plus vite que les effectifs : allonger
+ * les vagues rallongerait surtout l'attente, alors que des ennemis plus
+ * coriaces obligent vraiment a elargir son equipe.
+ *
+ * Le mini-boss arrive en renfort d'une vague ordinaire ; le boss occupe sa
+ * propre vague finale, avec une escorte maigre. Un boss noye dans trente
+ * Rattata ne se verrait pas.
+ */
+export function vaguesDuNiveau(niveau: Niveau): Wave[] {
+  const monde = getMonde(niveau.mondeId);
+  const palier = niveau.rang - 1;
 
-  return WAVES.map((vague) => ({
-    restAfter: vague.restAfter,
-    batches: vague.batches.map((lot) => ({
-      ...lot,
-      count: lot.count + renfort,
-      hp: Math.round(lot.hp * vie),
-      speed: lot.speed * (1 + palier * 0.04),
-      interval: Math.max(0.33, lot.interval * (1 - palier * 0.05)),
-    })),
-  }));
+  // Progression a l'interieur du monde, puis durete propre au monde : le
+  // premier niveau du Mont Braise doit etre plus dur que le dernier de la
+  // Prairie, sinon changer de monde n'est qu'un changement de decor.
+  const vie = (1 + palier * 0.22) * monde.durete;
+  const renfort = Math.floor(palier * 0.55);
+  const cadence = Math.max(0.3, 0.85 * (1 - palier * 0.025));
+  const vitesse = 2 * (1 + palier * 0.02);
+
+  const espece = (rang: number): string =>
+    monde.bestiaire[rang % monde.bestiaire.length] ?? monde.bestiaire[0]!;
+
+  const vagues: Wave[] = [];
+  const nombreVagues = niveau.sorte === 'normal' ? 3 : 4;
+
+  for (let i = 0; i < nombreVagues - (niveau.sorte === 'boss' ? 1 : 0); i++) {
+    const batches: SpawnBatch[] = [
+      lot(
+        espece(i),
+        6 + i * 3 + renfort,
+        Math.max(0.3, cadence - i * 0.08),
+        Math.round((18 + i * 7) * vie),
+        vitesse
+      ),
+    ];
+    // Une seconde espece des la deuxieme vague : deux profils a la fois, c'est
+    // ce qui rend un placement discutable.
+    if (i > 0) {
+      batches.push(
+        lot(
+          espece(i + 2),
+          4 + i * 2 + renfort,
+          Math.max(0.35, cadence + 0.05 - i * 0.06),
+          Math.round((26 + i * 9) * vie),
+          vitesse * 0.85
+        )
+      );
+    }
+    // Le mini-boss escorte la derniere vague ordinaire.
+    if (niveau.sorte === 'mini_boss' && i === nombreVagues - 1) {
+      batches.push({
+        speciesId: monde.miniBoss,
+        count: 1,
+        interval: 1,
+        hp: Math.round(220 * vie),
+        speed: vitesse * 0.6,
+        scale: 1.55,
+        boss: true,
+      });
+    }
+    vagues.push({ batches, restAfter: 6 });
+  }
+
+  if (niveau.sorte === 'boss') {
+    vagues.push({
+      batches: [
+        {
+          speciesId: monde.boss,
+          count: 1,
+          interval: 1,
+          hp: Math.round(620 * vie),
+          speed: vitesse * 0.5,
+          scale: 2.3,
+          boss: true,
+        },
+        lot(espece(1), 6 + renfort, 0.7, Math.round(24 * vie), vitesse),
+      ],
+      restAfter: 0,
+    });
+  }
+
+  const derniere = vagues[vagues.length - 1];
+  if (derniere) derniere.restAfter = 0;
+  return vagues;
+}
+
+/** Toutes les especes qu'un niveau peut faire apparaitre. */
+export function especesDuNiveau(niveau: Niveau): string[] {
+  const monde = getMonde(niveau.mondeId);
+  return [...new Set([...monde.bestiaire, monde.miniBoss, monde.boss])];
 }
 
 export type WaveEvent =
@@ -134,7 +238,13 @@ export class WaveRunner {
         this.timer = batch.interval;
         events.push({
           kind: 'spawn',
-          request: { species: getSpecies(batch.speciesId), hp: batch.hp, speed: batch.speed },
+          request: {
+            species: getSpecies(batch.speciesId),
+            hp: batch.hp,
+            speed: batch.speed,
+            scale: batch.scale,
+            boss: batch.boss,
+          },
         });
         this.spawned++;
         if (this.spawned >= batch.count) {

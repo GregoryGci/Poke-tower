@@ -47,9 +47,12 @@ import { Trainer } from '@/entities/trainer';
 import { EnemyPath } from '@/world/path';
 import { SpatialGrid } from '@/world/spatial';
 import { createTerrain, type Terrain } from '@/world/terrain';
+import { genererCarte, type ElementDecor } from '@/world/level-gen';
+import { construireDecor, type Decor } from '@/world/decor';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
-import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
-import { WAVES, WaveRunner, vaguesPourNiveau, vaguesTutoriel } from './waves';
+import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
+import { WAVES, WaveRunner, especesDuNiveau, vaguesDuNiveau, vaguesTutoriel } from './waves';
+import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
 import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
 import { statsArme, type StatsArme } from '@/data/weapon-upgrade';
@@ -109,7 +112,14 @@ const PLACEMENT_RULES: PlacementRules = {
   spacing: 1.6,
 };
 
-const LEVEL_PATH = new EnemyPath([
+/**
+ * Trace de repli.
+ *
+ * Il ne sert qu'au tutoriel, dont la carte doit rester la meme a chaque
+ * tentative et rester simple : un tracé généré, même propre, distrairait de
+ * ce qu'il y a à comprendre.
+ */
+const TUTORIAL_PATH = new EnemyPath([
   { x: -15, z: -12 },
   { x: -5, z: -12 },
   { x: -5, z: 2 },
@@ -227,6 +237,13 @@ export class Game {
   readonly root = new Group();
 
   private readonly terrain: Terrain;
+  private readonly decor: Decor | null;
+  /** Trace du niveau : genere, ou celui du tutoriel. */
+  private readonly path: EnemyPath;
+  /** Encombrements du terrain, pour les regles de pose. */
+  private readonly obstacles: readonly Obstacle[];
+  /** Niveau joue, pour l'afficher et pour le bilan. */
+  readonly niveau: Niveau;
   private readonly waves: WaveRunner;
   private readonly enemyGrid = new SpatialGrid<Enemy>(4);
 
@@ -300,13 +317,37 @@ export class Game {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly input: InputState,
-    niveau: number,
+    niveau: Niveau,
     tutoriel: boolean,
     arme: OwnedWeapon | null
   ) {
     this.arme = arme ? statsArme(arme) : null;
-    this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesPourNiveau(niveau));
-    this.terrain = createTerrain(LEVEL_PATH, { size: TERRAIN_SIZE, pathWidth: PATH_WIDTH });
+    this.niveau = niveau;
+    this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesDuNiveau(niveau));
+
+    // La carte est tiree de l'identifiant du niveau : deux tentatives du meme
+    // niveau donnent la meme carte, ce qui permet de preparer un placement.
+    const theme = getMonde(niveau.mondeId).theme;
+    if (tutoriel) {
+      this.path = TUTORIAL_PATH;
+      this.obstacles = [];
+      this.decor = null;
+    } else {
+      const carte = genererCarte(niveau, PLACEMENT_RULES.bounds, PLACEMENT_RULES.pathClearance);
+      this.path = new EnemyPath(carte.points);
+      this.obstacles = carte.decor.map((element: ElementDecor) => ({
+        x: element.x,
+        z: element.z,
+        rayon: element.rayon,
+      }));
+      this.decor = construireDecor(carte.decor, theme);
+    }
+    this.terrain = createTerrain(this.path, {
+      size: TERRAIN_SIZE,
+      pathWidth: PATH_WIDTH,
+      theme,
+    });
+    if (this.decor) this.root.add(this.decor.group);
     this.root.add(this.terrain.group);
 
     this.projectileMesh = new InstancedMesh(
@@ -360,13 +401,18 @@ export class Game {
     camera: PerspectiveCamera,
     input: InputState,
     rosterSpeciesIds: readonly string[],
-    niveau = 1,
+    niveau: Niveau | number = 1,
     tutoriel = false,
     arme: OwnedWeapon | null = null
   ): Promise<Game> {
-    const game = new Game(scene, camera, input, niveau, tutoriel, arme);
+    // Un numero suffit a designer un niveau : les appels anciens continuent
+    // donc de marcher, et le tutoriel n'a pas a connaitre la campagne.
+    const cible = typeof niveau === 'number' ? niveauParIndex(niveau) : niveau;
+    const game = new Game(scene, camera, input, cible, tutoriel, arme);
 
-    const enemySpecies = [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))];
+    const enemySpecies = tutoriel
+      ? [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))]
+      : especesDuNiveau(cible);
     await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));
 
     for (const speciesId of enemySpecies) {
@@ -449,7 +495,13 @@ export class Game {
     const evenements = this.phase === 'en_cours' ? this.waves.update(dt, this.countMarching()) : [];
     for (const event of evenements) {
       if (event.kind === 'spawn') {
-        this.spawnEnemy(event.request.species.id, event.request.hp, event.request.speed);
+        this.spawnEnemy(
+          event.request.species.id,
+          event.request.hp,
+          event.request.speed,
+          event.request.scale,
+          event.request.boss
+        );
       }
       if (event.kind === 'waveCleared') {
         this.crystals += PRIME_VAGUE;
@@ -688,9 +740,17 @@ export class Game {
     return count;
   }
 
-  private spawnEnemy(speciesId: string, hp: number, speed: number): void {
-    const offset = (Math.random() - 0.5) * (PATH_WIDTH - 0.8);
-    this.enemies.acquire().spawn(speciesId, LEVEL_PATH, hp, speed, offset);
+  private spawnEnemy(
+    speciesId: string,
+    hp: number,
+    speed: number,
+    scale = 1,
+    boss = false
+  ): void {
+    // Un boss marche au milieu de la voie : le decalage lateral le ferait
+    // deborder sur l'herbe, ou l'enfoncer dans le decor.
+    const offset = boss ? 0 : (Math.random() - 0.5) * (PATH_WIDTH - 0.8);
+    this.enemies.acquire().spawn(speciesId, this.path, hp, speed, offset, scale, boss);
   }
 
   /* ---------- Apercu des attaques ---------- */
@@ -825,7 +885,14 @@ export class Game {
     void this.ensureGhost(pending.speciesId);
 
     const species = getSpecies(pending.speciesId);
-    const check = canPlace(this.pointerWorld.x, this.pointerWorld.z, LEVEL_PATH, this.towers, PLACEMENT_RULES);
+    const check = canPlace(
+      this.pointerWorld.x,
+      this.pointerWorld.z,
+      this.path,
+      this.towers,
+      PLACEMENT_RULES,
+      this.obstacles
+    );
     (this.ghostRange.material as MeshStandardMaterial).color.set(check.ok ? '#5aa86c' : '#c25b4e');
     this.ghostRange.position.set(this.pointerWorld.x, 0.04, this.pointerWorld.z);
     this.ghostRange.scale.setScalar(species.range);
@@ -937,7 +1004,14 @@ export class Game {
       return;
     }
 
-    const check = canPlace(this.pointerWorld.x, this.pointerWorld.z, LEVEL_PATH, this.towers, PLACEMENT_RULES);
+    const check = canPlace(
+      this.pointerWorld.x,
+      this.pointerWorld.z,
+      this.path,
+      this.towers,
+      PLACEMENT_RULES,
+      this.obstacles
+    );
     if (!check.ok) {
       this.notify(REJECTION_LABELS[check.reason]);
       return;
@@ -1062,7 +1136,7 @@ export class Game {
       const angle = Math.atan2(enemy.x - enemy.prevX, enemy.z - enemy.prevZ) + MODEL_FACING;
       const clip = enemy.state === 'ko' ? entry.faint : enemy.active ? entry.walk : entry.idle;
       if (!clip) return;
-      entry.crowd.add(this.tmpVec2.x, this.tmpVec2.y, angle, 1, clip, enemy.phase);
+      entry.crowd.add(this.tmpVec2.x, this.tmpVec2.y, angle, enemy.scale, clip, enemy.phase);
     });
 
     for (const { crowd } of this.crowds.values()) crowd.end();
@@ -1106,6 +1180,7 @@ export class Game {
 
   dispose(): void {
     this.terrain.dispose();
+    this.decor?.dispose();
     this.projectileMesh.dispose();
     for (const { crowd } of this.crowds.values()) crowd.dispose();
     this.scene.remove(this.root);
