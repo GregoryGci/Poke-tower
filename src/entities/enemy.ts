@@ -11,7 +11,11 @@ import type { EnemyPath } from '@/world/path';
 import type { SpatialItem } from '@/world/spatial';
 import type { Poolable } from '@/core/pool';
 
-export type EnemyState = 'marche' | 'attire' | 'mort' | 'arrive';
+/**
+ * 'mort' est l'instant du coup fatal ; 'ko' est l'agonie jouée à l'écran.
+ * Les deux sont distincts pour que les cristaux ne soient comptés qu'une fois.
+ */
+export type EnemyState = 'marche' | 'attire' | 'mort' | 'ko' | 'arrive';
 
 export class Enemy implements Poolable, SpatialItem {
   /** Espèce affichée : décide de la foule instanciée qui la rendra. */
@@ -35,6 +39,8 @@ export class Enemy implements Poolable, SpatialItem {
   state: EnemyState = 'marche';
   /** Cible d'un appât lancé par le dresseur, s'il y en a un. */
   lure: { x: number; z: number; until: number } | null = null;
+  /** Secondes restantes d'agonie avant de rendre l'unité au réservoir. */
+  corpseTimer = 0;
 
   private readonly tmp = new Vector2();
 
@@ -49,6 +55,7 @@ export class Enemy implements Poolable, SpatialItem {
     this.offset = 0;
     this.state = 'marche';
     this.lure = null;
+    this.corpseTimer = 0;
   }
 
   spawn(speciesId: string, path: EnemyPath, hp: number, speed: number, offset: number): void {
@@ -81,8 +88,13 @@ export class Enemy implements Poolable, SpatialItem {
     return false;
   }
 
+  /** Vrai tant que l'unité participe au jeu : ni morte, ni sortie. */
+  get active(): boolean {
+    return this.state === 'marche' || this.state === 'attire';
+  }
+
   update(dt: number, tick: number): void {
-    if (this.state === 'mort' || this.state === 'arrive' || !this.path) return;
+    if (!this.active || !this.path) return;
     this.prevX = this.x;
     this.prevZ = this.z;
 

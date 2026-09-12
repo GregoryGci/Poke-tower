@@ -260,6 +260,16 @@ export class Crowd {
     this.mesh.count = 0;
   }
 
+  /** Temps d'animation courant de la foule, en secondes. */
+  get now(): number {
+    return this.time;
+  }
+
+  /** Phase à donner à une instance pour que son clip démarre à cet instant. */
+  phaseForStartNow(): number {
+    return -this.time;
+  }
+
   get clipNames(): string[] {
     return [...this.baked.clips.keys()];
   }
@@ -271,6 +281,11 @@ export class Crowd {
         if (name.endsWith(candidate)) return clip;
       }
     }
+    return null;
+  }
+
+  /** Premier clip disponible, quel qu'il soit : dernier recours. */
+  anyClip(): BakedClip | null {
     return this.baked.clips.values().next().value ?? null;
   }
 

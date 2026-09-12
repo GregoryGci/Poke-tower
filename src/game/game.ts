@@ -12,6 +12,8 @@
 
 import {
   AnimationMixer,
+  LoopOnce,
+  type AnimationAction,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -96,10 +98,24 @@ export interface GameStatus {
   message: string | null;
 }
 
+interface TowerVisual {
+  object: Object3D;
+  mixer: AnimationMixer | null;
+  idle: AnimationAction | null;
+  attack: AnimationAction | null;
+  /** Avance de l'unité vers sa cible au moment du tir, de 1 à 0. */
+  lunge: number;
+  /** Phase de respiration, pour les espèces sans clip de repos. */
+  phase: number;
+  breathing: boolean;
+}
+
 interface SpeciesCrowd {
   crowd: Crowd;
   walk: BakedClip | null;
   idle: BakedClip | null;
+  /** Agonie. Absente chez certaines espèces : l'unité disparaît alors sans mise en scène. */
+  faint: BakedClip | null;
 }
 
 export class Game {
@@ -116,9 +132,14 @@ export class Game {
 
   /** Une foule par espèce d'ennemi, construite au chargement. */
   private readonly crowds = new Map<string, SpeciesCrowd>();
-  private readonly towerMixers: AnimationMixer[] = [];
-  /** Tours sans clip de repos : animées à la main pour ne pas rester figées. */
-  private readonly breathing: Array<{ object: Object3D; phase: number }> = [];
+  /**
+   * État d'animation d'un Pokémon posé.
+   *
+   * Toutes les espèces n'ont pas de clip de combat : Cobblemon n'en fournit
+   * que pour une partie du Pokédex. On prévoit donc un repli gestuel, pour
+   * qu'un tir se voie toujours.
+   */
+  private readonly towerVisuals: TowerVisual[] = [];
 
   private readonly projectileMesh: InstancedMesh;
   private readonly ghostRange: Mesh;
@@ -214,8 +235,9 @@ export class Game {
         const crowd = new Crowd(baked, CROWD_CAPACITY);
         game.crowds.set(speciesId, {
           crowd,
-          walk: crowd.resolveClip('ground_walk', 'ground_idle'),
-          idle: crowd.resolveClip('ground_idle', 'ground_walk'),
+          walk: crowd.resolveClip('ground_walk', 'ground_idle') ?? crowd.anyClip(),
+          idle: crowd.resolveClip('ground_idle', 'ground_walk') ?? crowd.anyClip(),
+          faint: crowd.resolveClip('faint', 'recoil'),
         });
         game.root.add(crowd.mesh);
       } catch (error) {
@@ -253,7 +275,7 @@ export class Game {
 
     this.enemyGrid.clear();
     this.enemies.forEach((enemy) => {
-      if (enemy.state !== 'mort') this.enemyGrid.insert(enemy);
+      if (enemy.active) this.enemyGrid.insert(enemy);
     });
 
     for (const event of this.waves.update(dt, this.countMarching())) {
@@ -266,28 +288,54 @@ export class Game {
 
     this.enemies.forEach((enemy) => {
       enemy.update(dt, tick);
+
       if (enemy.state === 'arrive') {
         this.leaked++;
         this.enemies.release(enemy);
-      } else if (enemy.state === 'mort') {
+        return;
+      }
+
+      if (enemy.state === 'mort') {
+        // Coup fatal : on encaisse la récompense une seule fois, puis on laisse
+        // l'agonie se jouer avant de rendre l'unité au réservoir.
         this.crystals += 1;
-        this.enemies.release(enemy);
+        const entry = this.crowds.get(enemy.speciesId);
+        const faint = entry?.faint ?? null;
+        if (faint && entry) {
+          enemy.state = 'ko';
+          enemy.corpseTimer = faint.duration;
+          // La phase est recalée pour que l'agonie démarre à sa première image.
+          enemy.phase = entry.crowd.phaseForStartNow();
+        } else {
+          this.enemies.release(enemy);
+        }
+        return;
+      }
+
+      if (enemy.state === 'ko') {
+        enemy.corpseTimer -= dt;
+        if (enemy.corpseTimer <= 0) this.enemies.release(enemy);
       }
     });
 
-    for (const tower of this.towers) {
+    for (let i = 0; i < this.towers.length; i++) {
+      const tower = this.towers[i]!;
       const target = tower.update(dt, this.enemyGrid);
       if (!target || this.projectiles.activeCount >= MAX_PROJECTILES) continue;
       this.projectiles.acquire().launch(tower.x, tower.z, target, tower.damage, 14);
+      this.playAttack(this.towerVisuals[i]);
     }
 
     this.projectiles.forEach((shot) => {
       if (!shot.update(dt)) return;
-      if (shot.target && shot.target.state !== 'mort') shot.target.damage(shot.damage);
+      if (shot.target?.active) shot.target.damage(shot.damage);
       this.projectiles.release(shot);
     });
 
-    for (const mixer of this.towerMixers) mixer.update(dt);
+    for (const visual of this.towerVisuals) {
+      visual.mixer?.update(dt);
+      if (visual.lunge > 0) visual.lunge = Math.max(0, visual.lunge - dt * 3.5);
+    }
     for (const { crowd } of this.crowds.values()) crowd.advance(dt);
 
     this.updatePointer();
@@ -296,7 +344,7 @@ export class Game {
   private countMarching(): number {
     let count = 0;
     this.enemies.forEach((enemy) => {
-      if (enemy.state !== 'mort' && enemy.state !== 'arrive') count++;
+      if (enemy.active) count++;
     });
     return count;
   }
@@ -409,18 +457,49 @@ export class Game {
     const { object, clips } = await instantiate(species.model);
     holder.add(object);
 
-    const idle = pickClip(clips, 'ground_idle', 'battle_idle', 'ground_walk');
-    if (idle) {
+    const idleClip = pickClip(clips, 'ground_idle', 'battle_idle', 'ground_walk');
+    const attackClip = pickClip(clips, 'physical', 'special', 'cry');
+
+    const visual: TowerVisual = {
+      object,
+      mixer: null,
+      idle: null,
+      attack: null,
+      lunge: 0,
+      phase: Math.random() * Math.PI * 2,
+      breathing: !idleClip,
+    };
+
+    if (idleClip || attackClip) {
       const mixer = new AnimationMixer(object);
-      mixer.clipAction(idle).play();
-      // Chaque unité démarre à un instant différent de son cycle.
-      mixer.setTime(Math.random() * idle.duration);
-      this.towerMixers.push(mixer);
-    } else {
-      // Aucune animation de repos dans l'espèce : on respire à la main.
-      this.breathing.push({ object, phase: Math.random() * Math.PI * 2 });
-      console.info(`${species.name} n'a pas d'animation de repos : respiration procédurale.`);
+      visual.mixer = mixer;
+      if (idleClip) {
+        visual.idle = mixer.clipAction(idleClip);
+        visual.idle.play();
+        // Chaque unité démarre à un instant différent de son cycle.
+        mixer.setTime(Math.random() * idleClip.duration);
+      }
+      if (attackClip) {
+        visual.attack = mixer.clipAction(attackClip);
+        visual.attack.setLoop(LoopOnce, 1);
+        visual.attack.clampWhenFinished = false;
+        // Le repos reprend la main dès que le tir est joué.
+        mixer.addEventListener('finished', (event) => {
+          if ((event as unknown as { action: AnimationAction }).action === visual.attack) {
+            visual.idle?.setEffectiveWeight(1);
+          }
+        });
+      }
     }
+
+    if (!idleClip) {
+      console.info(`${species.name} : pas d'animation de repos, respiration procédurale.`);
+    }
+    if (!attackClip) {
+      console.info(`${species.name} : pas d'animation d'attaque, repli gestuel.`);
+    }
+
+    this.towerVisuals.push(visual);
 
     holder.rotation.y = MODEL_FACING;
     tower.object = holder;
@@ -430,11 +509,34 @@ export class Game {
     this.notify(`${species.name} posé`);
   }
 
+  /**
+   * Joue le tir.
+   *
+   * Quand l'espèce a un clip d'attaque, il est lancé une fois par-dessus le
+   * repos. Sinon l'unité se jette en avant : c'est rudimentaire, mais un tir
+   * sans réaction visible se lit très mal, et Cobblemon ne fournit d'animation
+   * de combat que pour une petite partie du Pokédex.
+   */
+  private playAttack(visual: TowerVisual | undefined): void {
+    if (!visual) return;
+    if (visual.attack) {
+      // Le repos est mis en veille le temps du tir : laisser les deux clips
+      // actifs les mélangerait à poids égal, et l'attaque perdrait la moitié
+      // de son amplitude.
+      visual.idle?.setEffectiveWeight(0);
+      visual.attack.reset();
+      visual.attack.setEffectiveWeight(1);
+      visual.attack.play();
+      return;
+    }
+    visual.lunge = 1;
+  }
+
   private throwLure(): void {
     const { x, z } = this.trainer;
     let attracted = 0;
     this.enemyGrid.queryRadius(x, z, 6, (enemy) => {
-      if (enemy.state === 'mort') return;
+      if (!enemy.active) return;
       enemy.lure = { x, z, until: this.tick + LURE_TICKS };
       attracted++;
     });
@@ -457,7 +559,7 @@ export class Game {
       if (!entry) return;
       enemy.renderAt(alpha, this.tmpVec2);
       const angle = Math.atan2(enemy.x - enemy.prevX, enemy.z - enemy.prevZ) + MODEL_FACING;
-      const clip = enemy.state === 'marche' || enemy.state === 'attire' ? entry.walk : entry.idle;
+      const clip = enemy.state === 'ko' ? entry.faint : enemy.active ? entry.walk : entry.idle;
       if (!clip) return;
       entry.crowd.add(this.tmpVec2.x, this.tmpVec2.y, angle, 1, clip, enemy.phase);
     });
@@ -482,9 +584,18 @@ export class Game {
     // Respiration de secours : une légère compression verticale suffit à ce
     // qu'une unité sans clip ne paraisse pas gelée.
     const breath = (this.tick + alpha) * 0.12;
-    for (const unit of this.breathing) {
-      const amount = Math.sin(breath + unit.phase) * 0.03;
-      unit.object.scale.set(1 - amount * 0.5, 1 + amount, 1 - amount * 0.5);
+    for (let i = 0; i < this.towerVisuals.length; i++) {
+      const visual = this.towerVisuals[i]!;
+      if (visual.breathing) {
+        const amount = Math.sin(breath + visual.phase) * 0.03;
+        visual.object.scale.set(1 - amount * 0.5, 1 + amount, 1 - amount * 0.5);
+      }
+      // Le repli gestuel : l'unité se jette en avant puis revient.
+      if (visual.lunge > 0) {
+        visual.object.position.z = Math.sin(visual.lunge * Math.PI) * 0.35;
+      } else if (visual.object.position.z !== 0) {
+        visual.object.position.z = 0;
+      }
     }
 
     this.trainer.renderAt(alpha, this.tmpVec2);
