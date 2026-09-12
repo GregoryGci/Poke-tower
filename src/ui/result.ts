@@ -7,6 +7,7 @@
  */
 
 import type { GameStatus } from '@/game/game';
+import { ecrire } from './typewriter';
 
 function elem<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -40,13 +41,10 @@ export function afficherBilan(status: GameStatus): Promise<void> {
     elem('h2', 'bilan-titre', victoire ? 'La route est nette' : 'Ils sont passés')
   );
 
-  const sous = elem(
-    'p',
-    'bilan-sous',
-    victoire
-      ? 'Aucune vague n’a franchi ta ligne. Les cristaux récoltés t’attendent au menu.'
-      : 'Dix ennemis ont atteint le bout du chemin. Replace tes Pokémon et retente la manche.'
-  );
+  const sous = elem('p', 'bilan-sous');
+  const texteSous = victoire
+    ? 'Aucune vague n’a franchi ta ligne. Les cristaux récoltés t’attendent au menu.'
+    : 'Dix ennemis ont atteint le bout du chemin. Replace tes Pokémon et retente la manche.';
 
   const chiffres = elem('div', 'bilan-chiffres');
   chiffres.append(
@@ -62,6 +60,7 @@ export function afficherBilan(status: GameStatus): Promise<void> {
   carte.append(entete, sous, chiffres, bouton);
   racine.appendChild(carte);
   document.body.appendChild(racine);
+  ecrire(sous, texteSous);
   bouton.focus();
 
   return new Promise<void>((resolve) => {

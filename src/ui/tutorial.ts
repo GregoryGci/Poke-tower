@@ -10,6 +10,7 @@
  */
 
 import type { GameStatus } from '@/game/game';
+import { ecrire, type Typewriter } from './typewriter';
 
 export interface TutorialContext {
   status: GameStatus;
@@ -88,6 +89,7 @@ export class Tutorial {
   private readonly titre = document.createElement('div');
   private readonly corps = document.createElement('div');
 
+  private machine: Typewriter | null = null;
   private index = 0;
   private attente = 0;
   private fini = false;
@@ -112,6 +114,12 @@ export class Tutorial {
     passer.textContent = 'Passer';
     passer.addEventListener('click', () => this.terminer());
 
+    // Un clic sur la bulle termine l'écriture d'un coup, comme dans les jeux.
+    this.racine.addEventListener('click', (evenement) => {
+      if (evenement.target === passer) return;
+      this.machine?.terminer();
+    });
+
     this.racine.append(this.compteur, texte, passer);
     parent.appendChild(this.racine);
     this.afficher();
@@ -126,7 +134,14 @@ export class Tutorial {
     if (!etape) return;
     this.compteur.textContent = `${this.index + 1}/${ETAPES.length}`;
     this.titre.textContent = etape.titre;
-    ecrireCorps(this.corps, etape.corps);
+    this.machine?.annuler();
+    // Les libellés de touches doivent rester des éléments : on n'anime donc que
+    // les consignes qui n'en contiennent pas.
+    if (etape.corps.includes('{')) {
+      ecrireCorps(this.corps, etape.corps);
+    } else {
+      this.machine = ecrire(this.corps, etape.corps);
+    }
     // Relance l'animation d'entrée à chaque changement d'étape.
     this.racine.style.animation = 'none';
     void this.racine.offsetWidth;
@@ -172,6 +187,7 @@ export class Tutorial {
   }
 
   dispose(): void {
+    this.machine?.annuler();
     this.racine.remove();
   }
 }

@@ -12,6 +12,7 @@
 import { getSpecies } from '@/data/content';
 import type { GameStatus } from '@/game/game';
 import type { OwnedPokemon } from '@/data/types';
+import { ecrire, type Typewriter } from './typewriter';
 
 function elem<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -51,6 +52,8 @@ export class Hud {
   private readonly lancer: HTMLButtonElement;
   private readonly vitesse = elem('div', 'vitesse');
   private phaseAffichee = '';
+  private messageAffiche: string | null = null;
+  private machine: Typewriter | null = null;
 
   private readonly vagueNumero = elem('strong');
   private readonly vagueTotal = elem('span');
@@ -218,11 +221,17 @@ export class Hud {
     // Le compteur ne s'alarme qu'une fois la tour reellement menacee.
     this.vies.bloc.classList.toggle('alerte', status.lives <= 3);
 
-    if (status.message) {
-      this.message.textContent = status.message;
-      this.message.dataset['visible'] = 'true';
-    } else {
-      this.message.dataset['visible'] = 'false';
+    // Le message ne se réécrit qu'au changement : sinon il repartirait de zéro
+    // à chaque image.
+    if (status.message !== this.messageAffiche) {
+      this.messageAffiche = status.message;
+      this.machine?.annuler();
+      if (status.message) {
+        this.machine = ecrire(this.message, status.message);
+        this.message.dataset['visible'] = 'true';
+      } else {
+        this.message.dataset['visible'] = 'false';
+      }
     }
   }
 
