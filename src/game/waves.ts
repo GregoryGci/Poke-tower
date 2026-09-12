@@ -56,6 +56,20 @@ export const WAVES: Wave[] = [
  * vraiment à élargir son équipe. La cadence d'apparition se resserre un peu,
  * sans jamais descendre sous un tiers de seconde.
  */
+/**
+ * Vagues de la premiere run.
+ *
+ * Volontairement maigres : cette manche sert a comprendre ou l'on pose et
+ * comment on lance, pas a etre mise en difficulte. Elle doit se gagner du
+ * premier coup avec l'unique Pokemon de depart.
+ */
+export function vaguesTutoriel(): Wave[] {
+  return [
+    { batches: [{ speciesId: 'rattata', count: 4, interval: 1.6, hp: 12, speed: 1.7 }], restAfter: 4 },
+    { batches: [{ speciesId: 'rattata', count: 5, interval: 1.4, hp: 14, speed: 1.8 }], restAfter: 0 },
+  ];
+}
+
 export function vaguesPourNiveau(niveau: number): Wave[] {
   const palier = Math.max(0, niveau - 1);
   const vie = 1 + palier * 0.4;

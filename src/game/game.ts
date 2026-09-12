@@ -46,7 +46,7 @@ import { SpatialGrid } from '@/world/spatial';
 import { createTerrain, type Terrain } from '@/world/terrain';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
-import { WAVES, WaveRunner, vaguesPourNiveau } from './waves';
+import { WAVES, WaveRunner, vaguesPourNiveau, vaguesTutoriel } from './waves';
 import type { OwnedPokemon } from '@/data/types';
 import { getSpecies } from '@/data/content';
 
@@ -196,9 +196,10 @@ export class Game {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly input: InputState,
-    niveau: number
+    niveau: number,
+    tutoriel: boolean
   ) {
-    this.waves = new WaveRunner(vaguesPourNiveau(niveau));
+    this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesPourNiveau(niveau));
     this.terrain = createTerrain(LEVEL_PATH, { size: TERRAIN_SIZE, pathWidth: PATH_WIDTH });
     this.root.add(this.terrain.group);
 
@@ -246,9 +247,10 @@ export class Game {
     camera: PerspectiveCamera,
     input: InputState,
     rosterSpeciesIds: readonly string[],
-    niveau = 1
+    niveau = 1,
+    tutoriel = false
   ): Promise<Game> {
-    const game = new Game(scene, camera, input, niveau);
+    const game = new Game(scene, camera, input, niveau, tutoriel);
 
     const enemySpecies = [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))];
     await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));

@@ -41,6 +41,13 @@ const ETAPES: Etape[] = [
     pause: 1.4,
   },
   {
+    titre: 'Lance la vague quand tu es prêt',
+    corps:
+      'Rien ne bouge tant que tu n’as pas appuyé sur « Lancer la run ». Prends le temps de placer tes Pokémon — tu peux en poser six.',
+    accomplie: (c) => c.status.phase === 'en_cours',
+    pause: 1,
+  },
+  {
     titre: 'Prends ton dresseur en main',
     corps: '{ZQSD} ou les flèches pour te déplacer. Tu joues pendant que tes Pokémon défendent.',
     accomplie: (c) => c.status.trainerMoved,

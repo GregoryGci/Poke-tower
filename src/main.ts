@@ -92,7 +92,8 @@ async function jouerManche(): Promise<void> {
     stage.camera,
     input,
     rosterSpecies,
-    account.account.progression.storyLevel
+    account.account.progression.storyLevel,
+    !account.account.progression.tutorialDone
   );
 
   let selectionActive = false;
