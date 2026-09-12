@@ -24,6 +24,7 @@ import { ouvrirInvocation } from '@/ui/summon';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
+
 import { STARTER_CASES } from '@/data/content';
 import { Hud } from '@/ui/hud';
 import { Tutorial } from '@/ui/tutorial';
@@ -101,6 +102,15 @@ async function jouerManche(): Promise<void> {
     },
   });
   hud.setRoster(account.account.roster);
+
+  // Une capture rejoint l'equipe sur-le-champ : le joueur peut poser sa prise
+  // dans la manche en cours, ce qui est tout l'interet d'affaiblir sans achever.
+  game.onCapture = (speciesId) => {
+    if (account.account.roster.some((p) => p.speciesId === speciesId)) return;
+    account.account.roster.push(createPokemon(speciesId, 'normal'));
+    hud.setRoster(account.account.roster);
+    account.touch();
+  };
 
   // Première run : les consignes s'effacent d'elles-mêmes dès que le geste est fait.
   const tutorial = account.account.progression.tutorialDone

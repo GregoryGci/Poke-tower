@@ -59,6 +59,10 @@ const CROWD_CAPACITY = 128;
 const LURE_TICKS = 90;
 /** Ennemis qu'on peut laisser passer avant de perdre la manche. */
 const VIES = 10;
+/** Distance à laquelle le dresseur peut lancer une capsule. */
+const PORTEE_CAPTURE = 3.2;
+/** Cristaux gagnés en capturant plutôt qu'en achevant. */
+const PRIME_CAPTURE = 3;
 
 /**
  * Les modèles Bedrock sont sculptés face à -Z, alors que `atan2(dx, dz)`
@@ -72,6 +76,7 @@ const VIES = 10;
 const MODEL_FACING = Math.PI;
 
 const UP = new Vector3(0, 1, 0);
+const RIGHT = new Vector3(1, 0, 0);
 const IDENTITY_QUAT = new Quaternion();
 
 const PLACEMENT_RULES: PlacementRules = {
@@ -103,6 +108,10 @@ export interface GameStatus {
   /** Points de vie restants de la tour. */
   lives: number;
   outcome: Outcome;
+  /** Ennemis capturés pendant la manche. */
+  captures: number;
+  /** Une capture est-elle possible ici et maintenant ? */
+  captureOffered: boolean;
   /** Le joueur a-t-il déjà déplacé son dresseur ? */
   trainerMoved: boolean;
   lures: number;
@@ -153,6 +162,7 @@ export class Game {
   private readonly towerVisuals: TowerVisual[] = [];
 
   private readonly projectileMesh: InstancedMesh;
+  private readonly captureRings: InstancedMesh;
   private readonly ghostRange: Mesh;
   private ghostModel: Object3D | null = null;
   private ghostSpeciesId: string | null = null;
@@ -166,15 +176,19 @@ export class Game {
   private crystals = 0;
   private trainerMoved = false;
   private lures = 0;
+  private captures = 0;
   private message: string | null = null;
   private messageUntil = 0;
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
+  /** Prévenu quand une espèce est capturée, pour l'ajouter au compte. */
+  onCapture: ((speciesId: string) => void) | null = null;
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
   private readonly tmpVec2 = new Vector2();
+  private readonly tmpQuat = new Quaternion();
   private readonly tmpScale = new Vector3(1, 1, 1);
 
   private constructor(
@@ -194,6 +208,21 @@ export class Game {
     this.projectileMesh.frustumCulled = false;
     this.projectileMesh.count = 0;
     this.root.add(this.projectileMesh);
+
+    this.captureRings = new InstancedMesh(
+      new RingGeometry(0.52, 0.66, 28),
+      new MeshStandardMaterial({
+        color: new Color('#f0a02c'),
+        emissive: new Color('#7a4f05'),
+        transparent: true,
+        opacity: 0.85,
+      }),
+      64
+    );
+    this.captureRings.instanceMatrix.setUsage(DynamicDrawUsage);
+    this.captureRings.frustumCulled = false;
+    this.captureRings.count = 0;
+    this.root.add(this.captureRings);
 
     this.ghostRange = new Mesh(
       new RingGeometry(0.97, 1, 48),
@@ -222,7 +251,7 @@ export class Game {
       if (button === 0) void this.tryPlace();
       if (button === 2) this.pendingPlacement = null;
     });
-    this.input.onAction(() => this.throwLure());
+    this.input.onAction(() => this.actionPrincipale());
   }
 
   /**
@@ -279,6 +308,8 @@ export class Game {
       crystals: this.crystals,
       placed: this.towers.length,
       lives: Math.max(0, VIES - this.leaked),
+      captures: this.captures,
+      captureOffered: this.cibleCapturable() !== null,
       outcome: this.outcome,
       trainerMoved: this.trainerMoved,
       lures: this.lures,
@@ -558,6 +589,47 @@ export class Game {
     visual.lunge = 1;
   }
 
+  /**
+   * Ennemi que le dresseur pourrait capturer, s'il y en a un.
+   *
+   * Le seuil de PV vient de l'entité : affaiblir sans achever est le pari que
+   * propose le brief, et c'est ce qui rend la capsule intéressante.
+   */
+  private cibleCapturable(): Enemy | null {
+    return this.enemyGrid.nearest(
+      this.trainer.x,
+      this.trainer.z,
+      PORTEE_CAPTURE,
+      (enemy) => enemy.active && enemy.capturable
+    );
+  }
+
+  /**
+   * Une seule touche, deux gestes.
+   *
+   * S'il y a une proie affaiblie à portée, on la capture ; sinon on pose un
+   * appât. Deux touches auraient demandé au joueur de choisir avant de savoir
+   * ce qui est possible.
+   */
+  private actionPrincipale(): void {
+    const proie = this.cibleCapturable();
+    if (proie) {
+      this.capturer(proie);
+      return;
+    }
+    this.throwLure();
+  }
+
+  private capturer(proie: Enemy): void {
+    const species = getSpecies(proie.speciesId);
+    proie.state = 'ko';
+    proie.corpseTimer = 0;
+    this.captures++;
+    this.crystals += PRIME_CAPTURE;
+    this.onCapture?.(proie.speciesId);
+    this.notify(`${species.name} capturé — +${PRIME_CAPTURE} cristaux`);
+  }
+
   private throwLure(): void {
     const { x, z } = this.trainer;
     let attracted = 0;
@@ -592,6 +664,19 @@ export class Game {
     });
 
     for (const { crowd } of this.crowds.values()) crowd.end();
+
+    // Un anneau sous chaque proie affaiblie, a plat sur le sol.
+    let ringIndex = 0;
+    this.enemies.forEach((enemy) => {
+      if (ringIndex >= 64 || !enemy.active || !enemy.capturable) return;
+      enemy.renderAt(alpha, this.tmpVec2);
+      this.tmpVec.set(this.tmpVec2.x, 0.03, this.tmpVec2.y);
+      this.tmpQuat.setFromAxisAngle(RIGHT, -Math.PI / 2);
+      this.tmpMatrix.compose(this.tmpVec, this.tmpQuat, this.tmpScale);
+      this.captureRings.setMatrixAt(ringIndex++, this.tmpMatrix);
+    });
+    this.captureRings.count = ringIndex;
+    this.captureRings.instanceMatrix.needsUpdate = true;
 
     let shotIndex = 0;
     this.projectiles.forEach((shot) => {
@@ -633,6 +718,7 @@ export class Game {
   dispose(): void {
     this.terrain.dispose();
     this.projectileMesh.dispose();
+    this.captureRings.dispose();
     for (const { crowd } of this.crowds.values()) crowd.dispose();
     this.scene.remove(this.root);
   }
