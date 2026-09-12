@@ -59,6 +59,8 @@ export function createPokemon(
     speciesId,
     rarity,
     level: 1,
+    stars: 1,
+    shiny: false,
     moves: rollMoves(speciesId, rng),
     traits: rollTraits(rng),
     subStats: rollSubStats(rng),

@@ -8,7 +8,7 @@
 
 import { Object3D } from 'three';
 import type { OwnedPokemon, Species } from '@/data/types';
-import { RARITY_MULTIPLIER } from '@/data/types';
+import { RARITY_MULTIPLIER, multiplicateurEtoiles } from '@/data/types';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -44,7 +44,8 @@ export class Tower {
     // Une seule des quatre attaques pour l'instant : la rotation du movepool
     // arrive avec le système d'attaques complet (phase 2).
     const move = owned.moves[0];
-    this.damage = move.power * FACTEUR_DEGATS * rarity * (1 + this.traitBonus('stat'));
+    const etoiles = multiplicateurEtoiles(owned.stars);
+    this.damage = move.power * FACTEUR_DEGATS * rarity * etoiles * (1 + this.traitBonus('stat'));
     this.cooldown = move.cooldown * (1 - Math.min(0.6, this.traitBonus('cooldown')));
   }
 

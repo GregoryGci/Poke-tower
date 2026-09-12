@@ -37,6 +37,14 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     ...account.progression,
     tutorialDone: account.progression?.tutorialDone ?? true,
   };
-  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return { ...account, progression };
-  return { ...account, progression, schemaVersion: CURRENT_SCHEMA_VERSION };
+  // Les etoiles sont arrivees apres les premieres sauvegardes : tout ce qui
+  // existait deja part a une etoile, sans brillance.
+  const roster = (account.roster ?? []).map((membre) => ({
+    ...membre,
+    stars: membre.stars ?? 1,
+    shiny: membre.shiny ?? false,
+  }));
+
+  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return { ...account, progression, roster };
+  return { ...account, progression, roster, schemaVersion: CURRENT_SCHEMA_VERSION };
 }

@@ -1195,3 +1195,46 @@
 @media (prefers-reduced-motion: reduce) {
   .bouton-lancer { animation: none; }
 }
+
+/* ---------- Étoiles ---------- */
+
+.etoiles { display: flex; align-items: center; gap: 3px; }
+
+.etoile {
+  width: 15px;
+  height: 15px;
+  display: block;
+  color: var(--argent);
+}
+
+.etoile[data-pleine='true'] { color: #e0a93b; }
+.etoile[data-shiny='true'] { color: #b072d8; }
+
+.vignette-etoiles { display: flex; gap: 2px; }
+.vignette-etoiles .etoile { width: 10px; height: 10px; }
+
+.fusion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  background: linear-gradient(120deg, #fdf8ed 0%, var(--blanc) 60%);
+}
+
+.fusion-texte { display: flex; flex-direction: column; gap: 4px; }
+.fusion-titre { font-weight: 600; font-size: 13.5px; }
+.fusion-detail { font-size: 12px; color: var(--gris); }
+
+.badge-shiny {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #f3e8fb;
+  color: #7b3fa8;
+}

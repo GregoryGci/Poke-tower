@@ -82,11 +82,35 @@ export interface Species {
 }
 
 /** Instance possédée par un joueur. */
+/** Étoiles : de 1 à 6. La sixième ne s'obtient qu'en raid. */
+export const ETOILES_MAX = 6;
+export const ETOILES_MAX_FUSION = 5;
+
+/**
+ * Gain de stats par étoile.
+ *
+ * Volontairement lineaire et lisible : le joueur doit pouvoir estimer ce que
+ * lui rapporte une fusion sans calculer.
+ */
+export function multiplicateurEtoiles(etoiles: number): number {
+  return 1 + (Math.max(1, etoiles) - 1) * 0.18;
+}
+
+/** Doublons a consommer pour atteindre ce palier : 2 pour la 2e, 3 pour la 3e… */
+export function doublonsRequis(etoilesCourantes: number): number | null {
+  if (etoilesCourantes >= ETOILES_MAX_FUSION) return null;
+  return etoilesCourantes + 1;
+}
+
 export interface OwnedPokemon {
   id: string;
   speciesId: string;
   rarity: Rarity;
   level: number;
+  /** 1 a 6. Monte par fusion de doublons, la 6e par ressource de raid. */
+  stars: number;
+  /** Obtenu a la sixieme etoile. */
+  shiny: boolean;
   /** Exactement 4 attaques, tirées du movepool de l'espèce. */
   moves: [Move, Move, Move, Move];
   /** Exactement 2 traits. */

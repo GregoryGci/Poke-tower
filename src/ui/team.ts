@@ -11,9 +11,20 @@
  */
 
 import { getSpecies } from '@/data/content';
-import { SUBSTAT_MAX_STACK, type OwnedPokemon, type PlayerAccount, type StatType } from '@/data/types';
+import {
+  ETOILES_MAX,
+  ETOILES_MAX_FUSION,
+  SUBSTAT_MAX_STACK,
+  doublonsRequis,
+  multiplicateurEtoiles,
+  type OwnedPokemon,
+  type PlayerAccount,
+  type StatType,
+} from '@/data/types';
 import type { AccountManager } from '@/save';
 import {
+  doublonsDisponibles,
+  fusionner,
   COUT_REROLL_ATTAQUES,
   COUT_REROLL_TRAITS,
   coutProchainPalier,
@@ -40,6 +51,18 @@ function elem<K extends keyof HTMLElementTagNameMap>(
   if (className) node.className = className;
   if (texte !== undefined) node.textContent = texte;
   return node;
+}
+
+/** Rangée d'étoiles. La sixième se distingue : elle vient des raids. */
+function rangeeEtoiles(etoiles: number, shiny: boolean, classe = 'etoiles'): HTMLDivElement {
+  const rangee = elem('div', classe);
+  for (let i = 1; i <= ETOILES_MAX; i++) {
+    const etoile = elem('span', 'etoile', '★');
+    etoile.dataset['pleine'] = String(i <= etoiles);
+    if (i === ETOILES_MAX && shiny) etoile.dataset['shiny'] = 'true';
+    rangee.appendChild(etoile);
+  }
+  return rangee;
 }
 
 function paire(gauche: string, droite: string): HTMLDivElement {
@@ -174,6 +197,47 @@ function remplirDetail(
     base.appendChild(paire(NOM_STAT[stat as StatType], String(valeur)));
   }
 
+  // --- Étoiles
+  const requis = doublonsRequis(owned.stars);
+  const dispos = doublonsDisponibles(compte, owned).length;
+  const fusion = elem('div', 'fusion');
+  const texteFusion = elem('div', 'fusion-texte');
+
+  if (owned.stars >= ETOILES_MAX) {
+    texteFusion.append(
+      elem('span', 'fusion-titre', 'Sixième étoile atteinte'),
+      elem('span', 'fusion-detail', `Stats de base ×${multiplicateurEtoiles(owned.stars).toFixed(2)}`)
+    );
+    fusion.append(texteFusion, elem('span', 'badge-shiny', 'Shiny'));
+  } else if (owned.stars >= ETOILES_MAX_FUSION) {
+    texteFusion.append(
+      elem('span', 'fusion-titre', 'Sixième étoile'),
+      elem('span', 'fusion-detail', 'Demande un fragment stellaire, rapporté des raids.')
+    );
+    const bouton = elem('button', 'bouton-cout', 'Fragment requis');
+    bouton.type = 'button';
+    bouton.id = 'fusionner';
+    bouton.disabled = true;
+    fusion.append(texteFusion, bouton);
+  } else {
+    texteFusion.append(
+      elem('span', 'fusion-titre', `Passer à ${owned.stars + 1} étoiles`),
+      elem(
+        'span',
+        'fusion-detail',
+        `${requis} doublon${requis && requis > 1 ? 's' : ''} de ${species.name} — tu en as ${dispos}. Stats ×${multiplicateurEtoiles(owned.stars + 1).toFixed(2)}.`
+      )
+    );
+    const bouton = elem('button', 'bouton-cout', 'Fusionner');
+    bouton.type = 'button';
+    bouton.id = 'fusionner';
+    bouton.disabled = requis === null || dispos < requis;
+    bouton.addEventListener('click', () => {
+      if (fusionner(compte, owned).ok) surChangement();
+    });
+    fusion.append(texteFusion, bouton);
+  }
+
   const relancerAttaques = boutonCout('Relancer', COUT_REROLL_ATTAQUES, compte.crystals);
   relancerAttaques.id = 'reroll-attaques';
   relancerAttaques.addEventListener('click', () => {
@@ -191,6 +255,7 @@ function remplirDetail(
 
   panneau.append(
     tete,
+    bloc('Étoiles', fusion, rangeeEtoiles(owned.stars, owned.shiny)),
     bloc('Attaques', attaques, relancerAttaques),
     bloc('Traits', traits, relancerTraits),
     bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
@@ -255,7 +320,8 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
     const texte = elem('span', 'unite-texte');
     texte.append(
       elem('span', 'unite-nom', species.name),
-      elem('span', 'unite-detail', `${owned.rarity} · niveau ${owned.level}`)
+      elem('span', 'unite-detail', `${owned.rarity} · niveau ${owned.level}`),
+      rangeeEtoiles(owned.stars, owned.shiny, 'vignette-etoiles')
     );
 
     vignette.append(pastille, texte);
