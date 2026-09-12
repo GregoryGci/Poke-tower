@@ -21,6 +21,7 @@
 
 import { getSpecies } from '@/data/content';
 import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
+import { pastillePokemon } from './pastille';
 import type { PlayerAccount } from '@/data/types';
 
 export type Destination =
@@ -106,7 +107,7 @@ const CARTES: Carte[] = [
     etiquette: 'Compétitif',
     titre: 'Arène',
     description:
-      'Ton équipe affronte celle d’un autre dresseur, sans route ni vagues. Posé pour ne pas perdre l’idée : rien n’est encore jouable.',
+      'Six vagues d’affilée, une par Pokémon du champion d’arène — le sixième est son ace. Pas de route : un siège long, sans reprendre son souffle entre deux vagues. Posé pour ne pas perdre l’idée, rien n’est encore jouable.',
     verrou: () => 'À construire',
   },
   {
@@ -166,8 +167,7 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
     elem('h1', 'titre titre-l', compte.trainerName || 'Sans nom')
   );
   if (starter) {
-    const pastille = elem('span', 'pastille', starter.slice(0, 1));
-    pastille.dataset['type'] = getSpecies(compte.starterId!).types[0];
+    const pastille = pastillePokemon(compte.starterId!);
     const partenaire = elem('div', 'fiche-partenaire');
     partenaire.append(pastille, elem('span', undefined, `Partenaire : ${starter}`));
     identite.appendChild(partenaire);

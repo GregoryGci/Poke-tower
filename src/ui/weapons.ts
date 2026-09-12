@@ -31,6 +31,7 @@ import {
   TRIS_ARMES,
 } from '@/data/weapon-upgrade';
 import { boutonFavori, selecteurTri, trier } from './tri';
+import { pastilleArme } from './pastille';
 import type { OwnedWeapon, PlayerAccount, WeaponStat } from '@/data/types';
 import type { AccountManager } from '@/save';
 import { ecrire } from './typewriter';
@@ -391,11 +392,14 @@ export function ouvrirArmes(account: AccountManager): Promise<void> {
       vignette.id = `arme-${arme.id}`;
       vignette.setAttribute('aria-pressed', String(choisie?.id === arme.id));
 
-      const pastille = elem('span', 'pastille pastille-arme', `+${arme.niveau}`);
+      // Le sprite dit quelle arme c'est ; le palier, qu'il a chassé de la
+      // pastille, repasse dans le nom — c'est là qu'on le cherche pour
+      // comparer deux exemplaires du même modèle.
+      const pastille = pastilleArme(arme.weaponId);
 
       const texte = elem('span', 'unite-texte');
       texte.append(
-        elem('span', 'unite-nom', stats.nom),
+        elem('span', 'unite-nom', `${stats.nom} +${arme.niveau}`),
         elem('span', 'unite-detail', `${LIBELLE_RARETE[arme.rarity]} · ${stats.damage.toFixed(1)} dégâts`),
         elem(
           'span',

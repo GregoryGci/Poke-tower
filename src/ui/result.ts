@@ -13,6 +13,7 @@
 import { getSpecies } from '@/data/content';
 import { STYLES, ajouterXp, xpRequise, type OwnedPokemon, type PlayerAccount } from '@/data/types';
 import { ARME_OWNER, type GameStatus, type RapportManche } from '@/game/game';
+import { pastillePokemon } from './pastille';
 import { ecrire } from './typewriter';
 
 /** Expérience versée par point de dégât infligé. */
@@ -95,8 +96,7 @@ function ligneGain(gain: GainPokemon, retard: number): HTMLDivElement {
   const species = getSpecies(gain.owned.speciesId);
   const ligne = elem('div', 'gain');
 
-  const pastille = elem('span', 'pastille', species.name.slice(0, 1));
-  pastille.dataset['type'] = species.types[0];
+  const pastille = pastillePokemon(species.id);
 
   const valeurXp = elem('span', 'gain-xp', '+0 XP');
   const centre = elem('div', 'gain-centre');

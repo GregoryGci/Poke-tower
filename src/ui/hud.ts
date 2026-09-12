@@ -10,6 +10,7 @@
  */
 
 import { getSpecies } from '@/data/content';
+import { pastillePokemon } from './pastille';
 import type { GameStatus, SelectionTour, SurvolTour } from '@/game/game';
 import type { OwnedPokemon } from '@/data/types';
 import { ecrire, type Typewriter } from './typewriter';
@@ -375,8 +376,7 @@ export class Hud {
       bouton.setAttribute('aria-pressed', String(this.selection === owned.id));
       bouton.setAttribute('aria-disabled', String(this.terrainPlein));
 
-      const pastille = elem('span', 'pastille', species.name.slice(0, 1));
-      pastille.dataset['type'] = species.types[0];
+      const pastille = pastillePokemon(owned.speciesId);
 
       const texte = elem('span', 'unite-texte');
       texte.append(

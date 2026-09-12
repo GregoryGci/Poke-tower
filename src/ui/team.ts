@@ -20,6 +20,7 @@ import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
 import { PALIER_MAX } from '@/data/paliers';
 import { boutonFavori, selecteurTri, trier } from './tri';
+import { pastillePokemon } from './pastille';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -482,8 +483,7 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
       vignette.id = `equipe-${owned.id}`;
       vignette.setAttribute('aria-pressed', String(choisi?.id === owned.id));
 
-      const pastille = elem('span', 'pastille', species.name.slice(0, 1));
-      pastille.dataset['type'] = species.types[0];
+      const pastille = pastillePokemon(owned.speciesId);
 
       const texte = elem('span', 'unite-texte');
       texte.append(

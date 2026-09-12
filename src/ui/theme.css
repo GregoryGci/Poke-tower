@@ -1121,7 +1121,10 @@
   animation: bilan-entree 0.44s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 
+/* Sur une carte de révélation, le sujet est l’illustration : il a droit
+   à la place. La lettre de repli garde sa taille d’origine. */
 .resultat .pastille { width: 56px; height: 56px; border-radius: 16px; font-size: 24px; }
+.resultat .pastille[data-portrait='true'] { width: 84px; height: 84px; border-radius: var(--rayon); }
 
 .resultat-nom {
   font-family: var(--titre);
@@ -2856,3 +2859,44 @@
 @media (max-width: 720px) {
   .palier-panneau { right: 12px; left: 12px; width: auto; bottom: 172px; }
 }
+
+/* ---------- Portraits et sprites dans les pastilles ---------- */
+
+/*
+ * La pastille accueille désormais une image : le portrait d'un Pokémon, rendu
+ * depuis son modèle 3D, ou le sprite pixel d'une arme. Tant que l'image n'est
+ * pas prête — un portrait demande de charger un .glb — c'est la lettre qui
+ * tient la place, et le fond coloré par type reste la base sur laquelle le
+ * sujet se détache.
+ */
+.pastille-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  /* Les sprites d'armes sont dessinés pixel par pixel : les lisser
+     annulerait tout l'intérêt, et les portraits rendus en 192 px gagnent
+     aussi à rester nets sur une vignette de 34 px. */
+  image-rendering: pixelated;
+}
+
+/* Une pastille qui porte une image garde la couleur de son type, mais
+   seulement en liseré : le sujet se détache sur une plaque claire, alors
+   qu'un aplat de couleur pleine le noircissait. */
+.pastille[data-portrait='true'] { padding: 2px; }
+
+.pastille[data-portrait='true'] .pastille-portrait {
+  background: rgba(253, 253, 244, 0.86);
+  border-radius: 6px;
+}
+
+/* Un portrait de Pokémon est un rendu lissé, pas du pixel art : sur une
+   grande vignette, le garder net le rendrait baveux. */
+.pastille-carte .pastille-portrait { image-rendering: auto; }
+
+.pastille-arme[data-portrait='true'] {
+  background: var(--argent-clair);
+}
+
+/* Une arme est large et plate : elle se lit mal dans un carré serré. */
+.pastille-arme .pastille-portrait { object-fit: contain; padding: 1px; }

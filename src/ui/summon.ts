@@ -21,6 +21,7 @@ import {
   invoquerMultiple,
 } from '@/data/gacha';
 import { getSpecies, rareteDe } from '@/data/content';
+import { pastilleArme, pastillePokemon } from './pastille';
 import { getWeapon, libelleStyle } from '@/data/weapons';
 import { rareteDominante, revelation } from './reveal';
 import type { AccountManager } from '@/save';
@@ -50,9 +51,6 @@ function carteResultat(owned: OwnedPokemon): HTMLDivElement {
   const carte = elem('div', 'resultat');
   carte.dataset['rarete'] = rareteDe(owned);
 
-  const pastille = elem('span', 'pastille', species.name.slice(0, 1));
-  pastille.dataset['type'] = species.types[0];
-
   const types = elem('div', 'types');
   for (const type of species.types) {
     const puce = elem('span', 'type', type);
@@ -61,7 +59,9 @@ function carteResultat(owned: OwnedPokemon): HTMLDivElement {
   }
 
   carte.append(
-    pastille,
+    // Le portrait est rendu depuis le modèle 3D : c'est littéralement le
+    // Pokémon qu'on vient d'obtenir, pas un symbole qui le représente.
+    pastillePokemon(owned.speciesId, 'pastille-carte'),
     badgeRarete(rareteDe(owned)),
     elem('div', 'resultat-nom', species.name),
     types,
@@ -88,7 +88,7 @@ function carteArme(arme: OwnedWeapon): HTMLDivElement {
   );
 
   carte.append(
-    elem('span', 'pastille pastille-arme', '✦'),
+    pastilleArme(arme.weaponId, 'pastille-carte'),
     badgeRarete(arme.rarity),
     elem('div', 'resultat-nom', modele.name),
     elem('p', 'sous-titre', libelleStyle(modele)),

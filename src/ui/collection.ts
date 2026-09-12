@@ -23,6 +23,7 @@ import {
 import { STYLES } from '@/data/types';
 import { notePotentiel } from '@/data/stats';
 import { boutonFavori } from './tri';
+import { pastillePokemon } from './pastille';
 
 const NOM_STAT: Record<StatType, string> = {
   pv: 'PV',
@@ -244,8 +245,11 @@ export function ouvrirCollection(
     vignette.dataset['possede'] = String(possede);
     vignette.setAttribute('aria-pressed', String(choisie?.speciesId === entree.speciesId));
 
-    const pastille = elem('span', 'pastille', possede ? species.name.slice(0, 1) : '?');
-    if (possede) pastille.dataset['type'] = species.types[0];
+    // Une espèce jamais obtenue reste une silhouette vide : montrer son
+    // portrait reviendrait à la révéler avant de l'avoir rencontrée.
+    const pastille = possede
+      ? pastillePokemon(species.id)
+      : elem('span', 'pastille', '?');
 
     vignette.append(pastille, elem('span', 'collection-nom', species.name));
     if (entree.copies.length > 1) {
