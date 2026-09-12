@@ -6,7 +6,7 @@
  * risque qu'un ennemi quitte la route.
  */
 
-import { Object3D, Vector2 } from 'three';
+import { Vector2 } from 'three';
 import type { EnemyPath } from '@/world/path';
 import type { SpatialItem } from '@/world/spatial';
 import type { Poolable } from '@/core/pool';
@@ -14,7 +14,10 @@ import type { Poolable } from '@/core/pool';
 export type EnemyState = 'marche' | 'attire' | 'mort' | 'arrive';
 
 export class Enemy implements Poolable, SpatialItem {
-  object: Object3D | null = null;
+  /** Espèce affichée : décide de la foule instanciée qui la rendra. */
+  speciesId = '';
+  /** Décalage d'animation, pour que la vague ne marche pas au pas cadencé. */
+  phase = 0;
   path: EnemyPath | null = null;
 
   x = 0;
@@ -36,7 +39,8 @@ export class Enemy implements Poolable, SpatialItem {
   private readonly tmp = new Vector2();
 
   reset(): void {
-    this.object = null;
+    this.speciesId = '';
+    this.phase = 0;
     this.path = null;
     this.x = this.z = this.prevX = this.prevZ = 0;
     this.distance = 0;
@@ -47,7 +51,9 @@ export class Enemy implements Poolable, SpatialItem {
     this.lure = null;
   }
 
-  spawn(path: EnemyPath, hp: number, speed: number, offset: number): void {
+  spawn(speciesId: string, path: EnemyPath, hp: number, speed: number, offset: number): void {
+    this.speciesId = speciesId;
+    this.phase = Math.random() * 4;
     this.path = path;
     this.hp = this.maxHp = hp;
     this.speed = speed;
@@ -91,7 +97,6 @@ export class Enemy implements Poolable, SpatialItem {
         this.z += (dz / len) * step;
       }
       this.state = 'attire';
-      this.applyToObject();
       return;
     }
 
@@ -103,7 +108,6 @@ export class Enemy implements Poolable, SpatialItem {
       this.state = 'arrive';
     }
     this.syncPosition();
-    this.applyToObject();
   }
 
   private syncPosition(): void {
@@ -116,13 +120,6 @@ export class Enemy implements Poolable, SpatialItem {
     this.z = pz + this.tmp.x * this.offset;
   }
 
-  private applyToObject(): void {
-    if (!this.object) return;
-    this.object.position.set(this.x, 0, this.z);
-    const dx = this.x - this.prevX;
-    const dz = this.z - this.prevZ;
-    if (dx * dx + dz * dz > 1e-6) this.object.rotation.y = Math.atan2(dx, dz);
-  }
 
   /** Position lissée pour le rendu, entre deux ticks. */
   renderAt(alpha: number, out: Vector2): Vector2 {

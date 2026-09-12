@@ -1,14 +1,17 @@
 /**
  * Orchestrateur d'une manche.
  *
- * Tient la simulation (vagues, ennemis, tours, projectiles) et son rendu.
- * Les visuels sont volontairement des primitives : cette étape valide
- * l'architecture et les perfs, pas la direction artistique. Les modèles
- * convertis se brancheront à la place des capsules sans toucher au reste.
+ * Deux régimes de rendu cohabitent, et c'est délibéré :
+ *
+ *  - les ennemis, nombreux et lointains, passent par une foule instanciée dont
+ *    l'animation est lue dans une texture (voir render/vat.ts) : un appel de
+ *    rendu par espèce, quel que soit le nombre d'unités ;
+ *  - les Pokémon posés, peu nombreux et au premier plan, gardent un vrai
+ *    squelette et un mixeur d'animation, ce qui permettra de réagir au combat.
  */
 
 import {
-  CapsuleGeometry,
+  AnimationMixer,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -26,9 +29,12 @@ import {
   SphereGeometry,
   Vector2,
   Vector3,
+  type AnimationClip,
+  type Object3D,
 } from 'three';
 import { Pool } from '@/core/pool';
 import type { InputState } from '@/core/input';
+import { instantiate, loadModel, preloadModels } from '@/core/assets';
 import { Enemy } from '@/entities/enemy';
 import { Projectile } from '@/entities/projectile';
 import { Tower } from '@/entities/tower';
@@ -36,18 +42,25 @@ import { Trainer } from '@/entities/trainer';
 import { EnemyPath } from '@/world/path';
 import { SpatialGrid } from '@/world/spatial';
 import { createTerrain, type Terrain } from '@/world/terrain';
+import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
-import { WaveRunner } from './waves';
+import { WAVES, WaveRunner } from './waves';
 import type { OwnedPokemon } from '@/data/types';
 import { getSpecies } from '@/data/content';
 
 const TERRAIN_SIZE = 34;
 const PATH_WIDTH = 2.4;
-/** Plafond d'ennemis simultanés : dimensionne les InstancedMesh une fois pour toutes. */
-const MAX_ENEMIES = 256;
 const MAX_PROJECTILES = 512;
+/** Capacité d'une foule, par espèce. */
+const CROWD_CAPACITY = 128;
 /** Durée d'un appât, en ticks. */
 const LURE_TICKS = 90;
+
+/**
+ * Les modèles Bedrock regardent vers -Z ; nos entités s'orientent avec
+ * `atan2(dx, dz)`, qui vise +Z. D'où ce demi-tour appliqué au rendu.
+ */
+const MODEL_FACING = Math.PI;
 
 const UP = new Vector3(0, 1, 0);
 const IDENTITY_QUAT = new Quaternion();
@@ -74,7 +87,14 @@ export interface GameStatus {
   leaked: number;
   crystals: number;
   placed: number;
+  drawCalls: number;
   message: string | null;
+}
+
+interface SpeciesCrowd {
+  crowd: Crowd;
+  walk: BakedClip | null;
+  idle: BakedClip | null;
 }
 
 export class Game {
@@ -89,10 +109,14 @@ export class Game {
   private readonly towers: Tower[] = [];
   private readonly trainer = new Trainer();
 
-  private readonly enemyMesh: InstancedMesh;
+  /** Une foule par espèce d'ennemi, construite au chargement. */
+  private readonly crowds = new Map<string, SpeciesCrowd>();
+  private readonly towerMixers: AnimationMixer[] = [];
+
   private readonly projectileMesh: InstancedMesh;
-  private readonly ghost: Mesh;
   private readonly ghostRange: Mesh;
+  private ghostModel: Object3D | null = null;
+  private ghostSpeciesId: string | null = null;
   private readonly trainerMesh: Mesh;
 
   private readonly raycaster = new Raycaster();
@@ -105,33 +129,20 @@ export class Game {
   private messageUntil = 0;
   private tick = 0;
 
-  /** Pokémon choisi dans la barre, en attente de pose. */
   pendingPlacement: OwnedPokemon | null = null;
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
   private readonly tmpVec2 = new Vector2();
-  private readonly tmpQuat = new Quaternion();
   private readonly tmpScale = new Vector3(1, 1, 1);
 
-  constructor(
+  private constructor(
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly input: InputState
   ) {
     this.terrain = createTerrain(LEVEL_PATH, { size: TERRAIN_SIZE, pathWidth: PATH_WIDTH });
     this.root.add(this.terrain.group);
-
-    this.enemyMesh = new InstancedMesh(
-      new CapsuleGeometry(0.32, 0.5, 4, 10),
-      new MeshStandardMaterial({ color: new Color('#b4553f'), roughness: 0.7 }),
-      MAX_ENEMIES
-    );
-    this.enemyMesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.enemyMesh.castShadow = true;
-    this.enemyMesh.frustumCulled = false;
-    this.enemyMesh.count = 0;
-    this.root.add(this.enemyMesh);
 
     this.projectileMesh = new InstancedMesh(
       new SphereGeometry(0.12, 8, 6),
@@ -142,13 +153,6 @@ export class Game {
     this.projectileMesh.frustumCulled = false;
     this.projectileMesh.count = 0;
     this.root.add(this.projectileMesh);
-
-    this.ghost = new Mesh(
-      new CapsuleGeometry(0.34, 0.6, 4, 10),
-      new MeshStandardMaterial({ color: '#5aa86c', transparent: true, opacity: 0.55 })
-    );
-    this.ghost.visible = false;
-    this.root.add(this.ghost);
 
     this.ghostRange = new Mesh(
       new RingGeometry(0.97, 1, 48),
@@ -174,10 +178,46 @@ export class Game {
     this.scene.add(this.root);
 
     this.input.onClick((button) => {
-      if (button === 0) this.tryPlace();
+      if (button === 0) void this.tryPlace();
       if (button === 2) this.pendingPlacement = null;
     });
     this.input.onAction(() => this.throwLure());
+  }
+
+  /**
+   * Charge et cuit les modèles avant la première image : une cuisson en cours
+   * de partie se verrait comme un à-coup.
+   */
+  static async create(
+    scene: Scene,
+    camera: PerspectiveCamera,
+    input: InputState,
+    rosterSpeciesIds: readonly string[]
+  ): Promise<Game> {
+    const game = new Game(scene, camera, input);
+
+    const enemySpecies = [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))];
+    await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));
+
+    for (const speciesId of enemySpecies) {
+      const species = getSpecies(speciesId);
+      try {
+        const model = await loadModel(species.model);
+        const baked = bakeAnimations(model.scene, model.clips);
+        const crowd = new Crowd(baked, CROWD_CAPACITY);
+        game.crowds.set(speciesId, {
+          crowd,
+          walk: crowd.resolveClip('ground_walk', 'ground_idle'),
+          idle: crowd.resolveClip('ground_idle', 'ground_walk'),
+        });
+        game.root.add(crowd.mesh);
+      } catch (error) {
+        // Une espèce sans animation cuisible ne doit pas empêcher de jouer.
+        console.warn(`Foule indisponible pour ${speciesId} :`, error);
+      }
+    }
+
+    return game;
   }
 
   get status(): GameStatus {
@@ -188,6 +228,10 @@ export class Game {
       leaked: this.leaked,
       crystals: this.crystals,
       placed: this.towers.length,
+      // Une foule par espèce visible, plus les projectiles et le décor.
+      drawCalls: [...this.crowds.values()].filter((c) => c.crowd.mesh.count > 0).length
+        + (this.projectileMesh.count > 0 ? 1 : 0)
+        + this.towers.length,
       message: this.message,
     };
   }
@@ -200,15 +244,15 @@ export class Game {
 
     this.trainer.update(dt, this.input.move);
 
-    // La grille est reconstruite à chaque tick : tous les ennemis bougent, donc
-    // la reconstruire coûte moins cher que de suivre chaque déplacement.
     this.enemyGrid.clear();
     this.enemies.forEach((enemy) => {
       if (enemy.state !== 'mort') this.enemyGrid.insert(enemy);
     });
 
     for (const event of this.waves.update(dt, this.countMarching())) {
-      if (event.kind === 'spawn') this.spawnEnemy(event.request.hp, event.request.speed);
+      if (event.kind === 'spawn') {
+        this.spawnEnemy(event.request.species.id, event.request.hp, event.request.speed);
+      }
       if (event.kind === 'waveCleared') this.notify(`Vague ${event.index + 1} terminée`);
       if (event.kind === 'allCleared') this.notify('Toutes les vagues sont passées');
     }
@@ -236,6 +280,9 @@ export class Game {
       this.projectiles.release(shot);
     });
 
+    for (const mixer of this.towerMixers) mixer.update(dt);
+    for (const { crowd } of this.crowds.values()) crowd.advance(dt);
+
     this.updatePointer();
   }
 
@@ -247,11 +294,9 @@ export class Game {
     return count;
   }
 
-  private spawnEnemy(hp: number, speed: number): void {
-    if (this.enemies.activeCount >= MAX_ENEMIES) return;
-    // Décalage latéral aléatoire : une file indienne parfaite se voit trop.
+  private spawnEnemy(speciesId: string, hp: number, speed: number): void {
     const offset = (Math.random() - 0.5) * (PATH_WIDTH - 0.8);
-    this.enemies.acquire().spawn(LEVEL_PATH, hp, speed, offset);
+    this.enemies.acquire().spawn(speciesId, LEVEL_PATH, hp, speed, offset);
   }
 
   /* ---------- Interaction ---------- */
@@ -273,24 +318,62 @@ export class Game {
     }
 
     this.pointerWorld.copy(hit.point);
+    void this.ensureGhost(pending.speciesId);
+
     const species = getSpecies(pending.speciesId);
     const check = canPlace(this.pointerWorld.x, this.pointerWorld.z, LEVEL_PATH, this.towers, PLACEMENT_RULES);
-    const color = check.ok ? '#5aa86c' : '#c25b4e';
-    (this.ghost.material as MeshStandardMaterial).color.set(color);
-    (this.ghostRange.material as MeshStandardMaterial).color.set(color);
-    this.ghost.position.set(this.pointerWorld.x, 0.5, this.pointerWorld.z);
-    this.ghost.visible = true;
+    (this.ghostRange.material as MeshStandardMaterial).color.set(check.ok ? '#5aa86c' : '#c25b4e');
     this.ghostRange.position.set(this.pointerWorld.x, 0.04, this.pointerWorld.z);
     this.ghostRange.scale.setScalar(species.range);
     this.ghostRange.visible = true;
+
+    if (this.ghostModel) {
+      this.ghostModel.position.set(this.pointerWorld.x, 0, this.pointerWorld.z);
+      this.ghostModel.rotation.y = MODEL_FACING;
+      this.ghostModel.visible = true;
+      this.ghostModel.traverse((child) => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh) return;
+        const material = mesh.material as MeshStandardMaterial;
+        material.color.set(check.ok ? '#8fd6a0' : '#e09a92');
+      });
+    }
+  }
+
+  /** Le fantôme est le vrai modèle, translucide : le placement libre demande de voir l'encombrement réel. */
+  private async ensureGhost(speciesId: string): Promise<void> {
+    if (this.ghostSpeciesId === speciesId) return;
+    this.ghostSpeciesId = speciesId;
+
+    const previous = this.ghostModel;
+    this.ghostModel = null;
+    if (previous) this.root.remove(previous);
+
+    const { object } = await instantiate(getSpecies(speciesId).model);
+    object.traverse((child) => {
+      const mesh = child as Mesh;
+      if (!mesh.isMesh) return;
+      const source = mesh.material as MeshStandardMaterial;
+      const material = source.clone();
+      material.transparent = true;
+      material.opacity = 0.55;
+      material.depthWrite = false;
+      mesh.material = material;
+      mesh.castShadow = false;
+    });
+    object.visible = false;
+    // Une autre sélection a pu arriver pendant le chargement.
+    if (this.ghostSpeciesId !== speciesId) return;
+    this.ghostModel = object;
+    this.root.add(object);
   }
 
   private hideGhost(): void {
-    this.ghost.visible = false;
     this.ghostRange.visible = false;
+    if (this.ghostModel) this.ghostModel.visible = false;
   }
 
-  private tryPlace(): void {
+  private async tryPlace(): Promise<void> {
     const pending = this.pendingPlacement;
     if (!pending || !this.pointerValid) return;
 
@@ -301,34 +384,41 @@ export class Game {
     }
 
     const species = getSpecies(pending.speciesId);
-    const tower = new Tower(pending, species);
+    const x = this.pointerWorld.x;
+    const z = this.pointerWorld.z;
+    this.pendingPlacement = null;
 
-    const body = new Mesh(
-      new CapsuleGeometry(0.34, 0.6, 4, 10),
-      new MeshStandardMaterial({ color: '#4f8f5f', roughness: 0.6 })
-    );
-    body.castShadow = true;
-    body.position.y = 0.62;
+    const tower = new Tower(pending, species);
+    const holder = new Group();
 
     const base = new Mesh(
-      new CylinderGeometry(0.5, 0.55, 0.12, 16),
+      new CylinderGeometry(0.5, 0.55, 0.1, 16),
       new MeshStandardMaterial({ color: '#c9cfd6', roughness: 0.8 })
     );
     base.receiveShadow = true;
-    base.position.y = 0.06;
+    base.position.y = 0.05;
+    holder.add(base);
 
-    const holder = new Group();
-    holder.add(base, body);
+    const { object, clips } = await instantiate(species.model);
+    object.rotation.y = MODEL_FACING;
+    holder.add(object);
+
+    const idle = pickClip(clips, 'ground_idle', 'battle_idle', 'ground_walk');
+    if (idle) {
+      const mixer = new AnimationMixer(object);
+      mixer.clipAction(idle).play();
+      // Chaque unité démarre à un instant différent de son cycle.
+      mixer.setTime(Math.random() * idle.duration);
+      this.towerMixers.push(mixer);
+    }
+
     tower.object = holder;
-    tower.place(this.pointerWorld.x, this.pointerWorld.z);
+    tower.place(x, z);
     this.root.add(holder);
     this.towers.push(tower);
-
-    this.pendingPlacement = null;
     this.notify(`${species.name} posé`);
   }
 
-  /** Pose un appât sur le dresseur : les ennemis proches s'en détournent. */
   private throwLure(): void {
     const { x, z } = this.trainer;
     let attracted = 0;
@@ -348,17 +438,20 @@ export class Game {
   /* ---------- Rendu ---------- */
 
   render(alpha: number): void {
-    let index = 0;
+    for (const { crowd } of this.crowds.values()) crowd.begin();
+
     this.enemies.forEach((enemy) => {
-      if (index >= MAX_ENEMIES || enemy.state === 'mort') return;
+      if (enemy.state === 'mort') return;
+      const entry = this.crowds.get(enemy.speciesId);
+      if (!entry) return;
       enemy.renderAt(alpha, this.tmpVec2);
-      this.tmpVec.set(this.tmpVec2.x, 0.55, this.tmpVec2.y);
-      this.tmpQuat.setFromAxisAngle(UP, Math.atan2(enemy.x - enemy.prevX, enemy.z - enemy.prevZ));
-      this.tmpMatrix.compose(this.tmpVec, this.tmpQuat, this.tmpScale);
-      this.enemyMesh.setMatrixAt(index++, this.tmpMatrix);
+      const angle = Math.atan2(enemy.x - enemy.prevX, enemy.z - enemy.prevZ) + MODEL_FACING;
+      const clip = enemy.state === 'marche' || enemy.state === 'attire' ? entry.walk : entry.idle;
+      if (!clip) return;
+      entry.crowd.add(this.tmpVec2.x, this.tmpVec2.y, angle, 1, clip, enemy.phase);
     });
-    this.enemyMesh.count = index;
-    this.enemyMesh.instanceMatrix.needsUpdate = true;
+
+    for (const { crowd } of this.crowds.values()) crowd.end();
 
     let shotIndex = 0;
     this.projectiles.forEach((shot) => {
@@ -370,16 +463,32 @@ export class Game {
     this.projectileMesh.count = shotIndex;
     this.projectileMesh.instanceMatrix.needsUpdate = true;
 
+    for (const tower of this.towers) {
+      if (!tower.object || !tower.target) continue;
+      tower.object.rotation.y = Math.atan2(tower.target.x - tower.x, tower.target.z - tower.z) + MODEL_FACING;
+    }
+
     this.trainer.renderAt(alpha, this.tmpVec2);
     this.trainer.object?.position.set(this.tmpVec2.x, 0, this.tmpVec2.y);
-    // Léger balancement : suffit à ce que le dresseur ne paraisse pas figé.
     this.trainerMesh.rotation.z = Math.sin(this.tick * 0.15) * 0.04;
   }
 
   dispose(): void {
     this.terrain.dispose();
-    this.enemyMesh.dispose();
     this.projectileMesh.dispose();
+    for (const { crowd } of this.crowds.values()) crowd.dispose();
     this.scene.remove(this.root);
   }
 }
+
+/** Cherche un clip par suffixe de nom, dans l'ordre de préférence. */
+function pickClip(clips: readonly AnimationClip[], ...candidates: string[]): AnimationClip | null {
+  for (const candidate of candidates) {
+    const found = clips.find((clip) => clip.name.endsWith(candidate) && clip.duration > 0);
+    if (found) return found;
+  }
+  return clips.find((clip) => clip.duration > 0) ?? null;
+}
+
+/** Rotation appliquée aux modèles : exportée pour le reste du rendu. */
+export { MODEL_FACING, UP };

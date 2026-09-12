@@ -20,7 +20,7 @@ if (!container) throw new Error('#app introuvable');
 
 const stage = createStage(container);
 const input = new InputState(stage.renderer.domElement);
-const game = new Game(stage.scene, stage.camera, input);
+
 
 const store = createStore();
 const account = await AccountManager.open(store, resolveAccountId());
@@ -34,6 +34,9 @@ if (account.account.roster.length === 0) {
   account.account.starterId = account.account.roster[0]?.speciesId ?? null;
   account.touch();
 }
+
+const rosterSpecies = [...new Set(account.account.roster.map((p) => p.speciesId))];
+const game = await Game.create(stage.scene, stage.camera, input, rosterSpecies);
 
 /* ---------- Relevé de bord ---------- */
 
@@ -108,7 +111,7 @@ const loop = new GameLoop({
     const s = game.status;
     readout.textContent =
       `vague ${s.wave}/${s.totalWaves}   ennemis ${s.alive}   passés ${s.leaked}\n` +
-      `cristaux ${s.crystals}   posés ${s.placed}   sauvegarde ${store.kind}` +
+      `cristaux ${s.crystals}   posés ${s.placed}   draw calls ${s.drawCalls}   sauvegarde ${store.kind}` +
       (s.message ? `\n${s.message}` : '');
   },
 });
