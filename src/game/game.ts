@@ -15,7 +15,7 @@ import {
   LoopOnce,
   type AnimationAction,
   Color,
-  ConeGeometry,
+  CapsuleGeometry,
   CylinderGeometry,
   DynamicDrawUsage,
   Group,
@@ -176,7 +176,7 @@ export class Game {
   private readonly ghostRange: Mesh;
   private ghostModel: Object3D | null = null;
   private ghostSpeciesId: string | null = null;
-  private readonly trainerMesh: Mesh;
+  private readonly trainerMesh: Group;
 
   private readonly raycaster = new Raycaster();
   private readonly pointerWorld = new Vector3();
@@ -244,13 +244,8 @@ export class Game {
     this.ghostRange.visible = false;
     this.root.add(this.ghostRange);
 
-    this.trainerMesh = new Mesh(
-      new ConeGeometry(0.34, 1.1, 12),
-      new MeshStandardMaterial({ color: '#3f6fb5', roughness: 0.5 })
-    );
-    this.trainerMesh.castShadow = true;
-    this.trainerMesh.position.y = 0.55;
     const trainerHolder = new Group();
+    this.trainerMesh = construireDresseur();
     trainerHolder.add(this.trainerMesh);
     this.trainer.object = trainerHolder;
     this.trainer.bounds = PLACEMENT_RULES.bounds;
@@ -734,7 +729,7 @@ export class Game {
 
     this.trainer.renderAt(alpha, this.tmpVec2);
     this.trainer.object?.position.set(this.tmpVec2.x, 0, this.tmpVec2.y);
-    this.trainerMesh.rotation.z = Math.sin(this.tick * 0.15) * 0.04;
+    this.trainerMesh.rotation.z = Math.sin(this.tick * 0.15) * 0.035;
   }
 
   dispose(): void {
@@ -752,6 +747,53 @@ export class Game {
  * On ne se rabat volontairement pas sur le premier clip venu : plusieurs
  * espèces n'embarquent que des émotes de visage, qui sont des poses fixes.
  * Les jouer donnerait un Pokémon parfaitement immobile.
+ */
+function construireDresseur(): Group {
+  const dresseur = new Group();
+
+  const veste = new MeshStandardMaterial({ color: '#2f5fa8', roughness: 0.62 });
+  const peau = new MeshStandardMaterial({ color: '#e8c39a', roughness: 0.85 });
+  const casquette = new MeshStandardMaterial({ color: '#c8452f', roughness: 0.6 });
+  const jean = new MeshStandardMaterial({ color: '#3a4658', roughness: 0.8 });
+
+  const jambes = new Mesh(new CylinderGeometry(0.19, 0.22, 0.42, 12), jean);
+  jambes.position.y = 0.21;
+
+  const corps = new Mesh(new CapsuleGeometry(0.21, 0.3, 4, 12), veste);
+  corps.position.y = 0.67;
+
+  const tete = new Mesh(new SphereGeometry(0.2, 16, 12), peau);
+  tete.position.y = 1.05;
+
+  const calotte = new Mesh(
+    new SphereGeometry(0.205, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    casquette
+  );
+  calotte.position.y = 1.06;
+
+  // La visière pointe vers -Z, comme le regard des modèles convertis.
+  const visiere = new Mesh(
+    new CylinderGeometry(0.2, 0.2, 0.04, 14, 1, false, 0, Math.PI),
+    casquette
+  );
+  visiere.position.set(0, 1.04, -0.11);
+
+  const sac = new Mesh(new CapsuleGeometry(0.12, 0.14, 3, 8), casquette);
+  sac.position.set(0, 0.68, 0.2);
+
+  for (const piece of [jambes, corps, tete, calotte, visiere, sac]) {
+    piece.castShadow = true;
+    dresseur.add(piece);
+  }
+  return dresseur;
+}
+
+/**
+ * Silhouette du dresseur — voir construireDresseur ci-dessus.
+ *
+ * En vue plongeante, ce qui identifie un personnage est sa tête et sa
+ * casquette, pas son corps. La visière donne en prime une direction lisible
+ * d'un coup d'œil, ce qu'un cône ne pouvait pas offrir.
  */
 function pickClip(clips: readonly AnimationClip[], ...candidates: string[]): AnimationClip | null {
   for (const candidate of candidates) {
