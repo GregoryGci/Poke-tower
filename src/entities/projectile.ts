@@ -1,0 +1,68 @@
+/**
+ * Projectile recyclé.
+ *
+ * Il vise là où la cible se trouve au tir, pas là où elle sera : les tours
+ * ratent donc les ennemis rapides, ce qui donne un sens à la vitesse.
+ */
+
+import { Object3D } from 'three';
+import type { Poolable } from '@/core/pool';
+import type { Enemy } from './enemy';
+
+export class Projectile implements Poolable {
+  object: Object3D | null = null;
+  x = 0;
+  z = 0;
+  targetX = 0;
+  targetZ = 0;
+  speed = 12;
+  damage = 0;
+  alive = false;
+  /** Cible visée : sert à appliquer les dégâts si elle est encore là. */
+  target: Enemy | null = null;
+
+  reset(): void {
+    this.object = null;
+    this.x = this.z = this.targetX = this.targetZ = 0;
+    this.speed = 12;
+    this.damage = 0;
+    this.alive = false;
+    this.target = null;
+  }
+
+  launch(fromX: number, fromZ: number, target: Enemy, damage: number, speed: number): void {
+    this.x = fromX;
+    this.z = fromZ;
+    this.target = target;
+    this.targetX = target.x;
+    this.targetZ = target.z;
+    this.damage = damage;
+    this.speed = speed;
+    this.alive = true;
+  }
+
+  /** Retourne true quand le projectile a touché ou expiré. */
+  update(dt: number): boolean {
+    if (!this.alive) return true;
+    // Une cible encore vivante est repoursuivie : sinon le tir part dans le vide
+    // dès que l'ennemi bouge un peu.
+    if (this.target && this.target.state !== 'mort') {
+      this.targetX = this.target.x;
+      this.targetZ = this.target.z;
+    }
+    const dx = this.targetX - this.x;
+    const dz = this.targetZ - this.z;
+    const len = Math.hypot(dx, dz);
+    const step = this.speed * dt;
+    if (len <= step) {
+      this.x = this.targetX;
+      this.z = this.targetZ;
+      this.alive = false;
+      return true;
+    }
+    this.x += (dx / len) * step;
+    this.z += (dz / len) * step;
+    if (this.object) this.object.position.set(this.x, 0.6, this.z);
+    return false;
+  }
+}
