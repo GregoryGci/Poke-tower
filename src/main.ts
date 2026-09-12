@@ -20,6 +20,7 @@ import { demanderStarter } from '@/ui/starter-screen';
 import { ouvrirMenu } from '@/ui/menu';
 import { afficherBilan } from '@/ui/result';
 import { ouvrirEquipe } from '@/ui/team';
+import { ouvrirInvocation } from '@/ui/summon';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
@@ -186,6 +187,11 @@ for (;;) {
 
   if (destination === 'equipe') {
     await ouvrirEquipe(account.account);
+    continue;
+  }
+
+  if (destination === 'invocation') {
+    await ouvrirInvocation(account);
     continue;
   }
 

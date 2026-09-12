@@ -48,7 +48,7 @@ const CARTES: Carte[] = [
     titre: 'Invocation',
     description: 'Dépense tes cristaux pour agrandir ton équipe.',
     pied: (compte) => `${compte.crystals} cristaux`,
-    verrou: (compte) => (compte.crystals >= 10 ? null : 'Dès 10 cristaux'),
+
   },
   {
     id: 'raid',
