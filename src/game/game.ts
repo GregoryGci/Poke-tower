@@ -95,6 +95,9 @@ export interface GameStatus {
   crystals: number;
   placed: number;
   drawCalls: number;
+  /** Le joueur a-t-il déjà déplacé son dresseur ? */
+  trainerMoved: boolean;
+  lures: number;
   message: string | null;
 }
 
@@ -153,6 +156,8 @@ export class Game {
 
   private leaked = 0;
   private crystals = 0;
+  private trainerMoved = false;
+  private lures = 0;
   private message: string | null = null;
   private messageUntil = 0;
   private tick = 0;
@@ -257,6 +262,8 @@ export class Game {
       leaked: this.leaked,
       crystals: this.crystals,
       placed: this.towers.length,
+      trainerMoved: this.trainerMoved,
+      lures: this.lures,
       // Une foule par espèce visible, plus les projectiles et le décor.
       drawCalls: [...this.crowds.values()].filter((c) => c.crowd.mesh.count > 0).length
         + (this.projectileMesh.count > 0 ? 1 : 0)
@@ -272,6 +279,7 @@ export class Game {
     if (this.message && tick > this.messageUntil) this.message = null;
 
     this.trainer.update(dt, this.input.move);
+    if (!this.trainerMoved && this.input.move.lengthSq() > 0.01) this.trainerMoved = true;
 
     this.enemyGrid.clear();
     this.enemies.forEach((enemy) => {
@@ -540,6 +548,7 @@ export class Game {
       enemy.lure = { x, z, until: this.tick + LURE_TICKS };
       attracted++;
     });
+    this.lures++;
     this.notify(attracted ? `Appât lancé — ${attracted} détournés` : 'Appât lancé dans le vide');
   }
 

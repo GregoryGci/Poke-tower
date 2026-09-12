@@ -105,6 +105,8 @@ export interface Item {
 export interface Progression {
   storyLevel: number;
   raidUnlocked: boolean;
+  /** La première run explicative a été suivie jusqu'au bout. */
+  tutorialDone: boolean;
   /** Niveaux terminés, pour ne pas re-donner les récompenses de première fois. */
   clearedLevels: string[];
 }
@@ -131,7 +133,7 @@ export function emptyAccount(id: string): PlayerAccount {
     roster: [],
     crystals: 0,
     inventory: [],
-    progression: { storyLevel: 1, raidUnlocked: false, clearedLevels: [] },
+    progression: { storyLevel: 1, raidUnlocked: false, tutorialDone: false, clearedLevels: [] },
     updatedAt: Date.now(),
   };
 }

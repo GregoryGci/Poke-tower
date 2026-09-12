@@ -486,3 +486,94 @@
   .unite-texte { display: none; }
   .panneau { gap: 12px; padding: 8px 12px; }
 }
+
+/* ---------- Première run ---------- */
+
+.tuto {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 14px 18px;
+  box-sizing: border-box;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-portee);
+  font-family: var(--ui);
+  color: var(--encre);
+  z-index: 5;
+  animation: tuto-entree 0.32s ease both;
+}
+
+.tuto[data-sortie='true'] {
+  animation: tuto-sortie 0.24s ease both;
+}
+
+/* Pastille de progression : le joueur voit combien d'étapes restent. */
+.tuto-etape {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  background: var(--emeraude-clair);
+  color: var(--emeraude);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tuto-texte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.tuto-titre {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+}
+
+.tuto-corps { font-size: 13px; line-height: 1.45; color: var(--gris); }
+
+.tuto-corps kbd {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--argent-clair);
+  color: var(--encre);
+  border: 1px solid var(--ligne);
+}
+
+.tuto-passer {
+  flex: none;
+  align-self: flex-start;
+  font: 500 11.5px var(--ui);
+  color: var(--gris-clair);
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.tuto-passer:hover { color: var(--encre); }
+.tuto-passer:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+@keyframes tuto-entree {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes tuto-sortie {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+
+@media (max-width: 720px) {
+  .tuto { bottom: 92px; padding: 11px 14px; gap: 10px; }
+}

@@ -19,6 +19,7 @@ import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
 import { STARTER_CASES } from '@/data/content';
 import { Hud } from '@/ui/hud';
+import { Tutorial } from '@/ui/tutorial';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app introuvable');
@@ -69,12 +70,23 @@ if (!account.account.starterId) {
 const rosterSpecies = [...new Set(account.account.roster.map((p) => p.speciesId))];
 const game = await Game.create(stage.scene, stage.camera, input, rosterSpecies);
 
+let selectionActive = false;
+
 const hud = new Hud(container, {
   onSelection(owned) {
+    selectionActive = owned !== null;
     game.pendingPlacement = owned;
   },
 });
 hud.setRoster(account.account.roster);
+
+// Première run : les consignes s'effacent d'elles-mêmes dès que le geste est fait.
+const tutorial = account.account.progression.tutorialDone
+  ? null
+  : new Tutorial(container, () => {
+      account.account.progression.tutorialDone = true;
+      account.touch();
+    });
 
 let lastCrystals = 0;
 
@@ -83,7 +95,12 @@ const loop = new GameLoop({
     game.update(dt, tick);
 
     // La pose consomme la sélection : on remet la barre en phase.
-    if (!game.pendingPlacement) hud.clearSelection();
+    if (!game.pendingPlacement) {
+      hud.clearSelection();
+      selectionActive = false;
+    }
+
+    tutorial?.update(dt, { status: game.status, selection: selectionActive });
 
     const status = game.status;
     if (status.crystals !== lastCrystals) {
@@ -119,5 +136,6 @@ if (import.meta.hot) {
     input.dispose();
     stage.dispose();
     hud.dispose();
+    tutorial?.dispose();
   });
 }

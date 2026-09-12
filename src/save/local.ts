@@ -31,7 +31,12 @@ export class LocalStore implements SaveStore {
 
 /** Remonte une vieille sauvegarde au schéma courant. */
 export function migrate(account: PlayerAccount): PlayerAccount {
-  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return account;
-  // Aucune migration à écrire pour l'instant : le schéma 1 est le premier.
-  return { ...account, schemaVersion: CURRENT_SCHEMA_VERSION };
+  // Le tutoriel est arrivé après les premières sauvegardes : un compte qui
+  // existe déjà a forcément dépassé ce stade.
+  const progression = {
+    ...account.progression,
+    tutorialDone: account.progression?.tutorialDone ?? true,
+  };
+  if (account.schemaVersion === CURRENT_SCHEMA_VERSION) return { ...account, progression };
+  return { ...account, progression, schemaVersion: CURRENT_SCHEMA_VERSION };
 }
