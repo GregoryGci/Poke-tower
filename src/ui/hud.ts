@@ -36,6 +36,10 @@ export interface HudOptions {
   onSelection(owned: OwnedPokemon | null): void;
   /** Appelée quand le joueur veut revenir au menu. */
   onQuit(): void;
+  /** Appelée quand le joueur déclenche la première vague. */
+  onStart(): void;
+  /** Appelée quand le joueur change la vitesse de simulation. */
+  onSpeed(multiplicateur: number): void;
 }
 
 export class Hud {
@@ -43,6 +47,10 @@ export class Hud {
   private readonly unites = elem('div', 'unites');
   private readonly message = elem('div', 'hud-message');
   private readonly retour: HTMLButtonElement;
+  private readonly controles = elem('div', 'hud-controles');
+  private readonly lancer: HTMLButtonElement;
+  private readonly vitesse = elem('div', 'vitesse');
+  private phaseAffichee = '';
 
   private readonly vagueNumero = elem('strong');
   private readonly vagueTotal = elem('span');
@@ -99,8 +107,29 @@ export class Hud {
     const bas = elem('div', 'hud-bas');
     bas.appendChild(this.unites);
 
+    this.lancer = elem('button', 'bouton-lancer', 'Lancer la run');
+    this.lancer.type = 'button';
+    this.lancer.id = 'lancer-run';
+    this.lancer.addEventListener('click', () => options.onStart());
+
+    for (const multiplicateur of [1, 2, 3]) {
+      const cran = elem('button', undefined, '×' + multiplicateur);
+      cran.type = 'button';
+      cran.id = 'vitesse-' + multiplicateur;
+      cran.setAttribute('aria-pressed', String(multiplicateur === 1));
+      cran.addEventListener('click', () => {
+        options.onSpeed(multiplicateur);
+        for (const autre of this.vitesse.querySelectorAll('button')) {
+          autre.setAttribute('aria-pressed', String(autre === cran));
+        }
+      });
+      this.vitesse.appendChild(cran);
+    }
+
+    this.controles.appendChild(this.lancer);
+
     this.racine.append(haut, this.message, bas);
-    parent.append(this.racine, retour);
+    parent.append(this.racine, retour, this.controles);
     this.retour = retour;
   }
 
@@ -176,6 +205,13 @@ export class Hud {
       this.rafraichirDisponibilite();
     }
     this.places.valeur.textContent = status.placed + "/" + status.maxPoses;
+
+    // Le bouton de lancement laisse la place au reglage de vitesse.
+    if (status.phase !== this.phaseAffichee) {
+      this.phaseAffichee = status.phase;
+      this.controles.innerHTML = '';
+      this.controles.appendChild(status.phase === 'preparation' ? this.lancer : this.vitesse);
+    }
     this.cristaux.valeur.textContent = String(status.crystals);
     this.appels.valeur.textContent = String(status.drawCalls);
 
@@ -193,5 +229,6 @@ export class Hud {
   dispose(): void {
     this.racine.remove();
     this.retour.remove();
+    this.controles.remove();
   }
 }

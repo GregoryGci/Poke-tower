@@ -91,6 +91,14 @@ const LEVEL_PATH = new EnemyPath([
   { x: 15, z: -6 },
 ]);
 
+/**
+ * Phase de la manche.
+ *
+ * La preparation laisse poser en paix : les vagues n'avancent pas tant que le
+ * joueur n'a pas lance lui-meme la run.
+ */
+export type Phase = 'preparation' | 'en_cours';
+
 /** Issue de la manche. Tant qu'elle est en cours, rien ne se decide. */
 export type Outcome = 'en_cours' | 'victoire' | 'defaite';
 
@@ -105,6 +113,7 @@ export interface GameStatus {
   /** Points de vie restants de la tour. */
   lives: number;
   outcome: Outcome;
+  phase: Phase;
   /** Places restantes sur le terrain. */
   slotsLibres: number;
   maxPoses: number;
@@ -167,6 +176,7 @@ export class Game {
   private readonly pointerWorld = new Vector3();
   private pointerValid = false;
 
+  private phase: Phase = 'preparation';
   private leaked = 0;
   private crystals = 0;
   private trainerMoved = false;
@@ -266,6 +276,7 @@ export class Game {
   }
 
   private get outcome(): Outcome {
+    if (this.phase === 'preparation') return 'en_cours';
     if (this.leaked >= VIES) return 'defaite';
     // Victoire seulement une fois le terrain vide : une vague epuisee dont les
     // derniers ennemis marchent encore n'est pas gagnee.
@@ -285,6 +296,7 @@ export class Game {
       slotsLibres: Math.max(0, MAX_POSES - this.towers.length),
       maxPoses: MAX_POSES,
       outcome: this.outcome,
+      phase: this.phase,
       trainerMoved: this.trainerMoved,
       lures: this.lures,
       // Une foule par espèce visible, plus les projectiles et le décor.
@@ -296,6 +308,13 @@ export class Game {
   }
 
   /* ---------- Simulation ---------- */
+
+  /** Ouvre les hostilites. Sans effet si la manche a deja commence. */
+  lancerRun(): void {
+    if (this.phase !== 'preparation') return;
+    this.phase = 'en_cours';
+    this.notify('La vague arrive');
+  }
 
   update(dt: number, tick: number): void {
     this.tick = tick;
@@ -309,7 +328,9 @@ export class Game {
       if (enemy.active) this.enemyGrid.insert(enemy);
     });
 
-    for (const event of this.waves.update(dt, this.countMarching())) {
+    // En preparation, le temps de jeu est suspendu : ni vagues, ni tirs.
+    const evenements = this.phase === 'en_cours' ? this.waves.update(dt, this.countMarching()) : [];
+    for (const event of evenements) {
       if (event.kind === 'spawn') {
         this.spawnEnemy(event.request.species.id, event.request.hp, event.request.speed);
       }

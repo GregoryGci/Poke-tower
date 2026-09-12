@@ -492,7 +492,7 @@
 .tuto {
   position: fixed;
   left: 50%;
-  bottom: 112px;
+  bottom: 182px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -575,7 +575,7 @@
 }
 
 @media (max-width: 720px) {
-  .tuto { bottom: 92px; padding: 11px 14px; gap: 10px; }
+  .tuto { bottom: 162px; padding: 11px 14px; gap: 10px; }
 }
 
 /* ---------- Menu principal ---------- */
@@ -1125,4 +1125,73 @@
 .unite[aria-disabled='true']:hover {
   transform: none;
   border-color: var(--ligne);
+}
+
+/* ---------- Lancement et vitesse ---------- */
+
+.hud-controles {
+  position: fixed;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 4;
+}
+
+.bouton-lancer {
+  font: 700 15px var(--titre);
+  letter-spacing: 0.01em;
+  padding: 14px 30px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  background: var(--emeraude);
+  color: var(--blanc);
+  box-shadow: 0 3px 16px rgba(14, 122, 87, 0.3);
+  animation: lancer-appel 2.4s ease-in-out infinite;
+}
+
+.bouton-lancer:hover { background: #0c6a4b; }
+.bouton-lancer:focus-visible { outline: 2px solid var(--encre); outline-offset: 3px; }
+
+@keyframes lancer-appel {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+
+/* Vitesse : un segment par palier, pour que l'état courant se lise sans texte. */
+.vitesse {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ligne);
+  border-radius: 999px;
+  box-shadow: var(--ombre-douce);
+}
+
+.vitesse button {
+  font: 600 12px var(--mono);
+  color: var(--gris);
+  background: transparent;
+  border: 0;
+  padding: 7px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.vitesse button:hover { color: var(--encre); }
+
+.vitesse button[aria-pressed='true'] {
+  background: var(--encre);
+  color: var(--blanc);
+}
+
+.vitesse button:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bouton-lancer { animation: none; }
 }

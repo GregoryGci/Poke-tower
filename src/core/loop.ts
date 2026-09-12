@@ -27,6 +27,15 @@ export class GameLoop {
   private frame = 0;
   tick = 0;
 
+  /**
+   * Vitesse de simulation.
+   *
+   * On multiplie le temps accumulé, pas la taille du pas : la logique avance
+   * donc simplement plus de fois par image, et reste identique à elle-même.
+   * Doubler dt aurait fait diverger la simulation.
+   */
+  speed = 1;
+
   constructor(private readonly handlers: LoopHandlers) {}
 
   start(): void {
@@ -48,7 +57,7 @@ export class GameLoop {
 
     const elapsed = (now - this.lastTime) / 1000;
     this.lastTime = now;
-    this.accumulator += Math.min(elapsed, MAX_CATCHUP_TICKS * TICK_SECONDS);
+    this.accumulator += Math.min(elapsed * this.speed, MAX_CATCHUP_TICKS * this.speed * TICK_SECONDS);
 
     while (this.accumulator >= TICK_SECONDS) {
       this.handlers.update(TICK_SECONDS, this.tick);

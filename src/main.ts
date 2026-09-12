@@ -106,6 +106,12 @@ async function jouerManche(): Promise<void> {
     onQuit() {
       terminer?.(true);
     },
+    onStart() {
+      game.lancerRun();
+    },
+    onSpeed(multiplicateur) {
+      loop.speed = multiplicateur;
+    },
   });
   hud.setRoster(account.account.roster);
 
