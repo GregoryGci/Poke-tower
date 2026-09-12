@@ -8,6 +8,8 @@
 import {
   BufferGeometry,
   CircleGeometry,
+  ConeGeometry,
+  CylinderGeometry,
   Float32BufferAttribute,
   Group,
   Mesh,
@@ -108,6 +110,28 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
   ribbon.receiveShadow = true;
   group.add(ribbon);
 
+  // La tour a defendre, a l'arrivee du chemin. Elle donne un but visible a la
+  // manche : sans elle, le joueur protege une ligne abstraite.
+  const tour = new Group();
+  const pierre = new MeshStandardMaterial({ color: '#cfd6cd', roughness: 0.9 });
+  const toit = new MeshStandardMaterial({ color: '#b4432f', roughness: 0.7 });
+  const socleTour = new Mesh(new CylinderGeometry(1.5, 1.8, 0.4, 20), pierre);
+  socleTour.position.y = 0.2;
+  const fut = new Mesh(new CylinderGeometry(1.05, 1.25, 2.6, 20), pierre);
+  fut.position.y = 1.7;
+  const corniche = new Mesh(new CylinderGeometry(1.35, 1.1, 0.3, 20), pierre);
+  corniche.position.y = 3.1;
+  const coiffe = new Mesh(new ConeGeometry(1.4, 1.3, 20), toit);
+  coiffe.position.y = 3.9;
+  for (const piece of [socleTour, fut, corniche, coiffe]) {
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    tour.add(piece);
+  }
+  const arrivee = path.sample(path.length, new Vector2());
+  tour.position.set(arrivee.x, 0, arrivee.y);
+  group.add(tour);
+
   // Repères visuels de départ et d'arrivée.
   const marker = (color: string, at: Vector2): Mesh => {
     const mesh = new Mesh(
@@ -119,7 +143,7 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
     return mesh;
   };
   group.add(marker('#0e7a57', path.sample(0, new Vector2())));
-  group.add(marker('#b4432f', path.sample(path.length, new Vector2())));
+
 
   return {
     group,
