@@ -47,7 +47,7 @@ import { createTerrain, type Terrain } from '@/world/terrain';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { canPlace, REJECTION_LABELS, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, vaguesPourNiveau, vaguesTutoriel } from './waves';
-import type { OwnedPokemon } from '@/data/types';
+import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
 
 const TERRAIN_SIZE = 34;
@@ -112,6 +112,21 @@ export type Phase = 'preparation' | 'en_cours';
 
 /** Issue de la manche. Tant qu'elle est en cours, rien ne se decide. */
 export type Outcome = 'en_cours' | 'victoire' | 'defaite';
+
+/** Ce qu'un Pokémon a accompli pendant la manche. */
+export interface ContributionPokemon {
+  ownedId: string;
+  speciesId: string;
+  degats: number;
+  kills: number;
+}
+
+/** Bilan chiffré d'une manche, lu par l'écran de fin. */
+export interface RapportManche {
+  parPokemon: ContributionPokemon[];
+  parType: Array<{ type: PokemonType; degats: number }>;
+  degatsTotal: number;
+}
 
 export interface GameStatus {
   wave: number;
@@ -188,6 +203,10 @@ export class Game {
   private pointerValid = false;
 
   private phase: Phase = 'preparation';
+  /** Dégâts et éliminations par Pokémon posé, pour le bilan de fin. */
+  private readonly contributions = new Map<string, ContributionPokemon>();
+  /** Dégâts cumulés par type d'attaque. */
+  private readonly degatsParType = new Map<PokemonType, number>();
   private leaked = 0;
   private crystals = 0;
   private trainerMoved = false;
@@ -393,7 +412,10 @@ export class Game {
       const tower = this.towers[i]!;
       const target = tower.update(dt, this.enemyGrid);
       if (!target || this.projectiles.activeCount >= MAX_PROJECTILES) continue;
-      this.projectiles.acquire().launch(tower.x, tower.z, target, tower.damage, 14, tower.style);
+      const tir = this.projectiles.acquire();
+      tir.launch(tower.x, tower.z, target, tower.damage, 14, tower.style);
+      tir.ownerId = tower.owned.id;
+      tir.moveType = tower.move.type;
       this.playAttack(this.towerVisuals[i]);
     }
 
@@ -427,7 +449,9 @@ export class Game {
         if (!enemy.active) return;
         const dx = enemy.x - shot.x;
         const dz = enemy.z - shot.z;
-        if (dx * dx + dz * dz <= style.rayon * style.rayon) enemy.damage(shot.damage);
+        if (dx * dx + dz * dz > style.rayon * style.rayon) return;
+        const inflige = Math.min(shot.damage, enemy.hp);
+        this.crediter(shot, inflige, enemy.damage(shot.damage));
       });
       return;
     }
@@ -450,12 +474,52 @@ export class Game {
         const avance = rx * ux + rz * uz;
         if (avance < 0 || avance > longueur) return;
         const ecart = Math.abs(rx * -uz + rz * ux);
-        if (ecart <= style.couloir) enemy.damage(shot.damage);
+        if (ecart > style.couloir) return;
+        const inflige = Math.min(shot.damage, enemy.hp);
+        this.crediter(shot, inflige, enemy.damage(shot.damage));
       });
       return;
     }
 
-    if (shot.target?.active) shot.target.damage(shot.damage);
+    if (shot.target?.active) {
+      const inflige = Math.min(shot.damage, shot.target.hp);
+      this.crediter(shot, inflige, shot.target.damage(shot.damage));
+    }
+  }
+
+  /** Rapport de manche, construit à la demande. */
+  get rapport(): RapportManche {
+    const parPokemon = [...this.contributions.values()].sort((a, b) => b.degats - a.degats);
+    const parType = [...this.degatsParType.entries()]
+      .map(([type, degats]) => ({ type, degats }))
+      .sort((a, b) => b.degats - a.degats);
+    return {
+      parPokemon,
+      parType,
+      degatsTotal: parPokemon.reduce((total, c) => total + c.degats, 0),
+    };
+  }
+
+  /**
+   * Impute des dégâts à leur auteur.
+   *
+   * On ne crédite que ce qui a réellement été encaissé : le surplus infligé à
+   * une cible déjà presque morte gonflerait le bilan sans rien changer au jeu.
+   */
+  private crediter(shot: Projectile, degats: number, tue: boolean): void {
+    if (!shot.ownerId) return;
+    let contribution = this.contributions.get(shot.ownerId);
+    if (!contribution) {
+      const tour = this.towers.find((candidate) => candidate.owned.id === shot.ownerId);
+      if (!tour) return;
+      contribution = { ownedId: shot.ownerId, speciesId: tour.owned.speciesId, degats: 0, kills: 0 };
+      this.contributions.set(shot.ownerId, contribution);
+    }
+    contribution.degats += degats;
+    if (tue) contribution.kills += 1;
+    if (shot.moveType) {
+      this.degatsParType.set(shot.moveType, (this.degatsParType.get(shot.moveType) ?? 0) + degats);
+    }
   }
 
   private countMarching(): number {

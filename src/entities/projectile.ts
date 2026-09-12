@@ -8,7 +8,7 @@
 import { Object3D } from 'three';
 import type { Poolable } from '@/core/pool';
 import type { Enemy } from './enemy';
-import type { StyleProfil } from '@/data/types';
+import type { PokemonType, StyleProfil } from '@/data/types';
 
 export class Projectile implements Poolable {
   object: Object3D | null = null;
@@ -24,6 +24,10 @@ export class Projectile implements Poolable {
   /** Point de depart, necessaire pour tracer le couloir d'un tir transperçant. */
   fromX = 0;
   fromZ = 0;
+  /** Auteur du tir, pour lui imputer ses dégâts dans le bilan. */
+  ownerId: string | null = null;
+  /** Type de l'attaque, pour la répartition par élément. */
+  moveType: PokemonType | null = null;
   /** Cible visée : sert à appliquer les dégâts si elle est encore là. */
   target: Enemy | null = null;
 
@@ -37,6 +41,8 @@ export class Projectile implements Poolable {
     this.style = null;
     this.fromX = 0;
     this.fromZ = 0;
+    this.ownerId = null;
+    this.moveType = null;
   }
 
   launch(

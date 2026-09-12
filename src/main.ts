@@ -173,7 +173,7 @@ async function jouerManche(): Promise<void> {
 
   // La scène reste affichée derrière le bilan : le joueur voit où en était le
   // terrain au moment où tout s'est joué.
-  if (!abandon) await afficherBilan(bilanFinal);
+  if (!abandon) await afficherBilan(bilanFinal, game.rapport, account.account);
 
   game.dispose();
   input.reset();

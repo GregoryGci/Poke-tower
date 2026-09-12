@@ -116,6 +116,28 @@ export interface Species {
 }
 
 /** Instance possédée par un joueur. */
+/**
+ * Experience necessaire pour quitter ce niveau.
+ *
+ * Courbe volontairement douce au debut : les premiers niveaux doivent tomber
+ * en une manche ou deux, pour que la progression se voie tout de suite.
+ */
+export function xpRequise(niveau: number): number {
+  return Math.round(40 * Math.pow(niveau, 1.45));
+}
+
+/** Applique un gain d'experience et retourne les niveaux pris. */
+export function ajouterXp(owned: OwnedPokemon, gain: number): number {
+  owned.xp += Math.max(0, Math.round(gain));
+  let gagnes = 0;
+  while (owned.xp >= xpRequise(owned.level)) {
+    owned.xp -= xpRequise(owned.level);
+    owned.level += 1;
+    gagnes += 1;
+  }
+  return gagnes;
+}
+
 /** Étoiles : de 1 à 6. La sixième ne s'obtient qu'en raid. */
 export const ETOILES_MAX = 6;
 export const ETOILES_MAX_FUSION = 5;
@@ -141,6 +163,8 @@ export interface OwnedPokemon {
   speciesId: string;
   rarity: Rarity;
   level: number;
+  /** Experience accumulee au niveau courant. */
+  xp: number;
   /** 1 a 6. Monte par fusion de doublons, la 6e par ressource de raid. */
   stars: number;
   /** Obtenu a la sixieme etoile. */

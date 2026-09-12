@@ -52,6 +52,8 @@ export class Tower {
   cooldown: number;
   /** Profil de frappe, lu par le jeu pour appliquer les degats. */
   readonly style: StyleProfil;
+  /** Attaque retenue, pour la répartition par élément du bilan. */
+  readonly move: Move;
   private timer = 0;
   target: Enemy | null = null;
 
@@ -65,6 +67,7 @@ export class Tower {
     // pouvait placer une attaque de statut en tete, et l'unite ne faisait alors
     // aucun degat. La rotation complete du movepool viendra plus tard.
     const move = choisirAttaque(owned);
+    this.move = move;
     const etoiles = multiplicateurEtoiles(owned.stars);
     this.style = STYLES[species.style];
 

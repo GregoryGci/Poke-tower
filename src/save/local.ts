@@ -41,6 +41,7 @@ export function migrate(account: PlayerAccount): PlayerAccount {
   // existait deja part a une etoile, sans brillance.
   const roster = (account.roster ?? []).map((membre) => ({
     ...membre,
+    xp: membre.xp ?? 0,
     stars: membre.stars ?? 1,
     shiny: membre.shiny ?? false,
   }));
