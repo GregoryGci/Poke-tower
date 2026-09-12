@@ -53,13 +53,6 @@ const ETAPES: Etape[] = [
     pause: 1.2,
   },
   {
-    titre: 'Capture plutôt que d’achever',
-    corps:
-      'Un ennemi presque vaincu s’entoure d’un anneau doré. Approche ton dresseur et appuie sur {Espace} : il rejoint ton équipe sur-le-champ.',
-    accomplie: (c) => c.status.captures > 0,
-    pause: 1.4,
-  },
-  {
     titre: 'Tiens la ligne',
     corps:
       'Chaque ennemi qui atteint le bout du chemin te coûte. Ceux que tu abats laissent des cristaux.',

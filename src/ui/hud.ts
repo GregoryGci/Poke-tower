@@ -50,11 +50,12 @@ export class Hud {
 
   private readonly restants = mesure('Sur le terrain');
   private readonly vies = mesure('Vies');
+  private readonly places = mesure('Posés');
   private readonly cristaux = mesure('Cristaux');
   private readonly appels = mesure('Draw calls');
 
   private selection: string | null = null;
-  private deployes: readonly string[] = [];
+  private terrainPlein = false;
   private roster: readonly OwnedPokemon[] = [];
 
   constructor(
@@ -77,6 +78,8 @@ export class Hud {
     const droite = elem('div', 'panneau');
     droite.append(
       this.cristaux.bloc,
+      elem('div', 'separateur'),
+      this.places.bloc,
       elem('div', 'separateur'),
       this.vies.bloc,
       elem('div', 'separateur'),
@@ -112,7 +115,7 @@ export class Hud {
       bouton.type = 'button';
       bouton.id = `unite-${owned.id}`;
       bouton.setAttribute('aria-pressed', String(this.selection === owned.id));
-      bouton.setAttribute('aria-disabled', String(this.deployes.includes(owned.id)));
+      bouton.setAttribute('aria-disabled', String(this.terrainPlein));
 
       const pastille = elem('span', 'pastille', species.name.slice(0, 1));
       pastille.dataset['type'] = species.types[0];
@@ -130,7 +133,7 @@ export class Hud {
   }
 
   private basculer(owned: OwnedPokemon): void {
-    if (this.deployes.includes(owned.id)) return;
+    if (this.terrainPlein) return;
     this.selection = this.selection === owned.id ? null : owned.id;
     this.rafraichirSelection();
     this.options.onSelection(this.selection ? owned : null);
@@ -146,7 +149,7 @@ export class Hud {
   private rafraichirDisponibilite(): void {
     for (const owned of this.roster) {
       const bouton = this.unites.querySelector(`#unite-${CSS.escape(owned.id)}`);
-      bouton?.setAttribute('aria-disabled', String(this.deployes.includes(owned.id)));
+      bouton?.setAttribute('aria-disabled', String(this.terrainPlein));
     }
   }
 
@@ -167,10 +170,12 @@ export class Hud {
     this.vies.valeur.textContent = String(status.lives);
 
     // La barre reflète ce qui reste disponible, sans se reconstruire.
-    if (status.deployed.length !== this.deployes.length) {
-      this.deployes = status.deployed;
+    const plein = status.slotsLibres <= 0;
+    if (plein !== this.terrainPlein) {
+      this.terrainPlein = plein;
       this.rafraichirDisponibilite();
     }
+    this.places.valeur.textContent = status.placed + "/" + status.maxPoses;
     this.cristaux.valeur.textContent = String(status.crystals);
     this.appels.valeur.textContent = String(status.drawCalls);
 

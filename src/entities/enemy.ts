@@ -72,11 +72,6 @@ export class Enemy implements Poolable, SpatialItem {
     this.prevZ = this.z;
   }
 
-  /** Seuil de capture : en dessous, le dresseur peut tenter une capsule. */
-  get capturable(): boolean {
-    return this.state !== 'mort' && this.hp / this.maxHp <= 0.25;
-  }
-
   damage(amount: number): boolean {
     if (this.state === 'mort') return false;
     this.hp -= amount;

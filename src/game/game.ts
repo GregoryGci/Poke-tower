@@ -57,12 +57,10 @@ const MAX_PROJECTILES = 512;
 const CROWD_CAPACITY = 128;
 /** Durée d'un appât, en ticks. */
 const LURE_TICKS = 90;
+/** Pokémon simultanément sur le terrain, doublons compris. */
+const MAX_POSES = 6;
 /** Ennemis qu'on peut laisser passer avant de perdre la manche. */
 const VIES = 10;
-/** Distance à laquelle le dresseur peut lancer une capsule. */
-const PORTEE_CAPTURE = 3.2;
-/** Cristaux gagnés en capturant plutôt qu'en achevant. */
-const PRIME_CAPTURE = 3;
 
 /**
  * Les modèles Bedrock sont sculptés face à -Z, alors que `atan2(dx, dz)`
@@ -76,7 +74,6 @@ const PRIME_CAPTURE = 3;
 const MODEL_FACING = Math.PI;
 
 const UP = new Vector3(0, 1, 0);
-const RIGHT = new Vector3(1, 0, 0);
 const IDENTITY_QUAT = new Quaternion();
 
 const PLACEMENT_RULES: PlacementRules = {
@@ -108,12 +105,9 @@ export interface GameStatus {
   /** Points de vie restants de la tour. */
   lives: number;
   outcome: Outcome;
-  /** Identifiants des Pokémon déjà sur le terrain. */
-  deployed: readonly string[];
-  /** Ennemis capturés pendant la manche. */
-  captures: number;
-  /** Une capture est-elle possible ici et maintenant ? */
-  captureOffered: boolean;
+  /** Places restantes sur le terrain. */
+  slotsLibres: number;
+  maxPoses: number;
   /** Le joueur a-t-il déjà déplacé son dresseur ? */
   trainerMoved: boolean;
   lures: number;
@@ -150,14 +144,6 @@ export class Game {
   private readonly enemies = new Pool<Enemy>(() => new Enemy(), 64);
   private readonly projectiles = new Pool<Projectile>(() => new Projectile(), 128);
   private readonly towers: Tower[] = [];
-  /**
-   * Pokémon déjà posés.
-   *
-   * Un membre de l'équipe est une unité, pas un modèle à dupliquer : sans
-   * cette garde, un seul starter suffisait à couvrir toute la carte et ni la
-   * capture ni l'invocation n'avaient d'intérêt.
-   */
-  private readonly deployes = new Set<string>();
   private readonly trainer = new Trainer();
 
   /** Une foule par espèce d'ennemi, construite au chargement. */
@@ -172,7 +158,6 @@ export class Game {
   private readonly towerVisuals: TowerVisual[] = [];
 
   private readonly projectileMesh: InstancedMesh;
-  private readonly captureRings: InstancedMesh;
   private readonly ghostRange: Mesh;
   private ghostModel: Object3D | null = null;
   private ghostSpeciesId: string | null = null;
@@ -186,19 +171,15 @@ export class Game {
   private crystals = 0;
   private trainerMoved = false;
   private lures = 0;
-  private captures = 0;
   private message: string | null = null;
   private messageUntil = 0;
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
-  /** Prévenu quand une espèce est capturée, pour l'ajouter au compte. */
-  onCapture: ((speciesId: string) => void) | null = null;
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
   private readonly tmpVec2 = new Vector2();
-  private readonly tmpQuat = new Quaternion();
   private readonly tmpScale = new Vector3(1, 1, 1);
 
   private constructor(
@@ -220,21 +201,6 @@ export class Game {
     this.projectileMesh.frustumCulled = false;
     this.projectileMesh.count = 0;
     this.root.add(this.projectileMesh);
-
-    this.captureRings = new InstancedMesh(
-      new RingGeometry(0.52, 0.66, 28),
-      new MeshStandardMaterial({
-        color: new Color('#f0a02c'),
-        emissive: new Color('#7a4f05'),
-        transparent: true,
-        opacity: 0.85,
-      }),
-      64
-    );
-    this.captureRings.instanceMatrix.setUsage(DynamicDrawUsage);
-    this.captureRings.frustumCulled = false;
-    this.captureRings.count = 0;
-    this.root.add(this.captureRings);
 
     this.ghostRange = new Mesh(
       new RingGeometry(0.97, 1, 48),
@@ -258,7 +224,7 @@ export class Game {
       if (button === 0) void this.tryPlace();
       if (button === 2) this.pendingPlacement = null;
     });
-    this.input.onAction(() => this.actionPrincipale());
+    this.input.onAction(() => this.throwLure());
   }
 
   /**
@@ -316,9 +282,8 @@ export class Game {
       crystals: this.crystals,
       placed: this.towers.length,
       lives: Math.max(0, VIES - this.leaked),
-      deployed: [...this.deployes],
-      captures: this.captures,
-      captureOffered: this.cibleCapturable() !== null,
+      slotsLibres: Math.max(0, MAX_POSES - this.towers.length),
+      maxPoses: MAX_POSES,
       outcome: this.outcome,
       trainerMoved: this.trainerMoved,
       lures: this.lures,
@@ -498,8 +463,8 @@ export class Game {
     const pending = this.pendingPlacement;
     if (!pending || !this.pointerValid) return;
 
-    if (this.deployes.has(pending.id)) {
-      this.notify('Déjà sur le terrain');
+    if (this.towers.length >= MAX_POSES) {
+      this.notify(`Terrain plein — ${MAX_POSES} Pokémon au maximum`);
       return;
     }
 
@@ -513,11 +478,15 @@ export class Game {
     const x = this.pointerWorld.x;
     const z = this.pointerWorld.z;
     this.pendingPlacement = null;
-    // Réservé tout de suite : le chargement du modèle est asynchrone, et deux
-    // clics rapides passeraient sinon tous les deux.
-    this.deployes.add(pending.id);
 
+    // La tour est enregistrée avant le chargement du modèle, qui est
+    // asynchrone : sans cela deux clics rapides passeraient tous les deux et
+    // dépasseraient la limite. Elle est positionnée dès maintenant pour que
+    // les règles de pose la voient, et reçoit son visuel une fois chargé.
     const tower = new Tower(pending, species);
+    tower.place(x, z);
+    this.towers.push(tower);
+
     const holder = new Group();
 
     const base = new Mesh(
@@ -579,7 +548,6 @@ export class Game {
     tower.object = holder;
     tower.place(x, z);
     this.root.add(holder);
-    this.towers.push(tower);
     this.notify(`${species.name} posé`);
   }
 
@@ -604,47 +572,6 @@ export class Game {
       return;
     }
     visual.lunge = 1;
-  }
-
-  /**
-   * Ennemi que le dresseur pourrait capturer, s'il y en a un.
-   *
-   * Le seuil de PV vient de l'entité : affaiblir sans achever est le pari que
-   * propose le brief, et c'est ce qui rend la capsule intéressante.
-   */
-  private cibleCapturable(): Enemy | null {
-    return this.enemyGrid.nearest(
-      this.trainer.x,
-      this.trainer.z,
-      PORTEE_CAPTURE,
-      (enemy) => enemy.active && enemy.capturable
-    );
-  }
-
-  /**
-   * Une seule touche, deux gestes.
-   *
-   * S'il y a une proie affaiblie à portée, on la capture ; sinon on pose un
-   * appât. Deux touches auraient demandé au joueur de choisir avant de savoir
-   * ce qui est possible.
-   */
-  private actionPrincipale(): void {
-    const proie = this.cibleCapturable();
-    if (proie) {
-      this.capturer(proie);
-      return;
-    }
-    this.throwLure();
-  }
-
-  private capturer(proie: Enemy): void {
-    const species = getSpecies(proie.speciesId);
-    proie.state = 'ko';
-    proie.corpseTimer = 0;
-    this.captures++;
-    this.crystals += PRIME_CAPTURE;
-    this.onCapture?.(proie.speciesId);
-    this.notify(`${species.name} capturé — +${PRIME_CAPTURE} cristaux`);
   }
 
   private throwLure(): void {
@@ -681,19 +608,6 @@ export class Game {
     });
 
     for (const { crowd } of this.crowds.values()) crowd.end();
-
-    // Un anneau sous chaque proie affaiblie, a plat sur le sol.
-    let ringIndex = 0;
-    this.enemies.forEach((enemy) => {
-      if (ringIndex >= 64 || !enemy.active || !enemy.capturable) return;
-      enemy.renderAt(alpha, this.tmpVec2);
-      this.tmpVec.set(this.tmpVec2.x, 0.03, this.tmpVec2.y);
-      this.tmpQuat.setFromAxisAngle(RIGHT, -Math.PI / 2);
-      this.tmpMatrix.compose(this.tmpVec, this.tmpQuat, this.tmpScale);
-      this.captureRings.setMatrixAt(ringIndex++, this.tmpMatrix);
-    });
-    this.captureRings.count = ringIndex;
-    this.captureRings.instanceMatrix.needsUpdate = true;
 
     let shotIndex = 0;
     this.projectiles.forEach((shot) => {
@@ -735,7 +649,6 @@ export class Game {
   dispose(): void {
     this.terrain.dispose();
     this.projectileMesh.dispose();
-    this.captureRings.dispose();
     for (const { crowd } of this.crowds.values()) crowd.dispose();
     this.scene.remove(this.root);
   }
