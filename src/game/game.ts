@@ -57,10 +57,11 @@ const CROWD_CAPACITY = 128;
 const LURE_TICKS = 90;
 
 /**
- * Les modèles Bedrock regardent vers -Z ; nos entités s'orientent avec
- * `atan2(dx, dz)`, qui vise +Z. D'où ce demi-tour appliqué au rendu.
+ * Les modèles convertis regardent déjà dans le sens de `atan2(dx, dz)`.
+ * Constante gardée pour pouvoir corriger une espèce mal orientée sans
+ * toucher au code de rendu.
  */
-const MODEL_FACING = Math.PI;
+const MODEL_FACING = 0;
 
 const UP = new Vector3(0, 1, 0);
 const IDENTITY_QUAT = new Quaternion();
@@ -112,6 +113,8 @@ export class Game {
   /** Une foule par espèce d'ennemi, construite au chargement. */
   private readonly crowds = new Map<string, SpeciesCrowd>();
   private readonly towerMixers: AnimationMixer[] = [];
+  /** Tours sans clip de repos : animées à la main pour ne pas rester figées. */
+  private readonly breathing: Array<{ object: Object3D; phase: number }> = [];
 
   private readonly projectileMesh: InstancedMesh;
   private readonly ghostRange: Mesh;
@@ -410,6 +413,10 @@ export class Game {
       // Chaque unité démarre à un instant différent de son cycle.
       mixer.setTime(Math.random() * idle.duration);
       this.towerMixers.push(mixer);
+    } else {
+      // Aucune animation de repos dans l'espèce : on respire à la main.
+      this.breathing.push({ object, phase: Math.random() * Math.PI * 2 });
+      console.info(`${species.name} n'a pas d'animation de repos : respiration procédurale.`);
     }
 
     tower.object = holder;
@@ -468,6 +475,14 @@ export class Game {
       tower.object.rotation.y = Math.atan2(tower.target.x - tower.x, tower.target.z - tower.z) + MODEL_FACING;
     }
 
+    // Respiration de secours : une légère compression verticale suffit à ce
+    // qu'une unité sans clip ne paraisse pas gelée.
+    const breath = (this.tick + alpha) * 0.12;
+    for (const unit of this.breathing) {
+      const amount = Math.sin(breath + unit.phase) * 0.03;
+      unit.object.scale.set(1 - amount * 0.5, 1 + amount, 1 - amount * 0.5);
+    }
+
     this.trainer.renderAt(alpha, this.tmpVec2);
     this.trainer.object?.position.set(this.tmpVec2.x, 0, this.tmpVec2.y);
     this.trainerMesh.rotation.z = Math.sin(this.tick * 0.15) * 0.04;
@@ -481,13 +496,19 @@ export class Game {
   }
 }
 
-/** Cherche un clip par suffixe de nom, dans l'ordre de préférence. */
+/**
+ * Cherche un clip de repos par nom.
+ *
+ * On ne se rabat volontairement pas sur le premier clip venu : plusieurs
+ * espèces n'embarquent que des émotes de visage, qui sont des poses fixes.
+ * Les jouer donnerait un Pokémon parfaitement immobile.
+ */
 function pickClip(clips: readonly AnimationClip[], ...candidates: string[]): AnimationClip | null {
   for (const candidate of candidates) {
     const found = clips.find((clip) => clip.name.endsWith(candidate) && clip.duration > 0);
     if (found) return found;
   }
-  return clips.find((clip) => clip.duration > 0) ?? null;
+  return null;
 }
 
 /** Rotation appliquée aux modèles : exportée pour le reste du rendu. */

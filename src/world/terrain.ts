@@ -22,31 +22,53 @@ export interface TerrainOptions {
   pathWidth: number;
 }
 
-/** Construit un ruban centré sur la polyligne, posé juste au-dessus du sol. */
-function buildPathRibbon(path: EnemyPath, width: number): BufferGeometry {
+/**
+ * Trace la route.
+ *
+ * Un ruban continu paraît naturel, mais il se replie sur lui-même dès qu'un
+ * virage est serré : aux angles droits, les deux bords se croisent et les
+ * triangles se retournent, ce qui produit de grandes écharpes sombres à même
+ * le sol. On pose donc un quad par segment, plus un disque à chaque jonction
+ * pour arrondir l'angle. Aucun triangle ne peut alors s'inverser.
+ */
+function buildPathSurface(path: EnemyPath, width: number): BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  const steps = Math.max(2, Math.ceil(path.length * 2));
-  const point = new Vector2();
-  const dir = new Vector2();
+  const half = width / 2;
 
-  for (let i = 0; i <= steps; i++) {
-    const distance = (i / steps) * path.length;
-    path.sample(distance, point);
-    path.direction(distance, dir);
-    // Normale dans le plan du sol.
-    const nx = -dir.y;
-    const nz = dir.x;
-    const half = width / 2;
-    positions.push(point.x + nx * half, 0, point.y + nz * half);
-    positions.push(point.x - nx * half, 0, point.y - nz * half);
-    const v = distance / 2;
-    uvs.push(0, v, 1, v);
-    if (i > 0) {
-      const a = (i - 1) * 2;
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  const pushQuad = (ax: number, az: number, bx: number, bz: number): void => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz) || 1;
+    // Normale dans le plan du sol, propre à ce segment.
+    const nx = (-dz / len) * half;
+    const nz = (dx / len) * half;
+    const base = positions.length / 3;
+    positions.push(ax + nx, 0, az + nz, ax - nx, 0, az - nz, bx + nx, 0, bz + nz, bx - nx, 0, bz - nz);
+    uvs.push(0, 0, 1, 0, 0, len / 2, 1, len / 2);
+    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+  };
+
+  const pushDisc = (cx: number, cz: number): void => {
+    const segments = 16;
+    const center = positions.length / 3;
+    positions.push(cx, 0, cz);
+    uvs.push(0.5, 0.5);
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      positions.push(cx + Math.cos(angle) * half, 0, cz + Math.sin(angle) * half);
+      uvs.push(0.5 + Math.cos(angle) * 0.5, 0.5 + Math.sin(angle) * 0.5);
+      if (i > 0) indices.push(center, center + i, center + i + 1);
     }
+  };
+
+  for (let i = 1; i < path.points.length; i++) {
+    const a = path.points[i - 1]!;
+    const b = path.points[i]!;
+    pushQuad(a.x, a.z, b.x, b.z);
+    // Un disque à chaque sommet intérieur comble l'encoche laissée par l'angle.
+    if (i < path.points.length - 1) pushDisc(b.x, b.z);
   }
 
   const geometry = new BufferGeometry();
@@ -75,7 +97,7 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
   group.add(groundMesh);
 
   const ribbon = new Mesh(
-    buildPathRibbon(path, options.pathWidth),
+    buildPathSurface(path, options.pathWidth),
     new MeshStandardMaterial({ color: '#c9b899', roughness: 1, metalness: 0 })
   );
   ribbon.position.y = 0.01;

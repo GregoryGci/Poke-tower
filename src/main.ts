@@ -118,6 +118,14 @@ const loop = new GameLoop({
 
 loop.start();
 
+// Accès au jeu depuis la console du navigateur, pour inspecter une partie
+// en cours. Retiré du build de production.
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>)['__game'] = game;
+  (window as unknown as Record<string, unknown>)['__stage'] = stage;
+  (window as unknown as Record<string, unknown>)['__account'] = account;
+}
+
 window.addEventListener('beforeunload', () => void account.flush());
 
 if (import.meta.hot) {
