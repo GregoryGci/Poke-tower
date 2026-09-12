@@ -305,3 +305,184 @@
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Interface de manche ---------- */
+
+.hud {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 16px clamp(14px, 3vw, 28px) 18px;
+  box-sizing: border-box;
+  font-family: var(--ui);
+  color: var(--encre);
+  pointer-events: none;
+}
+
+.hud > * { pointer-events: auto; }
+
+.hud-haut {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+/* Bandeau d'information : le fond est translucide pour ne pas masquer le terrain. */
+.panneau {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ligne);
+  border-radius: 999px;
+  box-shadow: var(--ombre-douce);
+}
+
+.mesure { display: flex; flex-direction: column; gap: 3px; line-height: 1; }
+
+.mesure .etiquette { font-size: 9.5px; letter-spacing: 0.1em; }
+
+.mesure b {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.mesure.alerte b { color: #b4432f; }
+
+.separateur {
+  width: 1px;
+  align-self: stretch;
+  background: var(--ligne);
+}
+
+/* Progression de la vague : une barre fine plutôt qu'un ratio à lire. */
+.vague { display: flex; flex-direction: column; gap: 5px; min-width: 128px; }
+
+.vague-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.vague-tete strong {
+  font-family: var(--titre);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.vague-tete span { font-family: var(--mono); font-size: 11px; color: var(--gris-clair); }
+
+.vague .jauge { height: 3px; }
+
+/* ---------- Messages ---------- */
+
+.hud-message {
+  align-self: center;
+  justify-self: center;
+  margin-bottom: 14px;
+  padding: 9px 18px;
+  background: rgba(19, 23, 26, 0.86);
+  color: var(--blanc);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.hud-message[data-visible='true'] { opacity: 1; transform: translateY(0); }
+
+/* ---------- Barre d'unités ---------- */
+
+.hud-bas { display: flex; justify-content: center; }
+
+.unites {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ligne);
+  border-radius: 18px;
+  box-shadow: var(--ombre-portee);
+}
+
+.unite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 10px;
+  min-width: 148px;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
+}
+
+.unite:hover { border-color: var(--argent); transform: translateY(-1px); }
+
+.unite[aria-pressed='true'] {
+  border-color: var(--emeraude);
+  background: var(--emeraude-clair);
+}
+
+/* Pastille de type : l'identité visuelle à la place d'un portrait. */
+.pastille {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  display: grid;
+  place-content: center;
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--blanc);
+  background: var(--argent);
+}
+
+.pastille[data-type='plante'] { background: #4f9e55; }
+.pastille[data-type='feu'] { background: #d2762f; }
+.pastille[data-type='eau'] { background: #3d7fc1; }
+.pastille[data-type='normal'] { background: #9aa29c; }
+.pastille[data-type='insecte'] { background: #7fa03a; }
+.pastille[data-type='roche'] { background: #a08a5c; }
+.pastille[data-type='combat'] { background: #b6543f; }
+.pastille[data-type='tenebres'] { background: #5b5a63; }
+
+.unite-texte { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.unite-nom {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+}
+
+.unite-detail {
+  font-size: 11px;
+  color: var(--gris);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unite:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .unite { min-width: 0; padding: 8px 10px; }
+  .unite-texte { display: none; }
+  .panneau { gap: 12px; padding: 8px 12px; }
+}

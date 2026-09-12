@@ -47,7 +47,9 @@ function buildPathSurface(path: EnemyPath, width: number): BufferGeometry {
     const base = positions.length / 3;
     positions.push(ax + nx, 0, az + nz, ax - nx, 0, az - nz, bx + nx, 0, bz + nz, bx - nx, 0, bz - nz);
     uvs.push(0, 0, 1, 0, 0, len / 2, 1, len / 2);
-    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    // Sens anti-horaire vu de dessus : dans l'autre ordre les normales pointent
+    // vers le sol et la route disparaît, éliminée par le culling.
+    indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   };
 
   const pushDisc = (cx: number, cz: number): void => {
@@ -59,7 +61,7 @@ function buildPathSurface(path: EnemyPath, width: number): BufferGeometry {
       const angle = (i / segments) * Math.PI * 2;
       positions.push(cx + Math.cos(angle) * half, 0, cz + Math.sin(angle) * half);
       uvs.push(0.5 + Math.cos(angle) * 0.5, 0.5 + Math.sin(angle) * 0.5);
-      if (i > 0) indices.push(center, center + i, center + i + 1);
+      if (i > 0) indices.push(center, center + i + 1, center + i);
     }
   };
 
@@ -90,7 +92,9 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
   const group = new Group();
 
   const groundGeometry = new PlaneGeometry(options.size, options.size);
-  const groundMaterial = new MeshStandardMaterial({ color: '#dfe6dd', roughness: 0.95, metalness: 0 });
+  // Herbe franchement verte : l'ancien gris se confondait avec la route et
+  // avec le fond, et le terrain paraissait délavé.
+  const groundMaterial = new MeshStandardMaterial({ color: '#d7e6cd', roughness: 0.95, metalness: 0 });
   const groundMesh = new Mesh(groundGeometry, groundMaterial);
   groundMesh.rotation.x = -Math.PI / 2;
   groundMesh.receiveShadow = true;
@@ -98,7 +102,7 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
 
   const ribbon = new Mesh(
     buildPathSurface(path, options.pathWidth),
-    new MeshStandardMaterial({ color: '#c9b899', roughness: 1, metalness: 0 })
+    new MeshStandardMaterial({ color: '#c6a878', roughness: 1, metalness: 0 })
   );
   ribbon.position.y = 0.01;
   ribbon.receiveShadow = true;
@@ -114,8 +118,8 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
     mesh.position.set(at.x, 0.02, at.y);
     return mesh;
   };
-  group.add(marker('#7fb069', path.sample(0, new Vector2())));
-  group.add(marker('#d16666', path.sample(path.length, new Vector2())));
+  group.add(marker('#0e7a57', path.sample(0, new Vector2())));
+  group.add(marker('#b4432f', path.sample(path.length, new Vector2())));
 
   return {
     group,

@@ -45,8 +45,8 @@ export function createStage(container: HTMLElement): Stage {
   container.appendChild(renderer.domElement);
 
   const scene = new Scene();
-  scene.background = new Color('#eef1f4');
-  scene.fog = new Fog('#eef1f4', DISTANCE * 1.4, DISTANCE * 3);
+  scene.background = new Color('#f7f8f6');
+  scene.fog = new Fog('#f7f8f6', DISTANCE * 1.4, DISTANCE * 3);
 
   const camera = new PerspectiveCamera(32, 1, 1, DISTANCE * 4);
 
