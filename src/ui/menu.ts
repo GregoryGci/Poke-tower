@@ -40,9 +40,7 @@ const CARTES: Carte[] = [
     titre: 'Mon équipe',
     description: 'Attaques, traits et sub-stats de chaque Pokémon.',
     pied: (compte) => `${compte.roster.length} Pokémon`,
-    // L'écran de détail reste à écrire : mieux vaut l'annoncer que renvoyer
-    // le joueur au menu sans explication.
-    verrou: () => 'Bientôt',
+
   },
   {
     id: 'invocation',

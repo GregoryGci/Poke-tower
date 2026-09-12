@@ -19,6 +19,7 @@ import { createShowcase } from '@/render/showcase';
 import { demanderStarter } from '@/ui/starter-screen';
 import { ouvrirMenu } from '@/ui/menu';
 import { afficherBilan } from '@/ui/result';
+import { ouvrirEquipe } from '@/ui/team';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
@@ -180,6 +181,11 @@ for (;;) {
 
   if (destination === 'histoire') {
     await jouerManche();
+    continue;
+  }
+
+  if (destination === 'equipe') {
+    await ouvrirEquipe(account.account);
     continue;
   }
 
