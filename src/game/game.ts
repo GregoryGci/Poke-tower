@@ -57,6 +57,8 @@ const MAX_PROJECTILES = 512;
 const CROWD_CAPACITY = 128;
 /** Durée d'un appât, en ticks. */
 const LURE_TICKS = 90;
+/** Ennemis qu'on peut laisser passer avant de perdre la manche. */
+const VIES = 10;
 
 /**
  * Les modèles Bedrock sont sculptés face à -Z, alors que `atan2(dx, dz)`
@@ -87,6 +89,9 @@ const LEVEL_PATH = new EnemyPath([
   { x: 15, z: -6 },
 ]);
 
+/** Issue de la manche. Tant qu'elle est en cours, rien ne se decide. */
+export type Outcome = 'en_cours' | 'victoire' | 'defaite';
+
 export interface GameStatus {
   wave: number;
   totalWaves: number;
@@ -95,6 +100,9 @@ export interface GameStatus {
   crystals: number;
   placed: number;
   drawCalls: number;
+  /** Points de vie restants de la tour. */
+  lives: number;
+  outcome: Outcome;
   /** Le joueur a-t-il déjà déplacé son dresseur ? */
   trainerMoved: boolean;
   lures: number;
@@ -254,6 +262,14 @@ export class Game {
     return game;
   }
 
+  private get outcome(): Outcome {
+    if (this.leaked >= VIES) return 'defaite';
+    // Victoire seulement une fois le terrain vide : une vague epuisee dont les
+    // derniers ennemis marchent encore n'est pas gagnee.
+    if (this.waves.done && this.enemies.activeCount === 0) return 'victoire';
+    return 'en_cours';
+  }
+
   get status(): GameStatus {
     return {
       wave: this.waves.currentWave,
@@ -262,6 +278,8 @@ export class Game {
       leaked: this.leaked,
       crystals: this.crystals,
       placed: this.towers.length,
+      lives: Math.max(0, VIES - this.leaked),
+      outcome: this.outcome,
       trainerMoved: this.trainerMoved,
       lures: this.lures,
       // Une foule par espèce visible, plus les projectiles et le décor.

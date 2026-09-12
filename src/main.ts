@@ -18,6 +18,7 @@ import { createStage } from '@/render/scene';
 import { createShowcase } from '@/render/showcase';
 import { demanderStarter } from '@/ui/starter-screen';
 import { ouvrirMenu } from '@/ui/menu';
+import { afficherBilan } from '@/ui/result';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
@@ -86,7 +87,7 @@ async function jouerManche(): Promise<void> {
   const game = await Game.create(stage.scene, stage.camera, input, rosterSpecies);
 
   let selectionActive = false;
-  let quitter: (() => void) | null = null;
+  let terminer: ((abandon: boolean) => void) | null = null;
 
   const hud = new Hud(container!, {
     onSelection(owned) {
@@ -94,7 +95,7 @@ async function jouerManche(): Promise<void> {
       game.pendingPlacement = owned;
     },
     onQuit() {
-      quitter?.();
+      terminer?.(true);
     },
   });
   hud.setRoster(account.account.roster);
@@ -122,6 +123,7 @@ async function jouerManche(): Promise<void> {
       tutorial?.update(dt, { status: game.status, selection: selectionActive });
 
       const status = game.status;
+      if (status.outcome !== 'en_cours') terminer?.(false);
       if (status.crystals !== lastCrystals) {
         lastCrystals = status.crystals;
         account.account.crystals = status.crystals;
@@ -141,15 +143,28 @@ async function jouerManche(): Promise<void> {
 
   loop.start();
 
-  await new Promise<void>((resolve) => {
-    quitter = resolve;
+  const abandon = await new Promise<boolean>((resolve) => {
+    terminer = resolve;
   });
 
+  // On fige la simulation avant de lire le bilan : sans cela, les compteurs
+  // continueraient d'avancer pendant que le joueur lit son résultat.
   loop.stop();
+  const bilanFinal = game.status;
   hud.dispose();
   tutorial?.dispose();
+
+  // La scène reste affichée derrière le bilan : le joueur voit où en était le
+  // terrain au moment où tout s'est joué.
+  if (!abandon) await afficherBilan(bilanFinal);
+
   game.dispose();
   input.reset();
+
+  // Une manche gagnée fait progresser l'histoire.
+  if (bilanFinal.outcome === 'victoire') {
+    account.account.progression.storyLevel += 1;
+  }
   await account.flush();
 }
 

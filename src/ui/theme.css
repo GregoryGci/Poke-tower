@@ -735,3 +735,77 @@
   .menu-grille { grid-template-columns: 1fr; }
   .destination.principale { grid-row: auto; min-height: 128px; }
 }
+
+/* ---------- Bilan de fin de manche ---------- */
+
+.bilan {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(247, 248, 246, 0.82);
+  backdrop-filter: blur(8px);
+  font-family: var(--ui);
+  color: var(--encre);
+  z-index: 10;
+  animation: apparition 0.4s ease both;
+}
+
+.bilan-carte {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 30px 32px;
+  background: var(--blanc);
+  border: 1px solid var(--ligne);
+  border-radius: 18px;
+  box-shadow: var(--ombre-portee);
+  text-align: center;
+  animation: bilan-entree 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.bilan-titre {
+  font-family: var(--titre);
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  margin: 6px 0 0;
+}
+
+.bilan[data-issue='defaite'] .bilan-titre { color: #b4432f; }
+.bilan[data-issue='victoire'] .bilan-titre { color: var(--emeraude); }
+
+.bilan-sous { font-size: 14px; color: var(--gris); line-height: 1.5; margin: 0; }
+
+.bilan-chiffres {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--ligne);
+  border: 1px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  overflow: hidden;
+}
+
+.bilan-chiffre {
+  background: var(--blanc);
+  padding: 13px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bilan-chiffre b {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes bilan-entree {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}

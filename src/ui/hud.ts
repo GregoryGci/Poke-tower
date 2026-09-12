@@ -49,7 +49,7 @@ export class Hud {
   private readonly vagueJauge = elem('i');
 
   private readonly restants = mesure('Sur le terrain');
-  private readonly passes = mesure('Passés');
+  private readonly vies = mesure('Vies');
   private readonly cristaux = mesure('Cristaux');
   private readonly appels = mesure('Draw calls');
 
@@ -72,12 +72,12 @@ export class Hud {
     const gauche = elem('div', 'panneau');
     gauche.append(vague, elem('div', 'separateur'), this.restants.bloc);
 
-    this.passes.bloc.classList.add('alerte');
+
     const droite = elem('div', 'panneau');
     droite.append(
       this.cristaux.bloc,
       elem('div', 'separateur'),
-      this.passes.bloc,
+      this.vies.bloc,
       elem('div', 'separateur'),
       this.appels.bloc
     );
@@ -154,12 +154,12 @@ export class Hud {
     this.vagueJauge.style.width = `${Math.min(100, avancee * 100)}%`;
 
     this.restants.valeur.textContent = String(status.alive);
-    this.passes.valeur.textContent = String(status.leaked);
+    this.vies.valeur.textContent = String(status.lives);
     this.cristaux.valeur.textContent = String(status.crystals);
     this.appels.valeur.textContent = String(status.drawCalls);
 
-    // Le compteur de fuites ne s'alarme qu'une fois qu'il y a matière.
-    this.passes.bloc.classList.toggle('alerte', status.leaked > 0);
+    // Le compteur ne s'alarme qu'une fois la tour reellement menacee.
+    this.vies.bloc.classList.toggle('alerte', status.lives <= 3);
 
     if (status.message) {
       this.message.textContent = status.message;
