@@ -219,6 +219,16 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
   game.dispose();
   input.reset();
 
+  // Le tutoriel est fini dès qu'on en a vu le bout, gagné ou perdu.
+  //
+  // Le drapeau était laissé au module de consignes, qui ne le lève qu'une fois
+  // tous ses gestes accomplis : à vitesse ×3 la manche se terminait avant, le
+  // tutoriel n'était jamais marqué, et « Défendre la tour » le relançait
+  // indéfiniment — la campagne devenait inatteignable.
+  if (tutoriel && !abandon) {
+    account.account.progression.tutorialDone = true;
+  }
+
   // Une manche gagnée marque le niveau et ouvre le suivant. Rejouer un
   // niveau déjà fait ne repousse donc pas la frontière — c'est le seul moyen
   // de laisser farmer les niveaux faciles sans casser la progression.
