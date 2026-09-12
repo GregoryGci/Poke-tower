@@ -18,15 +18,10 @@
  */
 
 import { Object3D } from 'three';
-import type { Move, OwnedPokemon, Species } from '@/data/types';
+import type { Move, OwnedPokemon, PokemonType, Species } from '@/data/types';
 import { RARITY_MULTIPLIER, STYLES, type StyleProfil } from '@/data/types';
 import { statsEffectives } from '@/data/stats';
-import {
-  CADENCE_ULTIME,
-  PALIER_MAX,
-  especeAuPalier,
-  multiplicateurPalier,
-} from '@/data/paliers';
+import { CADENCE_ULTIME, PALIER_MAX, multiplicateurPalier } from '@/data/paliers';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -187,17 +182,15 @@ export class Tower {
   /**
    * Monte d'un palier.
    *
-   * Renvoie la nouvelle forme, ou null si le palier maximum est déjà atteint.
-   * La forme peut être identique à la précédente : trois espèces n'ont qu'une
-   * seule évolution, et leur dernier palier ne change donc pas de silhouette
-   * — il rapporte le gain de stats et l'ultime.
+   * L'espèce ne change pas : évoluer se mérite à l'expérience, et c'est
+   * définitif (voir data/evolution.ts). Le palier rapporte de la puissance
+   * pour la manche en cours, et l'ultime au dernier cran.
    */
-  monterPalier(): Species | null {
-    if (this.palier >= PALIER_MAX) return null;
+  monterPalier(): boolean {
+    if (this.palier >= PALIER_MAX) return false;
     this.palier += 1;
-    this.species = especeAuPalier(this.owned.speciesId, this.palier);
     this.recalculer();
-    return this.species;
+    return true;
   }
 
   /* ---------- Lecture pour l'interface ---------- */
@@ -356,6 +349,19 @@ export class Tower {
       degats: attaque.degats,
       ultime: attaque === this.ultime,
     };
+  }
+
+  /**
+   * Type de l'attaque qui partira au prochain tir.
+   *
+   * Sert à annoncer l'efficacité avant qu'elle ne s'applique : c'est ce qui
+   * permet au joueur de comprendre pourquoi son Salamèche ne fait rien contre
+   * un Racaillou, sans attendre de lire un chiffre de dégâts.
+   */
+  get typeEnJeu(): PokemonType {
+    return this.ultimeDebloque && this.ultime.timer <= 0
+      ? this.ultime.move.type
+      : this.auto.move.type;
   }
 
   private outOfRange(enemy: Enemy): boolean {

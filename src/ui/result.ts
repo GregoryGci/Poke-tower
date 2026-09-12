@@ -13,7 +13,10 @@
 import { getSpecies } from '@/data/content';
 import { STYLES, ajouterXp, xpRequise, type OwnedPokemon, type PlayerAccount } from '@/data/types';
 import { ARME_OWNER, type GameStatus, type RapportManche } from '@/game/game';
+import { evoluerSiPossible } from '@/data/evolution';
+import { ajouterBonbons, bonbonsDeManche, getBonbon } from '@/data/bonbons';
 import { pastillePokemon } from './pastille';
+import { alerterEvolution } from './evolution-annonce';
 import { ecrire } from './typewriter';
 
 /** Expérience versée par point de dégât infligé. */
@@ -44,6 +47,14 @@ interface GainPokemon {
   kills: number;
   xp: number;
   niveauxPris: number;
+  /**
+   * Formes traversées si le Pokémon a évolué pendant ce bilan.
+   *
+   * L'évolution est appliquée au moment où l'expérience est versée, mais
+   * annoncée **après** le bilan : couper l'écran de résultat par une fenêtre
+   * modale au milieu de l'animation des barres serait illisible.
+   */
+  evolutions: string[];
   /** État d'avant la manche : c'est de là que part l'animation. */
   niveauAvant: number;
   xpAvant: number;
@@ -72,12 +83,16 @@ function distribuerXp(
     const niveauAvant = owned.level;
     const xpAvant = owned.xp;
     const niveauxPris = ajouterXp(owned, xp);
+    // L'évolution se déclenche ici, dans la foulée du gain : c'est le même
+    // événement pour le joueur, ça doit être la même opération.
+    const evolutions = evoluerSiPossible(owned).map((espece) => espece.name);
     gains.push({
       owned,
       degats: contribution.degats,
       kills: contribution.kills,
       xp,
       niveauxPris,
+      evolutions,
       niveauAvant,
       xpAvant,
     });
@@ -94,6 +109,7 @@ function distribuerXp(
  */
 function ligneGain(gain: GainPokemon, retard: number): HTMLDivElement {
   const species = getSpecies(gain.owned.speciesId);
+  void species;
   const ligne = elem('div', 'gain');
 
   const pastille = pastillePokemon(species.id);
@@ -264,10 +280,25 @@ export function afficherBilan(
   const victoire = status.outcome === 'victoire';
   const gains = distribuerXp(compte, rapport, victoire);
 
+  // Les bonbons tombent sur une victoire. Ils sont le seul moyen de faire
+  // progresser un Pokémon qu'on n'emmène pas : sans eux, un exemplaire gardé
+  // de côté n'évoluerait jamais.
+  const bonbonsGagnes = bonbonsDeManche(status.wave, victoire).map((drop) => {
+    ajouterBonbons(compte, drop.id, drop.quantite);
+    return { modele: getBonbon(drop.id), quantite: drop.quantite };
+  });
+
   const racine = elem('div', 'bilan');
   racine.dataset['issue'] = status.outcome;
 
   const carte = elem('div', 'bilan-carte');
+
+  // Le butin se lit d'une ligne : « Bonbon ×2 · Super Bonbon ». Une section
+  // entière pour un ou deux objets aurait alourdi un écran déjà chargé.
+  const ligneButin = bonbonsGagnes
+    .filter((entree) => entree.modele)
+    .map((entree) => `${entree.modele!.name}${entree.quantite > 1 ? ` ×${entree.quantite}` : ''}`)
+    .join(' · ');
 
   const entete = elem('div');
   entete.append(
@@ -318,6 +349,13 @@ export function afficherBilan(
   const lot = elem('div', 'butin-lot');
   lot.append(elem('span', 'butin-icone', '◆'), elem('span', undefined, `${status.crystals} cristaux`));
   butin.appendChild(lot);
+  // Les bonbons rejoignent le butin existant : deux sections « Butin » sur
+  // le meme ecran n'auraient rien clarifie.
+  if (ligneButin) {
+    const lotBonbons = elem('div', 'butin-lot');
+    lotBonbons.append(elem('span', 'butin-icone', '🍬'), elem('span', undefined, ligneButin));
+    butin.appendChild(lotBonbons);
+  }
   vueEquipe.appendChild(butin);
 
   const vueDegats = panneauDegats(rapport);
@@ -348,8 +386,19 @@ export function afficherBilan(
       racine.style.opacity = '0';
       setTimeout(() => {
         racine.remove();
-        resolve();
+        // Les évolutions sont annoncées une fois le bilan refermé : elles
+        // méritent l'écran pour elles, et une modale par-dessus les barres
+        // d'expérience en train de se remplir n'aurait rien montré du tout.
+        void annoncerEvolutions(gains).then(resolve);
       }, 200);
     });
   });
+}
+
+/** Enchaîne les annonces, un Pokémon après l'autre. */
+async function annoncerEvolutions(gains: readonly GainPokemon[]): Promise<void> {
+  for (const gain of gains) {
+    if (!gain.evolutions.length) continue;
+    await alerterEvolution(gain.evolutions);
+  }
 }

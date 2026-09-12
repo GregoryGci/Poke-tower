@@ -10,6 +10,7 @@
  */
 
 import { getSpecies } from '@/data/content';
+import { classeAffinite, libelleAffinite } from '@/data/affinites';
 import { pastillePokemon } from './pastille';
 import type { GameStatus, SelectionTour, SurvolTour } from '@/game/game';
 import type { OwnedPokemon } from '@/data/types';
@@ -257,9 +258,9 @@ export class Hud {
       this.palierBouton.textContent = 'Au maximum';
       this.palierBouton.disabled = true;
     } else {
-      this.palierSuite.textContent = selection.formeSuivante
-        ? `Évolue en ${selection.formeSuivante}.`
-        : 'Pas d’évolution suivante : gain de stats seul.';
+      // Le palier est une montée en puissance pour la manche en cours, pas
+      // une évolution : celle-ci se gagne à l'expérience et ne s'achète pas.
+      this.palierSuite.textContent = `+30 % de stats, et l’ultime au palier ${selection.palierMax}.`;
       this.palierBouton.textContent = `Monter au palier ${selection.palier + 1} — ${selection.cout} ◈`;
       this.palierBouton.disabled = !selection.abordable;
     }
@@ -269,9 +270,6 @@ export class Hud {
       : `${selection.ultime} — palier ${selection.palierMax}`;
     this.palierUltime.dataset['debloque'] = String(selection.ultimeDebloque);
 
-    // Le modèle est celui de la pré-évolution tant que le .glb n'est pas
-    // converti : mieux vaut l'écrire que laisser croire à un bug d'échelle.
-    this.panneauPalier.dataset['provisoire'] = String(selection.modeleProvisoire);
   }
 
   private construireInfobulle(): void {
@@ -341,11 +339,19 @@ export class Hud {
       : survol.recharge > 0.02
         ? 'Recharge ' + survol.recharge.toFixed(1) + 's / ' + survol.cooldown.toFixed(1) + 's'
         : 'Prêt · ' + survol.cooldown.toFixed(1) + 's par tir';
+    // L'efficacité prime sur « cible en vue » : quand une attaque ne passe
+    // pas, c'est presque toujours le type, et c'est la réponse que le joueur
+    // cherche.
+    const efficacite = survol.affinite === null ? null : libelleAffinite(survol.affinite);
     this.bulleEtat.textContent = survol.enIncantation
       ? 'Incantation'
-      : survol.enAction
-        ? 'Cible en vue'
-        : 'Aucune cible';
+      : efficacite
+        ? efficacite
+        : survol.enAction
+          ? 'Cible en vue'
+          : 'Aucune cible';
+    this.bulleEtat.dataset['affinite'] =
+      survol.affinite === null ? 'neutre' : classeAffinite(survol.affinite);
     this.bulleEtat.dataset['actif'] = String(survol.enAction);
     this.bulleEtat.dataset['cast'] = String(survol.enIncantation);
     this.bulleBilan.textContent =

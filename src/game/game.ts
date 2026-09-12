@@ -54,16 +54,10 @@ import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, especesDuNiveau, vaguesDuNiveau, vaguesTutoriel } from './waves';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
-import type { OwnedPokemon, PokemonType, Species } from '@/data/types';
+import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
-import {
-  PALIER_MAX,
-  PIECES_DEPART,
-  PIECES_KO,
-  PIECES_VAGUE,
-  coutPalier,
-  prochaineForme,
-} from '@/data/paliers';
+import { PALIER_MAX, PIECES_DEPART, PIECES_KO, PIECES_VAGUE, coutPalier } from '@/data/paliers';
+import { affinite } from '@/data/affinites';
 import { statsArme, type StatsArme } from '@/data/weapon-upgrade';
 import type { OwnedWeapon } from '@/data/types';
 import { STYLES } from '@/data/types';
@@ -208,8 +202,6 @@ export interface SelectionTour {
   nom: string;
   palier: number;
   palierMax: number;
-  /** Forme atteinte au palier suivant, ou null si la lignée s'arrête là. */
-  formeSuivante: string | null;
   /** Coût du palier suivant en Poképièces, ou null au maximum. */
   cout: number | null;
   /** Assez de pièces en caisse pour l'acheter. */
@@ -217,8 +209,6 @@ export interface SelectionTour {
   /** Nom de l'ultime, et s'il est déjà utilisable. */
   ultime: string;
   ultimeDebloque: boolean;
-  /** Silhouette provisoire : le .glb de l'évolution n'est pas converti. */
-  modeleProvisoire: boolean;
 }
 
 /**
@@ -247,6 +237,13 @@ export interface SurvolTour {
   portee: number;
   /** Vrai si l'unite tient une cible a portee. */
   enAction: boolean;
+  /**
+   * Efficacité de l'attaque contre la cible tenue, ou null sans cible.
+   *
+   * C'est la réponse à « pourquoi il ne fait rien ? » quand la recharge n'est
+   * pas en cause : le type.
+   */
+  affinite: number | null;
   degatsInfliges: number;
   kills: number;
   /** Palier de manche, et le maximum atteignable. */
@@ -704,6 +701,20 @@ export class Game {
    * Le style decide de qui encaisse : la cible seule, tout un couloir, ou
    * tout ce qui se trouve autour du point d'impact.
    */
+  /**
+   * Dégâts réellement encaissés par un ennemi.
+   *
+   * C'est l'unique endroit où la table des types s'applique. La mettre ici
+   * plutôt qu'au moment du tir n'est pas un détail : une attaque de zone
+   * touche plusieurs espèces d'un coup, et chacune doit encaisser selon ses
+   * propres faiblesses. Calculée au départ, elle aurait figé le multiplicateur
+   * de la première cible pour tout le groupe.
+   */
+  private degatsSur(shot: Projectile, enemy: Enemy): number {
+    if (!shot.moveType) return shot.damage;
+    return shot.damage * affinite(shot.moveType, getSpecies(enemy.speciesId).types);
+  }
+
   private appliquerImpact(shot: Projectile): void {
     const style = shot.style;
     if (!style) return;
@@ -714,8 +725,9 @@ export class Game {
         const dx = enemy.x - shot.x;
         const dz = enemy.z - shot.z;
         if (dx * dx + dz * dz > style.rayon * style.rayon) return;
-        const inflige = Math.min(shot.damage, enemy.hp);
-        this.crediter(shot, inflige, enemy.damage(shot.damage));
+        const degats = this.degatsSur(shot, enemy);
+        const inflige = Math.min(degats, enemy.hp);
+        this.crediter(shot, inflige, enemy.damage(degats));
       });
       return;
     }
@@ -739,15 +751,17 @@ export class Game {
         if (avance < 0 || avance > longueur) return;
         const ecart = Math.abs(rx * -uz + rz * ux);
         if (ecart > style.couloir) return;
-        const inflige = Math.min(shot.damage, enemy.hp);
-        this.crediter(shot, inflige, enemy.damage(shot.damage));
+        const degats = this.degatsSur(shot, enemy);
+        const inflige = Math.min(degats, enemy.hp);
+        this.crediter(shot, inflige, enemy.damage(degats));
       });
       return;
     }
 
     if (shot.target?.active) {
-      const inflige = Math.min(shot.damage, shot.target.hp);
-      this.crediter(shot, inflige, shot.target.damage(shot.damage));
+      const degats = this.degatsSur(shot, shot.target);
+      const inflige = Math.min(degats, shot.target.hp);
+      this.crediter(shot, inflige, shot.target.damage(degats));
     }
   }
 
@@ -1062,18 +1076,15 @@ export class Game {
     if (!tour || !this.towers.includes(tour)) return null;
 
     const cout = coutPalier(tour.palier);
-    const suivante = prochaineForme(tour.owned.speciesId, tour.palier);
     return {
       ownedId: tour.owned.id,
       nom: tour.species.name,
       palier: tour.palier,
       palierMax: PALIER_MAX,
-      formeSuivante: suivante?.name ?? null,
       cout,
       abordable: cout !== null && this.pokepieces >= cout,
       ultime: tour.moveUltime.name,
       ultimeDebloque: tour.ultimeDebloque,
-      modeleProvisoire: tour.species.modeleProvisoire === true,
     };
   }
 
@@ -1098,43 +1109,15 @@ export class Game {
       return false;
     }
 
-    const avant = tour.species;
-    const apres = tour.monterPalier();
-    if (!apres) return false;
+    if (!tour.monterPalier()) return false;
     this.pokepieces -= cout;
 
-    const index = this.towers.indexOf(tour);
-    this.ajusterSilhouette(index, avant, apres);
-
-    if (apres.id !== avant.id) {
-      this.notify(`${avant.name} évolue en ${apres.name} !`);
-    } else {
-      this.notify(`${apres.name} passe au palier ${tour.palier}`);
-    }
-    if (tour.ultimeDebloque) {
-      this.notify(`${apres.name} débloque ${tour.moveUltime.name}`);
-    }
+    this.notify(
+      tour.ultimeDebloque
+        ? `${tour.species.name} débloque ${tour.moveUltime.name}`
+        : `${tour.species.name} passe au palier ${tour.palier}`
+    );
     return true;
-  }
-
-  /**
-   * Met la silhouette à l'échelle de la forme atteinte.
-   *
-   * Le modèle ne change pas : les .glb des évolutions ne sont pas convertis,
-   * et un Grolem s'affiche donc comme un gros Racaillou. C'est une
-   * approximation assumée — la taille est la seule chose qu'on peut rendre
-   * juste sans asset, et une évolution qui ne se verrait pas du tout serait
-   * pire.
-   */
-  private ajusterSilhouette(index: number, avant: Species, apres: Species): void {
-    const tour = this.towers[index];
-    if (!tour?.object) return;
-    const base = getSpecies(tour.owned.speciesId);
-    const facteur = base.height > 0 ? apres.height / base.height : 1;
-    tour.object.scale.setScalar(facteur);
-    // Le cercle de portée suit, sinon il mentirait dès le premier palier.
-    tour.place(tour.x, tour.z);
-    void avant;
   }
 
   /** Le Pokemon pose le plus proche du point donne, dans le rayon de saisie. */
@@ -1181,6 +1164,9 @@ export class Game {
       enIncantation: tower.enIncantation,
       portee: tower.range,
       enAction: tower.target !== null,
+      affinite: tower.target
+        ? affinite(tower.typeEnJeu, getSpecies(tower.target.speciesId).types)
+        : null,
       degatsInfliges: contribution?.degats ?? 0,
       kills: contribution?.kills ?? 0,
       palier: tower.palier,
@@ -1202,7 +1188,9 @@ export class Game {
     this.ghostModel = null;
     if (previous) this.root.remove(previous);
 
-    const { object } = await instantiate(getSpecies(speciesId).model);
+    const espece = getSpecies(speciesId);
+    const { object } = await instantiate(espece.model);
+    if (espece.echelle) object.scale.setScalar(espece.echelle);
     object.traverse((child) => {
       const mesh = child as Mesh;
       if (!mesh.isMesh) return;
@@ -1272,6 +1260,9 @@ export class Game {
     holder.add(base);
 
     const { object, clips } = await instantiate(species.model);
+    // Les modèles Cobblemon sont à l'échelle de Minecraft : Rayquaza y fait
+    // seize blocs de long. Sans ça, il couvrirait la moitié du terrain.
+    if (species.echelle) object.scale.setScalar(species.echelle);
     holder.add(object);
 
     const idleClip = pickClip(clips, 'ground_idle', 'battle_idle', 'ground_walk');

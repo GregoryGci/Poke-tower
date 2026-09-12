@@ -113,28 +113,16 @@ function rebrancherTraits(membre: MembreSauvegarde): [Trait, Trait] {
 /**
  * Espèce sauvegardée, ou une espèce de repli.
  *
- * Une sauvegarde peut désigner une espèce retirée du catalogue — ou, depuis
- * les paliers de manche, un **stade évolué** écrit par erreur. Les stades
- * évolués ne doivent jamais dormir dans un roster : l'évolution est interne
- * à la manche. On redescend donc à la base de la lignée.
+ * Un stade évolué est désormais parfaitement légitime dans un roster :
+ * l'évolution vient de l'expérience et elle est définitive. La version
+ * précédente le rétrogradait à sa forme de base — c'était juste tant que
+ * l'évolution était un achat valable le temps d'une manche, et ça serait
+ * devenu une perte de progression silencieuse.
+ *
+ * Seule une espèce inconnue du catalogue est remplacée.
  */
 function especeDuRoster(speciesId: string | undefined): string {
-  if (!speciesId || !SPECIES[speciesId]) return 'bulbasaur';
-  if (!SPECIES[speciesId]!.modeleProvisoire) return speciesId;
-  const base = Object.values(SPECIES).find(
-    (candidate) => !candidate.modeleProvisoire && estDeLaLignee(candidate.id, speciesId)
-  );
-  return base?.id ?? speciesId;
-}
-
-/** Vrai si `cible` est atteignable depuis `baseId` en suivant les évolutions. */
-function estDeLaLignee(baseId: string, cible: string): boolean {
-  let courante = SPECIES[baseId];
-  while (courante) {
-    if (courante.id === cible) return true;
-    courante = courante.evolution ? SPECIES[courante.evolution] : undefined;
-  }
-  return false;
+  return speciesId && SPECIES[speciesId] ? speciesId : 'bulbasaur';
 }
 
 export function migrate(account: PlayerAccount): PlayerAccount {

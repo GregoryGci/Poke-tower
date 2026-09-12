@@ -15,10 +15,14 @@
  * dans data/upgrades, l'écran ne fait qu'appeler et réafficher.
  */
 
-import { getSpecies, rareteDe } from '@/data/content';
+import { getSpecies, lignee, rareteDe } from '@/data/content';
+import { prochaineEvolution } from '@/data/evolution';
+import { analyseAffinites } from '@/data/affinites';
+import { bonbonsDisponibles, donnerBonbon } from '@/data/bonbons';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
 import { PALIER_MAX } from '@/data/paliers';
+import { alerterEvolution } from './evolution-annonce';
 import { boutonFavori, selecteurTri, trier } from './tri';
 import { pastillePokemon } from './pastille';
 import {
@@ -355,24 +359,101 @@ function remplirDetail(
 
   // --- Lignée
   //
-  // Les paliers s'achètent en manche et rien n'en reste après : la fiche se
-  // contente donc de montrer où mène la lignée, pour qu'on sache ce qu'on
-  // achètera une fois sur le terrain.
-  const lignee = elem('div', 'lignee');
-  let forme: ReturnType<typeof getSpecies> | null = species;
-  for (let palier = 1; palier <= PALIER_MAX && forme; palier++) {
+  // L'évolution vient de l'expérience et elle est définitive : la fiche
+  // montre donc la lignée entière, le stade atteint, et le niveau qui ouvre
+  // le suivant. Savoir qu'il reste quatre niveaux avant Dracaufeu est
+  // exactement ce qui donne envie de dépenser un bonbon.
+  const formes = lignee(owned.speciesId);
+  const stadeCourant = formes.findIndex((forme) => forme.id === owned.speciesId);
+  const blocLignee = elem('div', 'lignee');
+  formes.forEach((forme, rang) => {
     const etape = elem('div', 'lignee-etape');
-    etape.dataset['courant'] = String(palier === 1);
+    etape.dataset['courant'] = String(rang === stadeCourant);
+    etape.dataset['atteint'] = String(rang <= stadeCourant);
+
+    const precedente = formes[rang - 1];
     etape.append(
-      elem('span', 'etiquette', `Palier ${palier}`),
+      elem('span', 'etiquette', `N°${String(forme.dexNumber).padStart(3, '0')}`),
       elem('b', undefined, forme.name)
     );
-    if (forme.modeleProvisoire) {
-      etape.appendChild(elem('span', 'lignee-note', 'modèle provisoire'));
+    if (precedente?.evolution) {
+      etape.appendChild(
+        elem('span', 'lignee-niveau', `niveau ${precedente.evolution.niveau}`)
+      );
     }
-    lignee.appendChild(etape);
-    forme = forme.evolution ? getSpecies(forme.evolution) : null;
+    blocLignee.appendChild(etape);
+  });
+
+  const suite = prochaineEvolution(owned);
+  const noteLignee = elem(
+    'span',
+    'bloc-note',
+    suite
+      ? suite.restant > 0
+        ? `${suite.espece.name} dans ${suite.restant} niveau${suite.restant > 1 ? 'x' : ''}`
+        : `Évolue en ${suite.espece.name} au prochain gain`
+      : 'Lignée terminée'
+  );
+
+  // --- Bonbons
+  //
+  // L'expérience ne vient plus seulement des manches : les bonbons en
+  // donnent d'un coup, et c'est le seul moyen de pousser un Pokémon qu'on
+  // n'emmène pas au combat. Ils tombent en fin de manche.
+  const bonbons = elem('div', 'bonbons');
+  const disponibles = bonbonsDisponibles(compte);
+  if (!disponibles.length) {
+    bonbons.appendChild(
+      elem('p', 'affinites-vide', 'Aucun bonbon. Il en tombe à la fin des manches.')
+    );
   }
+  for (const { item, modele } of disponibles) {
+    const bouton = elem('button', 'bonbon');
+    bouton.type = 'button';
+    bouton.id = `bonbon-${modele.id}`;
+    const gauche = elem('div');
+    gauche.append(
+      elem('b', undefined, modele.name),
+      elem('span', 'lignee-niveau', ` +${modele.xp} XP`)
+    );
+    bouton.append(gauche, elem('span', 'bonbon-quantite', `×${item.quantity}`));
+    bouton.addEventListener('click', () => {
+      const gain = donnerBonbon(compte, owned, modele.id);
+      if (!gain.ok) return;
+      if (gain.evolutions.length) {
+        // Une évolution est un événement : on le dit, plutôt que de laisser
+        // le joueur découvrir que sa fiche a changé de nom.
+        surChangement();
+        alerterEvolution(gain.evolutions.map((e) => e.name));
+        return;
+      }
+      surChangement();
+    });
+    bonbons.appendChild(bouton);
+  }
+
+  // --- Affinités
+  //
+  // La table des types décide de la moitié des dégâts du jeu : elle doit être
+  // consultable sur la fiche, pas seulement subie sur le terrain.
+  const affinites = elem('div', 'affinites');
+  const faiblesses = analyseAffinites(species.types);
+  const rangeeAffinite = (titre: string, types: readonly string[]): void => {
+    const ligne = elem('div', 'affinites-ligne');
+    ligne.appendChild(elem('span', 'etiquette', titre));
+    if (!types.length) {
+      ligne.appendChild(elem('span', 'affinites-vide', '—'));
+    }
+    for (const type of types) {
+      const puce = elem('span', 'type', type);
+      puce.dataset['type'] = type;
+      ligne.appendChild(puce);
+    }
+    affinites.appendChild(ligne);
+  };
+  rangeeAffinite('Faible contre', faiblesses.faiblesses);
+  rangeeAffinite('Résiste à', faiblesses.resistances);
+  rangeeAffinite('Immunisé à', faiblesses.immunites);
 
   panneau.append(
     tete,
@@ -381,7 +462,9 @@ function remplirDetail(
     bloc('Traits', traits, relancerTraits),
     bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
     bloc('Stats réelles', base),
-    bloc('Lignée — paliers achetés en manche', lignee)
+    bloc('Affinités — ce qu’il encaisse', affinites),
+    bloc('Lignée', blocLignee, noteLignee),
+    bloc('Bonbons', bonbons)
   );
 }
 

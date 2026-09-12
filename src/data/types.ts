@@ -143,18 +143,26 @@ export interface Species {
   style: AttackStyle;
   /** Auto-attaques réellement apprenables par l'espèce. */
   movepool: string[];
-  /** Espèce suivante de la lignée, atteinte par un palier en manche. */
-  evolution: string | null;
+  /**
+   * Stade suivant de la lignée, et le niveau auquel on y passe.
+   *
+   * L'évolution est **acquise et définitive** : elle vient de l'expérience,
+   * comme dans les jeux d'origine, et non d'un achat en cours de manche. Un
+   * Pokémon évolué le reste.
+   */
+  evolution: { into: string; niveau: number } | null;
   /** Nom du fichier .glb dans public/models, sans extension. */
   model: string;
   /**
-   * Vrai quand le .glb est celui de la pré-évolution.
+   * Facteur de taille appliqué au modèle.
    *
-   * Les modèles des évolutions ne sont pas convertis : la lignée existe en
-   * données et en règles, pas encore en assets. Autant le dire ici que de
-   * laisser croire que le rendu est juste.
+   * Les modèles Cobblemon sont à l'échelle de Minecraft, où un Rayquaza fait
+   * seize blocs de long. Sur un terrain de trente-quatre unités, il en
+   * couvrait la moitié. C'est une donnée de l'espèce, pas un correctif
+   * d'affichage : la hauteur de sa barre de vie et sa silhouette au sol en
+   * dépendent toutes les deux.
    */
-  modeleProvisoire?: boolean;
+  echelle?: number;
   /** Hauteur approximative, pour poser la barre de vie au-dessus. */
   height: number;
 }
@@ -163,11 +171,18 @@ export interface Species {
 /**
  * Experience necessaire pour quitter ce niveau.
  *
- * Courbe volontairement douce au debut : les premiers niveaux doivent tomber
- * en une manche ou deux, pour que la progression se voie tout de suite.
+ * Courbe volontairement douce, et **recalibree** quand l evolution est passee
+ * du cote de l experience. L ancienne (40 x n^1.45) demandait 13 456 XP pour
+ * atteindre le niveau 16, soit une cinquantaine de manches pour la premiere
+ * evolution d un starter, et plus de quatre cents pour la seconde : a ce
+ * rythme, personne n aurait jamais vu un Dracaufeu.
+ *
+ * Mesure avec la courbe actuelle, a 250 XP par manche : niveau 16 en une
+ * dizaine de manches, niveau 36 en une soixantaine. Les bonbons raccourcissent
+ * les deux.
  */
 export function xpRequise(niveau: number): number {
-  return Math.round(40 * Math.pow(niveau, 1.45));
+  return Math.round(14 * Math.pow(niveau, 1.2));
 }
 
 /** Applique un gain d'experience et retourne les niveaux pris. */

@@ -246,8 +246,25 @@ function evaluateNode(node, context) {
     }
     case 'call': {
       const fn = FUNCTIONS[node.name];
-      if (!fn) throw new Error(`Fonction Molang non gérée : ${node.name}`);
-      return fn(...node.args.map((arg) => evaluateNode(arg, context)));
+      if (fn) return fn(...node.args.map((arg) => evaluateNode(arg, context)));
+
+      // Les requêtes d'état sont appelées comme des fonctions : Cobblemon
+      // écrit `q.r.yaw_change(0)`, `q.r.velocity_y(0)`, `q.r.input_forward(0)`.
+      // Ce sont des valeurs **vivantes** de l'entité — de combien elle vient
+      // de tourner, à quelle vitesse elle tombe, ce que le joueur appuie.
+      //
+      // Une animation pré-cuite n'a aucune de ces valeurs, et n'en aura
+      // jamais : on échantillonne une pose au repos, pas une entité en
+      // mouvement. Elles valent donc zéro, exactement comme les variables
+      // inconnues juste au-dessus — c'est bien l'état de repos, pas un
+      // pis-aller. Sans ça, Roucarnage et Braségali échouaient entièrement à
+      // la conversion pour une poignée de termes réactifs.
+      if (node.name.startsWith('query.') || node.name.startsWith('variable.')) return 0;
+
+      // Une fonction `math.*` inconnue reste une erreur : là, c'est le
+      // convertisseur qui est en retard, et le taire donnerait une courbe
+      // fausse sans prévenir.
+      throw new Error(`Fonction Molang non gérée : ${node.name}`);
     }
     case 'unary':
       return node.op === '-' ? -evaluateNode(node.operand, context) : bool(!evaluateNode(node.operand, context));

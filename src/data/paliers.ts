@@ -9,16 +9,16 @@
  * longue — on les met de côté, on les dépense au calme entre deux manches.
  * Les Poképièces sont une décision prise sous pression, pendant qu'une vague
  * arrive : monter un Pokémon maintenant, ou garder de quoi en monter un autre
- * plus tard. Mélanger les deux monnaies aurait fait de la manche une simple
- * boutique de plus.
+ * plus tard.
  *
- * Monter un palier fait **évoluer** le Pokémon quand sa lignée le permet, et
- * le palier 3 débloque son ultime. La forme évoluée ne survit pas à la
- * manche : la fiche du Pokémon possédé n'est jamais touchée.
+ * Les paliers **ne font plus évoluer** : l'évolution est passée du côté de
+ * l'expérience, où elle est définitive (voir data/evolution.ts). Une évolution
+ * qui s'effaçait à la fin de la manche n'en était pas une. Il reste donc ici
+ * ce qui doit rester temporaire — un gain de stats, et le déverrouillage de
+ * l'ultime.
  */
 
-import { getSpecies } from './content';
-import type { Rarity, Species } from './types';
+import type { Rarity } from './types';
 
 /** Un Pokémon posé démarre au palier 1 et peut monter jusque-là. */
 export const PALIER_MAX = 3;
@@ -50,12 +50,11 @@ export function coutPalier(palierCourant: number): number | null {
 /**
  * Gain de stats apporté par les paliers.
  *
- * Il s'ajoute à l'évolution au lieu de la remplacer : les trois espèces qui
- * n'ont qu'une seule évolution (Rattata, Zigzaton, Medhyèna) verraient sinon
- * leur dernier palier ne rien faire du tout côté puissance.
+ * Plus généreux depuis que le palier ne fait plus évoluer : c'est désormais
+ * tout ce qu'il rapporte côté puissance, avec l'ultime.
  */
 export function multiplicateurPalier(palier: number): number {
-  return 1 + 0.18 * (Math.max(1, Math.min(PALIER_MAX, palier)) - 1);
+  return 1 + 0.3 * (Math.max(1, Math.min(PALIER_MAX, palier)) - 1);
 }
 
 /**
@@ -73,25 +72,3 @@ export const CADENCE_ULTIME: Record<Rarity, number> = {
   legendaire: 0.68,
   prismatique: 0.58,
 };
-
-/**
- * Espèce atteinte à un palier donné.
- *
- * Le palier 1 est la forme de base, et chaque palier suivant avance d'un
- * stade dans la lignée — tant qu'il y en a un.
- */
-export function especeAuPalier(speciesId: string, palier: number): Species {
-  let courante = getSpecies(speciesId);
-  for (let rang = 1; rang < Math.max(1, palier); rang++) {
-    if (!courante.evolution) break;
-    courante = getSpecies(courante.evolution);
-  }
-  return courante;
-}
-
-/** Nom de la forme atteinte au palier suivant, ou null si la lignée s'arrête. */
-export function prochaineForme(speciesId: string, palier: number): Species | null {
-  if (palier >= PALIER_MAX) return null;
-  const courante = especeAuPalier(speciesId, palier);
-  return courante.evolution ? getSpecies(courante.evolution) : null;
-}
