@@ -5,12 +5,18 @@
 
 import { Vector2 } from 'three';
 
+/**
+ * Déplacement du dresseur : ZQSD et les flèches, rien d'autre.
+ *
+ * W et A ont été retirés. Ils doublaient Z et Q pour les claviers QWERTY,
+ * mais A est désormais une commande de caméra : sur AZERTY, faire pivoter la
+ * vue déplaçait donc le dresseur vers la gauche en même temps.
+ */
 const KEY_AXES: Record<string, [number, number]> = {
-  KeyW: [0, -1], ArrowUp: [0, -1],
+  KeyZ: [0, -1], ArrowUp: [0, -1],
   KeyS: [0, 1], ArrowDown: [0, 1],
-  KeyA: [-1, 0], ArrowLeft: [-1, 0],
+  KeyQ: [-1, 0], ArrowLeft: [-1, 0],
   KeyD: [1, 0], ArrowRight: [1, 0],
-  KeyZ: [0, -1], KeyQ: [-1, 0], // clavier AZERTY
 };
 
 export class InputState {

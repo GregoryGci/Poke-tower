@@ -112,13 +112,16 @@ function construireFleches(path: EnemyPath): Group {
     path.direction(distance, direction);
 
     const fleche = new Mesh(new ConeGeometry(0.42, 1.05, 3), materiau);
-    // Le cone pointe vers +Y : on le couche, puis on l'oriente sur le chemin.
+    // Le cone pointe vers +Y : couché par la rotation en X, sa pointe regarde
+    // donc -Z, et non +Z. Une rotation de atan2(dx, dz) l'envoyait alors
+    // exactement à l'opposé du sens de marche — les flèches montraient d'où
+    // les ennemis venaient, pas où ils allaient. D'où les signes inversés.
     fleche.rotation.x = -Math.PI / 2;
     fleche.rotation.y = 0;
     const support = new Group();
     support.add(fleche);
     support.position.set(point.x, 0.06, point.y);
-    support.rotation.y = Math.atan2(direction.x, direction.y);
+    support.rotation.y = Math.atan2(-direction.x, -direction.y);
     fleches.add(support);
   }
 

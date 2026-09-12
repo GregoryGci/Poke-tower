@@ -84,7 +84,7 @@ async function choisirStarter(): Promise<void> {
   showcase.dispose();
 
   // Le starter choisi ouvre le roster ; le reste viendra du gacha.
-  account.account.roster.push(createPokemon(choix.speciesId, 'normal'));
+  account.account.roster.push(createPokemon(choix.speciesId));
   account.account.starterId = choix.speciesId;
   account.account.team = account.account.roster.map((membre) => membre.id);
 
@@ -142,6 +142,12 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
     onSpeed(multiplicateur) {
       loop.speed = multiplicateur;
     },
+    onPalier() {
+      game.monterPalierSelection();
+    },
+    onFermerSelection() {
+      game.deselectionner();
+    },
   });
   hud.setRoster(equipe);
 
@@ -162,6 +168,7 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
       });
 
   let lastCrystals = 0;
+  let derniereImage = performance.now();
 
   const loop = new GameLoop({
     update(dt) {
@@ -185,12 +192,20 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean): Promise<void> {
     },
     render(alpha) {
       game.render(alpha);
+      // La caméra avance sur le temps réel, pas sur le pas de simulation :
+      // à vitesse ×3 la boucle fait trois pas par image, et amortir sur ces
+      // pas-là ferait tourner la vue trois fois plus vite que la main du
+      // joueur ne le demande.
+      const maintenant = performance.now();
+      const dtCamera = Math.min(0.1, (maintenant - derniereImage) / 1000);
+      derniereImage = maintenant;
+      stage.avancer(dtCamera);
       // La camera colle au dresseur, sauf si le joueur l a saisie.
       // Bouger le dresseur recolle la camera : lacher le suivi pour regarder
       // ailleurs est utile, mais devoir appuyer sur une touche pour le reprendre
       // alors qu on vient de se deplacer ne l est pas.
       if (game.dresseurEnMouvement && !stage.suit) stage.reprendreSuivi();
-      stage.suivre(game.positionDresseur, 1 / 60);
+      stage.suivre(game.positionDresseur, dtCamera);
       stage.renderer.render(stage.scene, stage.camera);
       hud.update(game.status);
       hud.afficherSurvol(game.survol);

@@ -1,15 +1,32 @@
 /**
- * Pokémon posé : cherche une cible dans sa portée et tire.
+ * Pokémon posé : cherche une cible dans sa portée et frappe.
  *
  * La portée est propre à l'espèce, modifiée par les traits. Le placement est
  * libre sur le terrain, seule la route est interdite — c'est le `PlacementRules`
  * du module de jeu qui tranche, pas cette classe.
+ *
+ * Deux attaques, deux emplois :
+ *
+ *  - l'**auto-attaque** tourne en boucle et fait le travail de fond ;
+ *  - l'**ultime**, débloqué au palier 3, frappe beaucoup plus fort mais met
+ *    plusieurs secondes à revenir. La tour le lance dès qu'il est prêt, et
+ *    retombe sur son auto-attaque le reste du temps.
+ *
+ * Les **paliers** s'achètent en manche, en Poképièces. Ils font évoluer le
+ * Pokémon — l'exemplaire possédé n'est jamais modifié, seule la tour change
+ * de forme le temps de la partie.
  */
 
 import { Object3D } from 'three';
 import type { Move, OwnedPokemon, Species } from '@/data/types';
 import { RARITY_MULTIPLIER, STYLES, type StyleProfil } from '@/data/types';
 import { statsEffectives } from '@/data/stats';
+import {
+  CADENCE_ULTIME,
+  PALIER_MAX,
+  especeAuPalier,
+  multiplicateurPalier,
+} from '@/data/paliers';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -32,29 +49,29 @@ const FACTEUR_DEGATS = 0.3;
  */
 const STAT_REFERENCE = 50;
 
-/** Retient l'attaque au meilleur rendement, en ignorant les attaques de statut. */
-function choisirAttaque(owned: OwnedPokemon): Move {
-  const offensives = owned.moves.filter((candidat) => candidat.power > 0);
-  const pool = offensives.length ? offensives : owned.moves;
-  return pool.reduce((meilleure, candidat) =>
-    candidat.power / candidat.cooldown > meilleure.power / meilleure.cooldown ? candidat : meilleure
-  );
-}
-
 /**
  * Ce qu'une tour décide sur un tick.
  *
  * Trois issues seulement, et elles sont exclusives : rien, le début d'une
- * incantation, ou le tir. Renvoyer un ennemi nu ne suffisait plus — le jeu
- * doit savoir distinguer « je me prépare » de « je frappe » pour afficher la
- * zone visée pendant la préparation.
+ * incantation, ou le tir. L'attaque employée voyage avec la décision — le jeu
+ * doit savoir si c'est l'ultime qui partait, pour en afficher l'aperçu à la
+ * bonne taille et créditer le bon type de dégâts.
  */
 export type ActionTour =
   | { kind: 'rien' }
-  | { kind: 'cast'; cible: Enemy; duree: number }
-  | { kind: 'tir'; cible: Enemy };
+  | { kind: 'cast'; cible: Enemy; duree: number; move: Move; ultime: boolean }
+  | { kind: 'tir'; cible: Enemy; move: Move; degats: number; ultime: boolean };
 
 const RIEN: ActionTour = { kind: 'rien' };
+
+/** Une attaque, une fois passée par les stats, les traits et le style. */
+interface AttaquePrete {
+  move: Move;
+  degats: number;
+  cooldown: number;
+  cast: number;
+  timer: number;
+}
 
 export class Tower {
   object: Object3D | null = null;
@@ -63,84 +80,91 @@ export class Tower {
 
   x = 0;
   z = 0;
-  range: number;
-  damage: number;
-  cooldown: number;
-  /** Temps d'incantation avant le tir, en secondes. */
-  cast: number;
+  /** Forme courante : elle change quand un palier est acheté. */
+  species: Species;
+  /** Palier de manche, de 1 à PALIER_MAX. Jamais sauvegardé. */
+  palier = 1;
+  range = 0;
   /** Profil de frappe, lu par le jeu pour appliquer les degats. */
-  readonly style: StyleProfil;
-  /** Attaque retenue, pour la répartition par élément du bilan. */
-  readonly move: Move;
-  private timer = 0;
-  /** Temps d'incantation restant. Zéro quand l'unité ne s'incante pas. */
+  style: StyleProfil;
+
+  private auto!: AttaquePrete;
+  private ultime!: AttaquePrete;
+  /** Incantation en cours, et l'attaque qu'elle prépare. */
   private castRestant = 0;
+  private castEnCours: AttaquePrete | null = null;
   target: Enemy | null = null;
-
-  /** Vrai pendant l'incantation : l'unité est engagée, pas encore à l'oeuvre. */
-  get enIncantation(): boolean {
-    return this.castRestant > 0;
-  }
-
-  /** Secondes restantes avant le prochain tir, incantation comprise. */
-  get recharge(): number {
-    return Math.max(0, this.castRestant > 0 ? this.castRestant : this.timer);
-  }
-
-  /**
-   * Part d'attente restante, de 0 (sur le point de frapper) à 1.
-   *
-   * La même jauge sert aux deux temps : pendant l'incantation elle se vide sur
-   * la durée du cast, sinon sur celle de la recharge. Deux jauges distinctes
-   * demanderaient au joueur de savoir laquelle regarder.
-   */
-  get rechargePart(): number {
-    if (this.castRestant > 0) {
-      return this.cast <= 0 ? 0 : Math.min(1, Math.max(0, this.castRestant / this.cast));
-    }
-    return this.cooldown <= 0 ? 0 : Math.min(1, Math.max(0, this.timer / this.cooldown));
-  }
 
   constructor(
     readonly owned: OwnedPokemon,
-    readonly species: Species
+    species: Species
   ) {
-    const rarity = RARITY_MULTIPLIER[owned.rarity];
-    this.range = species.range * (1 + this.traitBonus('range'));
-    // On retient la plus efficace des quatre, pas la premiere : un tirage
-    // pouvait placer une attaque de statut en tete, et l'unite ne faisait alors
-    // aucun degat. La rotation complete du movepool viendra plus tard.
-    const move = choisirAttaque(owned);
-    this.move = move;
+    this.species = species;
     this.style = STYLES[species.style];
+    this.recalculer();
+  }
 
-    // Physique ou special : l'attaque puise dans la stat correspondante.
-    //
-    // Ce sont les stats REELLES, pas celles du Pokedex : niveau, etoiles,
-    // potentiel et paliers de sub-stats y sont deja. Les etoiles ne sont donc
-    // plus appliquees ici — elles l'etaient deux fois dans le calcul
-    // precedent une fois les stats centralisees.
-    const stats = statsEffectives(owned);
+  /* ---------- Dérivés ---------- */
+
+  /**
+   * Recompose tout ce qui dépend de la forme et du palier.
+   *
+   * Appelée à la construction et à chaque palier acheté. Les recharges en
+   * cours sont préservées : monter un palier ne doit pas offrir un tir
+   * gratuit, ni repousser celui qui était presque prêt.
+   */
+  private recalculer(): void {
+    const restantAuto = this.auto?.timer ?? 0;
+    const restantUltime = this.ultime?.timer ?? 0;
+
+    this.style = STYLES[this.species.style];
+    this.range = this.species.range * (1 + this.traitBonus('range'));
+
+    this.auto = this.preparer(this.owned.auto, 1);
+    this.auto.timer = restantAuto;
+    this.ultime = this.preparer(this.owned.ultime, CADENCE_ULTIME[this.species.rarity]);
+    this.ultime.timer = restantUltime;
+  }
+
+  /**
+   * Met une attaque en état de servir.
+   *
+   * Les stats employées sont celles de la **forme courante** : un Grolem
+   * frappe avec le socle de Grolem, pendant que le potentiel, le niveau, les
+   * étoiles et les sub-stats continuent de venir de l'exemplaire possédé.
+   */
+  private preparer(move: Move, cadence: number): AttaquePrete {
+    const rarity = RARITY_MULTIPLIER[this.species.rarity];
+    const stats = statsEffectives(this.owned, this.species.id);
     const puissance = move.category === 'special' ? stats.atkSpe : stats.atk;
     const affinite = puissance / STAT_REFERENCE;
 
-    this.damage =
-      move.power * FACTEUR_DEGATS * affinite * rarity * this.style.degats * (1 + this.traitBonus('stat'));
-    this.cooldown =
-      move.cooldown * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
-    // L'incantation suit la cadence du style : le corps à corps, qui frappe
-    // vite, se prépare vite. Les traits de recharge la raccourcissent aussi —
-    // sinon « Cadence infernale » n'aurait plus d'effet sur les grosses
-    // attaques, qui sont justement celles qui s'incantent.
+    const degats =
+      move.power *
+      FACTEUR_DEGATS *
+      affinite *
+      rarity *
+      this.style.degats *
+      (1 + this.traitBonus('stat')) *
+      multiplicateurPalier(this.palier);
+
+    const reduction = 1 - Math.min(0.6, this.traitBonus('cooldown'));
+    const cooldown = move.cooldown * this.style.cadence * reduction * cadence;
     // `move.cast ?? 0` et non `move.cast` nu : une attaque sauvegardée avant
     // l'arrivée de ce champ donnait `undefined`, donc `NaN` après
     // multiplication. Et comme `NaN <= 0` est faux, l'unité entrait en
     // incantation sans jamais en sortir — plus un seul tir. La sauvegarde est
     // désormais rebranchée sur le catalogue, mais une valeur absente, d'où
     // qu'elle vienne, ne doit plus pouvoir figer un tir.
-    const castBrut =
-      (move.cast ?? 0) * this.style.cadence * (1 - Math.min(0.6, this.traitBonus('cooldown')));
-    this.cast = Number.isFinite(castBrut) ? Math.max(0, castBrut) : 0;
+    const castBrut = (move.cast ?? 0) * this.style.cadence * reduction;
+
+    return {
+      move,
+      degats: Number.isFinite(degats) ? degats : 0,
+      cooldown: Number.isFinite(cooldown) ? Math.max(0.05, cooldown) : 1,
+      cast: Number.isFinite(castBrut) ? Math.max(0, castBrut) : 0,
+      timer: 0,
+    };
   }
 
   private traitBonus(kind: 'stat' | 'range' | 'cooldown'): number {
@@ -153,6 +177,96 @@ export class Tower {
     return total;
   }
 
+  /* ---------- Paliers ---------- */
+
+  /** Vrai quand l'ultime est utilisable : il ne l'est qu'au dernier palier. */
+  get ultimeDebloque(): boolean {
+    return this.palier >= PALIER_MAX;
+  }
+
+  /**
+   * Monte d'un palier.
+   *
+   * Renvoie la nouvelle forme, ou null si le palier maximum est déjà atteint.
+   * La forme peut être identique à la précédente : trois espèces n'ont qu'une
+   * seule évolution, et leur dernier palier ne change donc pas de silhouette
+   * — il rapporte le gain de stats et l'ultime.
+   */
+  monterPalier(): Species | null {
+    if (this.palier >= PALIER_MAX) return null;
+    this.palier += 1;
+    this.species = especeAuPalier(this.owned.speciesId, this.palier);
+    this.recalculer();
+    return this.species;
+  }
+
+  /* ---------- Lecture pour l'interface ---------- */
+
+  /** Attaque affichée sur la fiche : l'ultime quand il est débloqué. */
+  get move(): Move {
+    return this.ultimeDebloque ? this.ultime.move : this.auto.move;
+  }
+
+  get moveAuto(): Move {
+    return this.auto.move;
+  }
+
+  get moveUltime(): Move {
+    return this.ultime.move;
+  }
+
+  /** Dégâts de l'auto-attaque, tous multiplicateurs appliqués. */
+  get damage(): number {
+    return this.auto.degats;
+  }
+
+  get degatsUltime(): number {
+    return this.ultime.degats;
+  }
+
+  get cooldown(): number {
+    return this.auto.cooldown;
+  }
+
+  get cooldownUltime(): number {
+    return this.ultime.cooldown;
+  }
+
+  get cast(): number {
+    return this.auto.cast;
+  }
+
+  /** Vrai pendant l'incantation : l'unité est engagée, pas encore à l'oeuvre. */
+  get enIncantation(): boolean {
+    return this.castRestant > 0;
+  }
+
+  /** Secondes restantes avant l'ultime, ou null s'il n'est pas débloqué. */
+  get rechargeUltime(): number | null {
+    return this.ultimeDebloque ? Math.max(0, this.ultime.timer) : null;
+  }
+
+  /** Secondes restantes avant le prochain tir, incantation comprise. */
+  get recharge(): number {
+    return Math.max(0, this.castRestant > 0 ? this.castRestant : this.auto.timer);
+  }
+
+  /**
+   * Part d'attente restante, de 0 (sur le point de frapper) à 1.
+   *
+   * La même jauge sert aux deux temps : pendant l'incantation elle se vide sur
+   * la durée du cast, sinon sur celle de la recharge. Deux jauges distinctes
+   * demanderaient au joueur de savoir laquelle regarder.
+   */
+  get rechargePart(): number {
+    if (this.castRestant > 0) {
+      const duree = this.castEnCours?.cast ?? 0;
+      return duree <= 0 ? 0 : Math.min(1, Math.max(0, this.castRestant / duree));
+    }
+    const cd = this.auto.cooldown;
+    return cd <= 0 ? 0 : Math.min(1, Math.max(0, this.auto.timer / cd));
+  }
+
   place(x: number, z: number): void {
     this.x = x;
     this.z = z;
@@ -163,6 +277,8 @@ export class Tower {
     }
   }
 
+  /* ---------- Simulation ---------- */
+
   /**
    * Fait avancer l'unité d'un tick.
    *
@@ -171,7 +287,8 @@ export class Tower {
    * n'aurait aucun coût en cadence.
    */
   update(dt: number, enemies: SpatialGrid<Enemy>): ActionTour {
-    this.timer -= dt;
+    this.auto.timer -= dt;
+    this.ultime.timer -= dt;
 
     // On garde la cible tant qu'elle est vivante et à portée : sans ça, la tour
     // change de cible à chaque tick et ne tue jamais rien.
@@ -186,6 +303,7 @@ export class Tower {
       // pas le cast sur le voisin — viser quelqu'un d'autre demande de
       // recommencer, ce qui donne du prix à la survie des gros ennemis.
       this.castRestant = 0;
+      this.castEnCours = null;
     }
     if (!this.target) {
       this.target = enemies.nearest(this.x, this.z, this.range, (e) => e.active);
@@ -195,23 +313,49 @@ export class Tower {
     if (this.castRestant > 0) {
       this.castRestant -= dt;
       if (this.castRestant > 0) return RIEN;
+      const attaque = this.castEnCours;
       this.castRestant = 0;
-      this.timer = this.cooldown;
-      return { kind: 'tir', cible: this.target };
+      this.castEnCours = null;
+      if (!attaque) return RIEN;
+      return this.tirer(attaque);
     }
 
-    if (this.timer > 0) return RIEN;
+    // L'ultime passe devant dès qu'il est prêt : c'est ce qui fait qu'un
+    // palier 3 se voit. Le reste du temps, l'auto-attaque tourne.
+    const attaque = this.prochaineAttaque();
+    if (!attaque) return RIEN;
 
-    // Le test porte sur « strictement positif » plutot que sur « <= 0 » :
-    // ainsi une valeur non numeriquement comparable tombe du bon cote et
-    // l'unite tire, au lieu de rester bloquee en incantation.
-    if (!(this.cast > 0)) {
-      this.timer = this.cooldown;
-      return { kind: 'tir', cible: this.target };
-    }
+    // Le test porte sur « strictement positif » plutôt que sur « <= 0 » :
+    // ainsi une valeur non comparable numériquement tombe du bon côté et
+    // l'unité tire, au lieu de rester bloquée en incantation.
+    if (!(attaque.cast > 0)) return this.tirer(attaque);
 
-    this.castRestant = this.cast;
-    return { kind: 'cast', cible: this.target, duree: this.cast };
+    this.castRestant = attaque.cast;
+    this.castEnCours = attaque;
+    return {
+      kind: 'cast',
+      cible: this.target,
+      duree: attaque.cast,
+      move: attaque.move,
+      ultime: attaque === this.ultime,
+    };
+  }
+
+  private prochaineAttaque(): AttaquePrete | null {
+    if (this.ultimeDebloque && this.ultime.timer <= 0) return this.ultime;
+    if (this.auto.timer <= 0) return this.auto;
+    return null;
+  }
+
+  private tirer(attaque: AttaquePrete): ActionTour {
+    attaque.timer = attaque.cooldown;
+    return {
+      kind: 'tir',
+      cible: this.target!,
+      move: attaque.move,
+      degats: attaque.degats,
+      ultime: attaque === this.ultime,
+    };
   }
 
   private outOfRange(enemy: Enemy): boolean {

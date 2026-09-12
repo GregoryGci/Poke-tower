@@ -9,7 +9,7 @@
  * appliqué, soit rien ne bouge.
  */
 
-import { rollMove, rollMoves, rollTrait, rollTraits } from './roll';
+import { rollAuto, rollTrait, rollTraits, rollUltime } from './roll';
 import {
   ETOILES_MAX,
   ETOILES_MAX_FUSION,
@@ -19,16 +19,16 @@ import {
   type PlayerAccount,
 } from './types';
 
-export const COUT_REROLL_ATTAQUES = 5;
 export const COUT_REROLL_TRAITS = 8;
 /**
- * Relancer une seule case.
+ * Relancer l'auto-attaque, et relancer l'ultime.
  *
- * Plus cher a l'unite que la relance complete rapportee au nombre de cases,
- * et c'est voulu : on paie le droit de **garder** ce qui est bon. Relancer
- * les quatre reste le choix economique quand tout est a jeter.
+ * L'ultime coûte plus cher : il n'a que deux ou trois candidats, donc une
+ * relance a de vraies chances de donner celui qu'on visait, alors qu'une
+ * auto-attaque se tire parmi bien plus.
  */
-export const COUT_REROLL_ATTAQUE_UNITE = 3;
+export const COUT_REROLL_AUTO = 4;
+export const COUT_REROLL_ULTIME = 9;
 export const COUT_REROLL_TRAIT_UNITE = 5;
 /** Monter une sub-stat coûte de plus en plus cher à mesure qu'elle grimpe. */
 export const COUT_SUBSTAT_BASE = 3;
@@ -95,35 +95,28 @@ function debiter(compte: PlayerAccount, cout: number): boolean {
   return true;
 }
 
-export function rerollAttaques(compte: PlayerAccount, owned: OwnedPokemon): Depense {
-  if (!debiter(compte, COUT_REROLL_ATTAQUES)) return { ok: false, raison: 'cristaux' };
-  owned.moves = rollMoves(owned.speciesId, Math.random);
+/**
+ * Relance l'auto-attaque.
+ *
+ * L'attaque portée est exclue du tirage : payer pour retomber sur la même
+ * était la première chose reprochée à l'ancien reroll.
+ */
+export function rerollAuto(compte: PlayerAccount, owned: OwnedPokemon): Depense {
+  if (!debiter(compte, COUT_REROLL_AUTO)) return { ok: false, raison: 'cristaux' };
+  owned.auto = rollAuto(owned.speciesId, [owned.auto.id], Math.random);
+  return { ok: true };
+}
+
+/** Relance l'ultime, celui porté étant exclu du tirage. */
+export function rerollUltime(compte: PlayerAccount, owned: OwnedPokemon): Depense {
+  if (!debiter(compte, COUT_REROLL_ULTIME)) return { ok: false, raison: 'cristaux' };
+  owned.ultime = rollUltime(owned.speciesId, [owned.ultime.id], Math.random);
   return { ok: true };
 }
 
 export function rerollTraits(compte: PlayerAccount, owned: OwnedPokemon): Depense {
   if (!debiter(compte, COUT_REROLL_TRAITS)) return { ok: false, raison: 'cristaux' };
   owned.traits = rollTraits(Math.random);
-  return { ok: true };
-}
-
-/**
- * Relance une seule attaque.
- *
- * Les trois autres sont exclues du tirage : sans cela, relancer une case
- * pouvait rendre le doublon qu'on cherchait justement a supprimer.
- */
-export function rerollAttaque(
-  compte: PlayerAccount,
-  owned: OwnedPokemon,
-  index: number
-): Depense {
-  const actuelle = owned.moves[index];
-  if (!actuelle) return { ok: false, raison: 'maximum' };
-  if (!debiter(compte, COUT_REROLL_ATTAQUE_UNITE)) return { ok: false, raison: 'cristaux' };
-
-  const autres = owned.moves.filter((_, i) => i !== index).map((move) => move.id);
-  owned.moves[index] = rollMove(owned.speciesId, autres, Math.random);
   return { ok: true };
 }
 

@@ -17,7 +17,7 @@
  * l'unité posée, et non à la fiche du Pokémon.
  */
 
-import { getSpecies } from './content';
+import { getSpecies, rareteDe } from './content';
 import {
   STAT_TYPES,
   SUBSTAT_MAX_STACK,
@@ -101,8 +101,20 @@ export interface DetailStat {
  * investissement doit valoir d'autant plus que le Pokémon est déjà bon, sinon
  * monter un prismatique et monter un normal reviennent au même.
  */
-export function detailStat(owned: OwnedPokemon, stat: StatType): DetailStat {
-  const base = getSpecies(owned.speciesId).baseStats[stat];
+export function detailStat(
+  owned: OwnedPokemon,
+  stat: StatType,
+  /**
+   * Espèce à considérer, quand elle diffère de celle de l'exemplaire.
+   *
+   * Les paliers de manche font évoluer un Pokémon posé sans toucher à sa
+   * fiche : le socle de stats doit alors être celui de la forme atteinte,
+   * pendant que tout le reste — potentiel, niveau, étoiles, sub-stats —
+   * continue de venir de l'exemplaire possédé.
+   */
+  speciesId: string = owned.speciesId
+): DetailStat {
+  const base = getSpecies(speciesId).baseStats[stat];
   const potentiel = owned.potentiel?.[stat] ?? 0;
   const etoiles = (multiplicateurEtoiles(owned.stars) - 1) * 100;
   const niveau = CROISSANCE_NIVEAU * Math.max(0, owned.level - 1) * 100;
@@ -119,9 +131,12 @@ export function detailStat(owned: OwnedPokemon, stat: StatType): DetailStat {
 }
 
 /** Toutes les stats réelles d'un exemplaire. */
-export function statsEffectives(owned: OwnedPokemon): BaseStats {
+export function statsEffectives(
+  owned: OwnedPokemon,
+  speciesId: string = owned.speciesId
+): BaseStats {
   const out = {} as BaseStats;
-  for (const stat of STAT_TYPES) out[stat] = detailStat(owned, stat).valeur;
+  for (const stat of STAT_TYPES) out[stat] = detailStat(owned, stat, speciesId).valeur;
   return out;
 }
 
@@ -155,7 +170,7 @@ export const TRIS_POKEMON: ReadonlyArray<{
   {
     id: 'rarete',
     libelle: 'Rareté',
-    comparer: (a, b) => POTENTIEL_MAX[b.rarity] - POTENTIEL_MAX[a.rarity],
+    comparer: (a, b) => POTENTIEL_MAX[rareteDe(b)] - POTENTIEL_MAX[rareteDe(a)],
   },
   {
     id: 'espece',
@@ -172,7 +187,7 @@ export const TRIS_POKEMON: ReadonlyArray<{
  * que le potentiel tiré — pas ce qui a été investi, qui se rattrape toujours.
  */
 export function notePotentiel(owned: OwnedPokemon): number {
-  const plafond = POTENTIEL_MAX[owned.rarity];
+  const plafond = POTENTIEL_MAX[rareteDe(owned)];
   if (plafond <= 0) return 0;
   let somme = 0;
   for (const stat of STAT_TYPES) somme += owned.potentiel?.[stat] ?? 0;

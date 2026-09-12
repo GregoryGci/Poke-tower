@@ -338,6 +338,7 @@
 .hud > * { pointer-events: auto; }
 
 .hud-haut {
+  flex-wrap: wrap;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -599,8 +600,8 @@
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 22px;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
   padding: clamp(26px, 5vh, 56px) clamp(18px, 5vw, 64px);
   box-sizing: border-box;
   background: var(--ivoire);
@@ -610,40 +611,115 @@
   animation: apparition 0.35s ease both;
 }
 
-.menu-haut {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+/* La fiche à gauche, les destinations à droite : on lit où on en est avant
+   de choisir où aller. */
+.menu-corps {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 18px;
+  align-content: start;
+  min-height: 0;
 }
 
-.menu-solde {
+.menu-fiche {
   display: flex;
-  gap: 22px;
-  padding: 12px 20px;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
   background: var(--blanc);
-  border: 1px solid var(--ligne);
-  border-radius: var(--rayon);
-  box-shadow: var(--ombre-douce);
+  align-self: start;
 }
 
-/* Les destinations : une grande carte pour l'action principale, trois petites. */
+.fiche-identite { display: flex; flex-direction: column; gap: 6px; }
+
+.fiche-partenaire {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--gris);
+  margin-top: 4px;
+}
+
+.fiche-soldes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 2px solid var(--ligne-douce);
+  border-bottom: 2px solid var(--ligne-douce);
+}
+
+.fiche-avancee { display: flex; flex-direction: column; gap: 7px; }
+.fiche-avancee .jauge { height: 6px; }
+
+.fiche-commandes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 2px solid var(--ligne-douce);
+}
+
+.commande {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--gris);
+}
+
+.commande kbd {
+  flex: none;
+  min-width: 58px;
+  text-align: center;
+  font: 600 10.5px var(--mono);
+  padding: 4px 6px;
+  color: var(--encre);
+  background: var(--ivoire);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+}
+
+/* Les destinations : une grande carte pour l'action principale, le reste en
+   grille régulière. */
 .menu-grille {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   align-content: start;
+}
+
+.destination.principale { grid-column: span 3; }
+
+.destination-haut {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Le glyphe se reconnaît avant le titre : c'est lui qui rend la grille
+   parcourable une fois qu'on la connaît. */
+.destination-glyphe {
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--argent);
+}
+
+.destination.principale .destination-glyphe {
+  font-size: 34px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .destination {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 20px;
-  min-height: 150px;
-  padding: 20px 22px;
+  gap: 14px;
+  min-height: 132px;
+  padding: 17px 19px;
   background: var(--blanc);
   border: 1px solid var(--ligne);
   border-radius: var(--rayon);
@@ -663,9 +739,7 @@
 
 .destination:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 3px; }
 
-/* L'action principale occupe la hauteur des deux rangées. */
 .destination.principale {
-  grid-row: span 2;
   background: linear-gradient(160deg, #0e7a57 0%, #0a5f44 100%);
   border-color: transparent;
   color: var(--blanc);
@@ -746,9 +820,14 @@
 .hud-retour:hover { color: var(--encre); border-color: var(--argent); }
 .hud-retour:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
 
-@media (max-width: 860px) {
+@media (max-width: 1040px) {
+  .menu-corps { grid-template-columns: 1fr; }
+  .menu-fiche { order: 2; }
+}
+
+@media (max-width: 720px) {
   .menu-grille { grid-template-columns: 1fr; }
-  .destination.principale { grid-row: auto; min-height: 128px; }
+  .destination.principale { grid-column: auto; min-height: 128px; }
 }
 
 /* ---------- Bilan de fin de manche ---------- */
@@ -1277,12 +1356,13 @@
 
 .carte,
 .destination,
+.menu-fiche,
+.palier-panneau,
 .equipe-detail,
 .equipe-vignette,
 .unite,
 .panneau,
 .unites,
-.menu-solde,
 .tuto,
 .bilan-carte,
 .resultat,
@@ -2615,3 +2695,164 @@
 
 .campagne-case[data-etat='ferme'] { border-color: var(--ligne-douce); }
 .campagne-case[data-etat='ferme'] .campagne-lieu { color: var(--gris-clair); }
+
+/* ---------- Paliers de manche ---------- */
+
+/*
+ * Le panneau s'ouvre au clic sur un Pokémon posé. Il est ancré en bas à
+ * droite, au-dessus de la barre d'unités mais hors du chemin du terrain :
+ * la décision qu'il porte — monter maintenant ou garder ses pièces — se
+ * prend en regardant la vague avancer, pas en la masquant.
+ */
+.palier-panneau {
+  position: fixed;
+  right: 18px;
+  bottom: 118px;
+  z-index: 5;
+  width: 252px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  background: var(--blanc);
+  font-family: var(--ui);
+  color: var(--encre);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.palier-panneau[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.palier-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.palier-nom {
+  margin: 0;
+  font: 700 17px var(--titre);
+  letter-spacing: -0.01em;
+}
+
+.palier-fermer {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  font-size: 15px;
+  color: var(--gris);
+  background: none;
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+}
+
+.palier-fermer:hover { color: var(--encre); border-color: var(--ligne); }
+
+/* Trois crans : le palier se lit sans chiffre, comme les étoiles. */
+.palier-crans { display: flex; gap: 5px; }
+
+.palier-cran {
+  flex: 1;
+  height: 7px;
+  background: var(--argent-clair);
+  border: 2px solid var(--ligne);
+  border-radius: 2px;
+}
+
+.palier-cran[data-plein='true'] { background: var(--emeraude); }
+
+.palier-suite { margin: 0; font-family: var(--corps); font-size: 12.5px; color: var(--gris); }
+
+.palier-ultime {
+  margin: 0;
+  font: 600 11.5px var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--gris-clair);
+}
+
+.palier-ultime[data-debloque='true'] { color: var(--emeraude); }
+
+.palier-monter {
+  margin-top: 2px;
+  padding: 9px 12px;
+  font: 600 12.5px var(--ui);
+  color: var(--blanc);
+  background: var(--bleu);
+  border: 3px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+  cursor: pointer;
+}
+
+.palier-monter:hover:not(:disabled) { filter: brightness(1.1); }
+.palier-monter:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: none; }
+
+.palier-monter:disabled {
+  color: var(--gris-clair);
+  background: var(--argent-clair);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Le modèle de l'évolution n'est pas converti : on le dit plutôt que de
+   laisser croire à un bug d'échelle. */
+.palier-panneau[data-provisoire='true'] .palier-suite::after {
+  content: ' Modèle encore provisoire.';
+  color: var(--gris-clair);
+}
+
+/* ---------- Ultime dans l'infobulle ---------- */
+
+.infobulle-ultime {
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--gris-clair);
+}
+
+.infobulle-ultime[data-debloque='true'] { color: var(--emeraude); }
+
+/* ---------- Fiche : attaques et lignée ---------- */
+
+/* Le rôle avant le nom : « Auto » et « Ultime » sont ce qui distingue les
+   deux lignes, le nom de l'attaque ne le dit pas. */
+.attaque-role {
+  display: inline-block;
+  min-width: 42px;
+  margin-right: 9px;
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gris-clair);
+}
+
+/* L'ultime est montré verrouillé, pas caché : c'est lui qui donne envie de
+   monter les paliers en manche. */
+.paire[data-verrouille='true'] { border-style: dashed; }
+.paire[data-verrouille='true'] .attaque-role { color: var(--bleu); }
+
+.bloc-note { font: 500 11px var(--corps); color: var(--gris-clair); }
+
+.lignee { display: flex; gap: 9px; flex-wrap: wrap; }
+
+.lignee-etape {
+  flex: 1 1 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+}
+
+.lignee-etape[data-courant='true'] { border-color: var(--ligne); background: var(--emeraude-clair); }
+
+.lignee-note { font: 500 9.5px var(--mono); color: var(--gris-clair); }
+
+@media (max-width: 720px) {
+  .palier-panneau { right: 12px; left: 12px; width: auto; bottom: 172px; }
+}

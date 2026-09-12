@@ -3,69 +3,106 @@
  *
  * Isolé du reste pour que le gacha de la phase 3 réutilise exactement les
  * mêmes règles que le starter offert au début.
+ *
+ * Un Pokémon porte deux attaques et non quatre : son auto-attaque, tirée de
+ * son movepool, et son ultime, tiré parmi les grosses attaques de son ou ses
+ * types. Chacune se relance séparément — il n'y a plus de « tirage complet »,
+ * qui n'avait de sens qu'avec quatre cases interchangeables.
  */
 
-import { getMove, getSpecies, MOVES, TRAITS } from './content';
+import {
+  AUTO_IDS,
+  ULTIME_UNIVERSEL,
+  getMove,
+  getSpecies,
+  MOVES,
+  TRAITS,
+  rareteDe,
+} from './content';
 import { rollPotentiel } from './stats';
 import {
   STAT_TYPES,
   type Move,
   type OwnedPokemon,
-  type Rarity,
   type SubStat,
   type Trait,
 } from './types';
 
 /**
- * Attaques que l'espece peut recevoir, par ordre de legitimite.
+ * Auto-attaques que l'espèce peut recevoir, par rangs de légitimité.
  *
- * Sept des quinze especes ont un movepool plus court que quatre : le tirage
- * completait alors en **repetant la derniere attaque**, ce qui donnait des
- * doublons sur la moitie du Pokedex. On elargit donc plutot que de repeter —
- * d'abord le movepool, puis les attaques du ou des types de l'espece, et en
- * dernier recours n'importe quelle attaque.
+ * Trois rangs, et l'ordre est strict : on ne descend au suivant que si le
+ * précédent est vide une fois les exclusions faites.
+ *
+ *  1. le movepool — ce que l'espèce apprend réellement ;
+ *  2. les attaques de son ou ses types ;
+ *  3. le reste du catalogue.
+ *
+ * Le second et le troisième rang existent parce que plusieurs espèces n'ont
+ * que deux attaques au movepool : sans eux, relancer l'attaque d'un Aspicot
+ * rendrait toujours la même. Mais ce sont des **filets**, pas des candidats
+ * ordinaires — les mettre dans le même sac que le movepool faisait sortir
+ * Flammèche sur un Bulbizarre une fois sur quinze, ce qui ne ressemble à
+ * rien.
  */
-function candidatsAttaques(speciesId: string): string[] {
+function rangsAutos(speciesId: string): string[][] {
   const species = getSpecies(speciesId);
   const types = new Set<string>(species.types);
+  const autres = AUTO_IDS.filter((id) => !species.movepool.includes(id));
 
-  const parType = Object.values(MOVES)
-    .filter((move) => types.has(move.type) && !species.movepool.includes(move.id))
-    .map((move) => move.id);
-
-  const reste = Object.values(MOVES)
-    .filter((move) => !types.has(move.type) && !species.movepool.includes(move.id))
-    .map((move) => move.id);
-
-  return [...species.movepool, ...parType, ...reste];
+  return [
+    [...species.movepool],
+    autres.filter((id) => types.has(MOVES[id]!.type)),
+    autres.filter((id) => !types.has(MOVES[id]!.type)),
+  ];
 }
 
 /**
- * Tire une attaque de plus, jamais deja presente.
+ * Ultimes que l'espèce peut recevoir.
  *
- * Sert au tirage complet comme au reroll d'une seule case : c'est la meme
- * regle, donc le meme code.
+ * Restreint à ses types, plus l'ultime universel : Salamèche ne peut pas
+ * hériter d'Hydrocanon, et il n'y a jamais plus de trois candidats. L'ultime
+ * se lit donc comme un choix entre deux ou trois options connues, pas comme
+ * une loterie.
  */
-export function rollMove(
-  speciesId: string,
-  exclure: readonly string[],
-  rng: () => number
-): Move {
-  const pris = new Set(exclure);
-  const candidats = candidatsAttaques(speciesId).filter((id) => !pris.has(id));
-  // Seize attaques au catalogue et quatre cases : ce repli ne peut pas etre
-  // atteint, mais il vaut mieux une attaque de plus qu'une exception.
-  if (!candidats.length) return getMove('charge');
-  return getMove(candidats[Math.floor(rng() * candidats.length)]!);
+export function candidatsUltimes(speciesId: string): string[] {
+  const types = new Set<string>(getSpecies(speciesId).types);
+  const parType = Object.values(MOVES)
+    .filter((move) => move.sorte === 'ultime' && types.has(move.type))
+    .map((move) => move.id);
+  return parType.includes(ULTIME_UNIVERSEL) ? parType : [...parType, ULTIME_UNIVERSEL];
 }
 
-/** Quatre attaques, toujours distinctes. */
-export function rollMoves(speciesId: string, rng: () => number): [Move, Move, Move, Move] {
-  const chosen: Move[] = [];
-  for (let i = 0; i < 4; i++) {
-    chosen.push(rollMove(speciesId, chosen.map((move) => move.id), rng));
+function tirerParmi(candidats: readonly string[], exclure: readonly string[], rng: () => number): string | null {
+  const pris = new Set(exclure);
+  const libres = candidats.filter((id) => !pris.has(id));
+  const pool = libres.length ? libres : candidats;
+  return pool[Math.floor(rng() * pool.length)] ?? null;
+}
+
+/**
+ * Tire une auto-attaque, en évitant celle déjà portée.
+ *
+ * Le premier rang qui a encore quelque chose à offrir gagne : une espèce au
+ * movepool fourni ne verra donc jamais d'attaque hors movepool, et une espèce
+ * à deux attaques descend d'un rang plutôt que de rendre la même.
+ */
+export function rollAuto(speciesId: string, exclure: readonly string[], rng: () => number): Move {
+  const pris = new Set(exclure);
+  for (const rang of rangsAutos(speciesId)) {
+    const libres = rang.filter((id) => !pris.has(id));
+    if (!libres.length) continue;
+    return getMove(libres[Math.floor(rng() * libres.length)]!);
   }
-  return [chosen[0]!, chosen[1]!, chosen[2]!, chosen[3]!];
+  // Le catalogue entier est exclu : impossible avec une seule attaque portée,
+  // mais mieux vaut une attaque de plus qu'une exception.
+  return getMove('charge');
+}
+
+/** Tire un ultime, en évitant celui déjà porté. */
+export function rollUltime(speciesId: string, exclure: readonly string[], rng: () => number): Move {
+  const choisi = tirerParmi(candidatsUltimes(speciesId), exclure, rng);
+  return getMove(choisi ?? ULTIME_UNIVERSEL);
 }
 
 /** Tire un trait, jamais deja present. */
@@ -91,22 +128,25 @@ export function rollSubStats(rng: () => number): [SubStat, SubStat, SubStat, Sub
   return [out[0]!, out[1]!, out[2]!, out[3]!];
 }
 
-export function createPokemon(
-  speciesId: string,
-  rarity: Rarity,
-  rng: () => number = Math.random
-): OwnedPokemon {
+/**
+ * Crée un exemplaire.
+ *
+ * La rareté n'est plus un paramètre : elle appartient à l'espèce. Le hasard
+ * porte sur le potentiel, les attaques, les traits et les sub-stats — de quoi
+ * distinguer deux Aspicot sans faire croire que l'un est légendaire.
+ */
+export function createPokemon(speciesId: string, rng: () => number = Math.random): OwnedPokemon {
   return {
     id: crypto.randomUUID(),
     speciesId,
-    rarity,
     level: 1,
     xp: 0,
     stars: 1,
     shiny: false,
-    potentiel: rollPotentiel(rarity, rng),
+    potentiel: rollPotentiel(rareteDe({ speciesId }), rng),
     favori: false,
-    moves: rollMoves(speciesId, rng),
+    auto: rollAuto(speciesId, [], rng),
+    ultime: rollUltime(speciesId, [], rng),
     traits: rollTraits(rng),
     subStats: rollSubStats(rng),
   };

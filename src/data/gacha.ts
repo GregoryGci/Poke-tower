@@ -9,7 +9,8 @@
  * à mesure qu'on ajoute des espèces au Pokédex.
  */
 
-import { SPECIES } from './content';
+import { RARITIES } from './types';
+import { especesDeRarete, ESPECES_OBTENABLES, rareteDe } from './content';
 import { createPokemon } from './roll';
 import { armePourRarete } from './weapons';
 import { initialiserArme } from './weapon-upgrade';
@@ -51,16 +52,49 @@ export function tirerRarete(rng: () => number = Math.random): Rarity {
   return 'normal';
 }
 
-/** Espèces qu'une invocation peut donner. */
+/**
+ * Espèces qu'une invocation peut donner.
+ *
+ * Les stades évolués en sont absents : ils s'obtiennent en montant un palier
+ * en manche, jamais au portail.
+ */
 export function especesInvocables(): string[] {
-  return Object.keys(SPECIES);
+  return [...ESPECES_OBTENABLES];
 }
 
+/**
+ * Rareté effectivement tirable.
+ *
+ * La rareté appartient désormais à l'espèce, et tous les paliers ne sont pas
+ * peuplés — le prismatique est réservé aux vrais légendaires, dont aucun
+ * modèle n'est converti. Un tirage prismatique redescend donc d'un cran
+ * jusqu'à trouver un palier habité, au lieu de renvoyer un lot vide.
+ */
+function rareteServie(rng: () => number): Rarity {
+  const voulue = tirerRarete(rng);
+  const depart = RARITIES.indexOf(voulue);
+  for (let i = depart; i >= 0; i--) {
+    const candidate = RARITIES[i];
+    if (candidate && especesDeRarete(candidate).length > 0) return candidate;
+  }
+  // Aucun palier peuplé : le catalogue est cassé, mieux vaut le dire.
+  throw new Error('Aucune espèce invocable');
+}
+
+/**
+ * Un tirage.
+ *
+ * Deux temps, et l'ordre compte : la rareté d'abord, l'espèce ensuite parmi
+ * celles de cette rareté. Tirer l'espèce en premier rendrait les taux
+ * dépendants du nombre d'espèces par palier — six starters légendaires
+ * feraient alors sortir du légendaire quatre fois sur dix.
+ */
 export function invoquer(rng: () => number = Math.random): OwnedPokemon {
-  const pool = especesInvocables();
+  const rarete = rareteServie(rng);
+  const pool = especesDeRarete(rarete);
   const speciesId = pool[Math.floor(rng() * pool.length)];
   if (!speciesId) throw new Error('Aucune espèce invocable');
-  return createPokemon(speciesId, tirerRarete(rng), rng);
+  return createPokemon(speciesId, rng);
 }
 
 /** Nombre de tirages d'un tirage multiple. */
@@ -81,9 +115,13 @@ export function invoquerMultiple(rng: () => number = Math.random): OwnedPokemon[
   const lot: OwnedPokemon[] = [];
   for (let i = 0; i < TIRAGE_MULTIPLE; i++) lot.push(invoquer(rng));
 
-  if (lot.every((membre) => membre.rarity === 'normal')) {
-    const dernier = lot[lot.length - 1];
-    if (dernier) lot[lot.length - 1] = createPokemon(dernier.speciesId, 'rare', rng);
+  if (lot.every((membre) => rareteDe(membre) === 'normal')) {
+    // On remplace par une espèce rare tirée au hasard : promouvoir
+    // l'exemplaire lui-même est devenu impossible, sa rareté étant celle de
+    // son espèce.
+    const rares = especesDeRarete('rare');
+    const remplacant = rares[Math.floor(rng() * rares.length)];
+    if (remplacant) lot[lot.length - 1] = createPokemon(remplacant, rng);
   }
   return lot;
 }

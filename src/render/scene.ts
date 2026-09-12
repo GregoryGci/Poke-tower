@@ -1,13 +1,21 @@
 /**
  * Scène, caméra et lumières.
  *
- * La caméra ne tourne jamais — c'est un choix du brief, et il nous arrange :
- * une seule direction de vue veut dire une seule shadow map à cadrer, un tri
- * de profondeur stable, et aucun angle sous lequel le décor se troue.
+ * La plongée est fixe — c'est elle qui porte le rendu « Clash Royale » du
+ * brief, et elle garantit une seule shadow map à cadrer et un tri de
+ * profondeur stable. Le **cap**, lui, est libre : sous un seul angle, un
+ * relief ou un morceau de décor finit toujours par masquer un coin de carte.
  *
- * Elle recule et avance en revanche. Sans cela le cadrage montrait à peine la
- * moitié du terrain, et le dresseur sortait de l'écran dès qu'on le déplaçait
- * vers un bord.
+ * Tout ce qui bouge la caméra passe par une **valeur voulue** et une valeur
+ * courante qui la rattrape à chaque image. Rien ne saute :
+ *
+ *  - la rotation était appliquée d'un bloc, par cran de 15°, au rythme de
+ *    répétition du clavier. Ça se voyait comme une saccade, et c'était bien
+ *    une saccade ;
+ *  - le zoom à la molette sautait de la même façon.
+ *
+ * L'amortissement est exponentiel et recalculé à partir du temps écoulé : le
+ * résultat ne dépend donc pas de la cadence d'affichage.
  */
 
 import {
@@ -16,6 +24,7 @@ import {
   Color,
   DirectionalLight,
   Fog,
+  MathUtils,
   PCFSoftShadowMap,
   PerspectiveCamera,
   Scene,
@@ -25,23 +34,47 @@ import {
 
 /** Angle de plongée, en degrés. 50° donne le rendu « Clash Royale » demandé. */
 const PITCH = 50;
-/**
- * Cap initial, en degrés.
- *
- * Il n'est plus constant : le joueur peut tourner la vue, parce qu'un décor
- * ou un relief finit toujours par masquer un coin de la carte sous un seul
- * angle. Seule la plongée reste fixe — c'est elle qui porte le rendu
- * « Clash Royale » et le cadrage d'une seule shadow map.
- */
+/** Cap initial, en degrés. */
 const YAW_DEFAUT = 35;
-/** Pas de rotation, en degrés, pour un appui ou un cran de bouton. */
-const PAS_ROTATION = 15;
+/** Pas de rotation d'un appui bref, en degrés. */
+const PAS_ROTATION = 20;
+/**
+ * Vitesse de rotation quand la touche reste enfoncée, en degrés par seconde.
+ *
+ * Un appui maintenu tourne donc en continu au lieu de répéter le pas au
+ * rythme de l'auto-répétition du clavier — qui commence après un délai, puis
+ * part d'un coup. C'était l'essentiel de la saccade.
+ */
+const VITESSE_ROTATION = 110;
+/** Degrés de cap par pixel de glisser horizontal. */
+const ROTATION_PAR_PIXEL = 0.32;
+/** Unités de distance par pixel de glisser vertical. */
+const ZOOM_PAR_PIXEL = 0.06;
+/**
+ * Pixels de glisser au-delà desquels le geste devient une rotation.
+ *
+ * En dessous, c'est un clic : le clic gauche sert à poser un Pokémon et à en
+ * sélectionner un, il ne doit pas se transformer en rotation parce que la
+ * main a bougé de deux pixels.
+ */
+const SEUIL_GLISSER = 4;
 
 /** Distance au point visé, en unités monde. */
 const DISTANCE_MIN = 26;
 const DISTANCE_MAX = 76;
 /** Par défaut, le terrain entier tient dans le cadre. */
 const DISTANCE_DEFAUT = 58;
+
+/**
+ * Constantes d'amorti, en part restante après une seconde.
+ *
+ * Plus le nombre est petit, plus la caméra colle à sa consigne. Le cap est
+ * le plus vif des trois : une rotation qui traîne donne l'impression que la
+ * commande n'a pas été prise.
+ */
+const AMORTI_CAP = 0.000004;
+const AMORTI_DISTANCE = 0.00002;
+const AMORTI_SUIVI = 0.0015;
 
 export interface Stage {
   renderer: WebGLRenderer;
@@ -51,6 +84,13 @@ export interface Stage {
   focus(target: Vector3): void;
   /** Repeint le fond et le brouillard aux couleurs du monde courant. */
   appliquerCiel(couleur: string): void;
+  /**
+   * Fait avancer cap, distance et rotation maintenue d'une image.
+   *
+   * À appeler une fois par image, avant `suivre`. C'est ici que tout
+   * l'amortissement se joue.
+   */
+  avancer(dt: number): void;
   /**
    * Suit une cible en douceur, tant que la camera n'a pas ete liberee.
    * A appeler a chaque image.
@@ -91,7 +131,9 @@ export function createStage(container: HTMLElement): Stage {
   const camera = new PerspectiveCamera(32, 1, 1, DISTANCE_MAX * 4);
 
   let distance = DISTANCE_DEFAUT;
+  let distanceVoulue = DISTANCE_DEFAUT;
   let yaw = YAW_DEFAUT;
+  let yawVoulu = YAW_DEFAUT;
   let suit = true;
   const focusPoint = new Vector3(0, 0, 0);
   const voulu = new Vector3(0, 0, 0);
@@ -103,16 +145,12 @@ export function createStage(container: HTMLElement): Stage {
    * place la caméra, donc la garder constante annulait la rotation.
    */
   const direction = new Vector3();
-  const recalculerDirection = (): void => {
+  const appliquer = (): void => {
     const pitch = (PITCH * Math.PI) / 180;
     const rad = (yaw * Math.PI) / 180;
     direction
       .set(Math.sin(rad) * Math.cos(pitch), Math.sin(pitch), Math.cos(rad) * Math.cos(pitch))
       .normalize();
-  };
-  recalculerDirection();
-
-  const appliquer = (): void => {
     camera.position.copy(focusPoint).addScaledVector(direction, distance);
     camera.lookAt(focusPoint);
   };
@@ -129,6 +167,34 @@ export function createStage(container: HTMLElement): Stage {
     (scene.fog as Fog).color.set(couleur);
   }
 
+  /* ---------- Amortissement ---------- */
+
+  /** Touches de rotation maintenues, pour tourner en continu. */
+  const rotationTenue = { gauche: false, droite: false };
+
+  function avancer(dt: number): void {
+    const pas = Math.min(dt, 0.1);
+
+    // Une touche maintenue pousse la consigne, elle ne déplace pas la caméra
+    // elle-même : c'est l'amorti en dessous qui fait le mouvement, et les
+    // deux sources — clavier et souris — se mélangent donc sans se battre.
+    if (rotationTenue.gauche) yawVoulu -= VITESSE_ROTATION * pas;
+    if (rotationTenue.droite) yawVoulu += VITESSE_ROTATION * pas;
+
+    const facteurCap = 1 - Math.pow(AMORTI_CAP, pas);
+    const facteurDistance = 1 - Math.pow(AMORTI_DISTANCE, pas);
+    yaw += (yawVoulu - yaw) * facteurCap;
+    distance += (distanceVoulue - distance) * facteurDistance;
+
+    // On recale les deux ensemble une fois la consigne atteinte : laisser
+    // l'écart tendre vers zéro indéfiniment ferait tourner le calcul pour
+    // rien, et le cap dériverait par accumulation d'arrondis.
+    if (Math.abs(yawVoulu - yaw) < 0.01) yaw = yawVoulu;
+    if (Math.abs(distanceVoulue - distance) < 0.01) distance = distanceVoulue;
+
+    appliquer();
+  }
+
   /**
    * Suivi amorti.
    *
@@ -139,7 +205,7 @@ export function createStage(container: HTMLElement): Stage {
   function suivre(cible: Vector3, dt: number): void {
     if (!suit) return;
     voulu.copy(cible);
-    focusPoint.lerp(voulu, 1 - Math.pow(0.0015, Math.min(dt, 0.1)));
+    focusPoint.lerp(voulu, 1 - Math.pow(AMORTI_SUIVI, Math.min(dt, 0.1)));
     appliquer();
   }
 
@@ -152,15 +218,20 @@ export function createStage(container: HTMLElement): Stage {
   }
 
   function pivoter(degres: number): void {
-    yaw = (yaw + degres) % 360;
-    recalculerDirection();
-    appliquer();
+    yawVoulu += degres;
   }
 
   function reinitialiserCap(): void {
-    yaw = YAW_DEFAUT;
-    recalculerDirection();
-    appliquer();
+    // Le cap courant est d'abord ramené dans le tour de YAW_DEFAUT : sans
+    // ça, revenir au cap d'origine après trois tours de molette ferait faire
+    // trois tours complets à la caméra.
+    const ecart = ((((yaw - YAW_DEFAUT) % 360) + 540) % 360) - 180;
+    yaw = YAW_DEFAUT + ecart;
+    yawVoulu = YAW_DEFAUT;
+  }
+
+  function zoom(delta: number): void {
+    distanceVoulue = MathUtils.clamp(distanceVoulue + delta, DISTANCE_MIN, DISTANCE_MAX);
   }
 
   /** Deplacement libre : le glisser fait glisser le terrain sous la camera. */
@@ -179,34 +250,67 @@ export function createStage(container: HTMLElement): Stage {
     appliquer();
   }
 
-  // Glisser a la souris : seulement quand le suivi a ete lache.
-  let glisse = false;
+  /* ---------- Souris ---------- */
+
+  /**
+   * Glisser à la souris.
+   *
+   * Bouton gauche ou droit : le geste horizontal tourne la vue, le geste
+   * vertical rapproche ou éloigne. Le bouton du milieu fait glisser le
+   * terrain, quand le suivi a été lâché.
+   *
+   * Le seuil est là pour une raison précise : le clic gauche pose un Pokémon
+   * et en sélectionne un. Tant que la main n'a pas franchi quelques pixels,
+   * le geste reste un clic et la caméra ne bouge pas.
+   */
+  let bouton: number | null = null;
+  let franchi = false;
   let dernierX = 0;
   let dernierY = 0;
+  let departX = 0;
+  let departY = 0;
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (suit || event.button !== 0) return;
-    glisse = true;
-    dernierX = event.clientX;
-    dernierY = event.clientY;
+    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+    bouton = event.button;
+    franchi = false;
+    dernierX = departX = event.clientX;
+    dernierY = departY = event.clientY;
   };
+
   const onPointerMove = (event: PointerEvent): void => {
-    if (!glisse) return;
-    deplacer(event.clientX - dernierX, event.clientY - dernierY);
+    if (bouton === null) return;
+    const dx = event.clientX - dernierX;
+    const dy = event.clientY - dernierY;
     dernierX = event.clientX;
     dernierY = event.clientY;
+
+    if (!franchi) {
+      const parcouru = Math.hypot(event.clientX - departX, event.clientY - departY);
+      if (parcouru < SEUIL_GLISSER) return;
+      franchi = true;
+    }
+
+    if (bouton === 1) {
+      if (!suit) deplacer(dx, dy);
+      return;
+    }
+
+    // La consigne bouge, pas la caméra : le glisser passe donc par le même
+    // amorti que les touches, et le mouvement reste lisse même si les
+    // événements souris arrivent par paquets irréguliers.
+    yawVoulu += dx * ROTATION_PAR_PIXEL;
+    zoom(dy * ZOOM_PAR_PIXEL);
   };
+
   const onPointerUp = (): void => {
-    glisse = false;
+    bouton = null;
+    franchi = false;
   };
+
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
-
-  function zoom(delta: number): void {
-    distance = Math.min(DISTANCE_MAX, Math.max(DISTANCE_MIN, distance + delta));
-    appliquer();
-  }
 
   appliquer();
 
@@ -241,14 +345,33 @@ export function createStage(container: HTMLElement): Stage {
   };
   renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-  // A et E tournent la vue, R la remet d'aplomb. Le clavier plutot que le
-  // clic droit : celui-ci annule deja une pose en cours.
+  // A et E tournent la vue, R la remet d'aplomb. Maintenir tourne en continu :
+  // l'appui bref garde son pas, pour un ajustement précis au clavier.
   const onKey = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyA') pivoter(-PAS_ROTATION);
-    else if (event.code === 'KeyE') pivoter(PAS_ROTATION);
-    else if (event.code === 'KeyR') reinitialiserCap();
+    if (event.code === 'KeyA') {
+      if (!event.repeat) pivoter(-PAS_ROTATION);
+      rotationTenue.gauche = true;
+    } else if (event.code === 'KeyE') {
+      if (!event.repeat) pivoter(PAS_ROTATION);
+      rotationTenue.droite = true;
+    } else if (event.code === 'KeyR' && !event.repeat) {
+      reinitialiserCap();
+    }
+  };
+  const onKeyUp = (event: KeyboardEvent): void => {
+    if (event.code === 'KeyA') rotationTenue.gauche = false;
+    if (event.code === 'KeyE') rotationTenue.droite = false;
+  };
+  // Une touche relâchée hors de la fenêtre ne produit pas de keyup : sans ce
+  // filet, la caméra continuerait de tourner toute seule au retour.
+  const onBlur = (): void => {
+    rotationTenue.gauche = false;
+    rotationTenue.droite = false;
+    bouton = null;
   };
   window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
 
   function resize(): void {
     const width = container.clientWidth;
@@ -269,6 +392,7 @@ export function createStage(container: HTMLElement): Stage {
     camera,
     focus,
     appliquerCiel,
+    avancer,
     suivre,
     libererSuivi,
     reprendreSuivi,
@@ -289,6 +413,8 @@ export function createStage(container: HTMLElement): Stage {
       observer.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);

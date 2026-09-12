@@ -54,8 +54,16 @@ import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
 import { WAVES, WaveRunner, especesDuNiveau, vaguesDuNiveau, vaguesTutoriel } from './waves';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
-import type { OwnedPokemon, PokemonType } from '@/data/types';
+import type { OwnedPokemon, PokemonType, Species } from '@/data/types';
 import { getSpecies } from '@/data/content';
+import {
+  PALIER_MAX,
+  PIECES_DEPART,
+  PIECES_KO,
+  PIECES_VAGUE,
+  coutPalier,
+  prochaineForme,
+} from '@/data/paliers';
 import { statsArme, type StatsArme } from '@/data/weapon-upgrade';
 import type { OwnedWeapon } from '@/data/types';
 import { STYLES } from '@/data/types';
@@ -92,6 +100,15 @@ const PRIME_VAGUE = 12;
 const PRIME_VICTOIRE = 30;
 /** Ennemis qu'on peut laisser passer avant de perdre la manche. */
 const VIES = 10;
+
+/**
+ * Grossissement de l'aperçu quand c'est l'ultime qui part.
+ *
+ * L'aperçu est la seule chose qui annonce un gros coup avant qu'il tombe : à
+ * taille égale avec celui de l'auto-attaque, rien ne distinguait les deux et
+ * le palier 3 ne se voyait pas sur le terrain.
+ */
+const APERCU_ULTIME = 1.55;
 
 /**
  * Les modèles Bedrock sont sculptés face à -Z, alors que `atan2(dx, dz)`
@@ -161,6 +178,8 @@ export interface GameStatus {
   alive: number;
   leaked: number;
   crystals: number;
+  /** Monnaie interne à la manche, dépensée sur les paliers. */
+  pokepieces: number;
   placed: number;
   drawCalls: number;
   /** Points de vie restants de la tour. */
@@ -172,7 +191,34 @@ export interface GameStatus {
   maxPoses: number;
   /** Le joueur a-t-il déjà déplacé son dresseur ? */
   trainerMoved: boolean;
+  /** Pokémon posé actuellement sélectionné, pour le panneau de paliers. */
+  selection: SelectionTour | null;
   message: string | null;
+}
+
+/**
+ * Ce que le joueur lit et décide sur un Pokémon déjà posé.
+ *
+ * Le panneau répond à une seule question : est-ce que je monte celui-là
+ * maintenant, ou est-ce que je garde mes pièces ? Tout ce qui n'y répond pas
+ * reste dans l'infobulle de survol.
+ */
+export interface SelectionTour {
+  ownedId: string;
+  nom: string;
+  palier: number;
+  palierMax: number;
+  /** Forme atteinte au palier suivant, ou null si la lignée s'arrête là. */
+  formeSuivante: string | null;
+  /** Coût du palier suivant en Poképièces, ou null au maximum. */
+  cout: number | null;
+  /** Assez de pièces en caisse pour l'acheter. */
+  abordable: boolean;
+  /** Nom de l'ultime, et s'il est déjà utilisable. */
+  ultime: string;
+  ultimeDebloque: boolean;
+  /** Silhouette provisoire : le .glb de l'évolution n'est pas converti. */
+  modeleProvisoire: boolean;
 }
 
 /**
@@ -203,6 +249,13 @@ export interface SurvolTour {
   enAction: boolean;
   degatsInfliges: number;
   kills: number;
+  /** Palier de manche, et le maximum atteignable. */
+  palier: number;
+  palierMax: number;
+  /** Ultime porté, et sa recharge quand il est débloqué. */
+  ultime: string;
+  ultimeDebloque: boolean;
+  rechargeUltime: number | null;
   /** Position du sujet en coordonnees ecran normalisees, de -1 a 1. */
   ndcX: number;
   ndcY: number;
@@ -306,6 +359,16 @@ export class Game {
   private readonly degatsParType = new Map<PokemonType, number>();
   private leaked = 0;
   private crystals = 0;
+  /**
+   * Poképièces en caisse.
+   *
+   * Elles ne sortent jamais de la manche : rien ne les écrit dans le compte,
+   * et l'objet Game est détruit à la fin. C'est exactement ce qu'on attend
+   * d'une monnaie de partie.
+   */
+  private pokepieces = PIECES_DEPART;
+  /** Pokémon posé sélectionné, cible des achats de palier. */
+  private tourSelectionnee: Tower | null = null;
   private trainerMoved = false;
   private message: string | null = null;
   private messageUntil = 0;
@@ -392,12 +455,24 @@ export class Game {
 
     this.input.onClick((button) => {
       if (button === 0) {
-        // Sans Pokemon selectionne, le clic gauche sert a saisir la camera
-        // plutot qu'a poser dans le vide.
-        if (this.pendingPlacement) void this.tryPlace();
-        else this.onCameraLibre?.();
+        if (this.pendingPlacement) {
+          void this.tryPlace();
+        } else if (this.survolTour) {
+          // Cliquer un Pokémon déjà posé l'ouvre : c'est là qu'on dépense ses
+          // Poképièces. Sans ce geste, les paliers n'auraient aucune prise.
+          this.tourSelectionnee = this.survolTour;
+        } else {
+          // Le clic dans le vide rend la camera au joueur, et referme le
+          // panneau : laisser une selection ouverte sur un terrain qu'on
+          // regarde ailleurs n'aide personne.
+          this.tourSelectionnee = null;
+          this.onCameraLibre?.();
+        }
       }
-      if (button === 2) this.pendingPlacement = null;
+      if (button === 2) {
+        this.pendingPlacement = null;
+        this.tourSelectionnee = null;
+      }
     });
   }
 
@@ -462,6 +537,7 @@ export class Game {
       alive: this.enemies.activeCount,
       leaked: this.leaked,
       crystals: this.crystals,
+      pokepieces: this.pokepieces,
       placed: this.towers.length,
       lives: Math.max(0, VIES - this.leaked),
       slotsLibres: Math.max(0, MAX_POSES - this.towers.length),
@@ -469,6 +545,7 @@ export class Game {
       outcome: this.outcome,
       phase: this.phase,
       trainerMoved: this.trainerMoved,
+      selection: this.selection,
       // Une foule par espèce visible, plus les projectiles et le décor.
       drawCalls: [...this.crowds.values()].filter((c) => c.crowd.mesh.count > 0).length
         + (this.projectileMesh.count > 0 ? 1 : 0)
@@ -478,6 +555,11 @@ export class Game {
   }
 
   /* ---------- Simulation ---------- */
+
+  /** Referme le panneau de paliers. */
+  deselectionner(): void {
+    this.tourSelectionnee = null;
+  }
 
   /** Ouvre les hostilites. Sans effet si la manche a deja commence. */
   lancerRun(): void {
@@ -514,7 +596,10 @@ export class Game {
       }
       if (event.kind === 'waveCleared') {
         this.crystals += PRIME_VAGUE;
-        this.notify(`Vague ${event.index + 1} tenue — +${PRIME_VAGUE} cristaux`);
+        this.pokepieces += PIECES_VAGUE;
+        this.notify(
+          `Vague ${event.index + 1} tenue — +${PRIME_VAGUE} cristaux, +${PIECES_VAGUE} Poképièces`
+        );
       }
       if (event.kind === 'allCleared') {
         this.crystals += PRIME_VICTOIRE;
@@ -536,6 +621,7 @@ export class Game {
         // l'agonie se jouer avant de rendre l'unité au réservoir.
         // La sub-stat « Cristaux » de l'arme portee majore chaque K.O.
         this.crystals += Math.round(PRIME_KO * (1 + (this.arme?.cristaux ?? 0)));
+        this.pokepieces += PIECES_KO;
         const entry = this.crowds.get(enemy.speciesId);
         const faint = entry?.faint ?? null;
         if (faint && entry) {
@@ -562,17 +648,17 @@ export class Game {
       // L'incantation n'envoie rien : elle annonce. La zone visée s'affiche
       // pendant toute sa durée, ce qui laisse le temps de la lire.
       if (action.kind === 'cast') {
-        this.montrerApercu(tower, action.cible, action.duree);
+        this.montrerApercu(tower, action.cible, action.duree, action.ultime);
         continue;
       }
       if (action.kind === 'rien') continue;
       if (this.projectiles.activeCount >= MAX_PROJECTILES) continue;
 
       const tir = this.projectiles.acquire();
-      tir.launch(tower.x, tower.z, action.cible, tower.damage, 14, tower.style);
+      tir.launch(tower.x, tower.z, action.cible, action.degats, 14, tower.style);
       tir.ownerId = tower.owned.id;
-      tir.moveType = tower.move.type;
-      this.montrerApercu(tower, action.cible, tir.dureeVol);
+      tir.moveType = action.move.type;
+      this.montrerApercu(tower, action.cible, tir.dureeVol, action.ultime);
       this.playAttack(this.towerVisuals[i]);
     }
 
@@ -818,16 +904,17 @@ export class Game {
    * L'apercu vit le temps du vol du projectile : il montre donc la zone avant
    * l'impact, ce qui est exactement l'information utile — ou ca va tomber.
    */
-  private montrerApercu(tower: Tower, cible: Enemy, duree: number): void {
+  private montrerApercu(tower: Tower, cible: Enemy, duree: number, ultime = false): void {
     const style = tower.style;
     // Une duree invalide reserverait la forme pour toujours.
     if (!Number.isFinite(duree) || duree <= 0) return;
+    const ampleur = ultime ? APERCU_ULTIME : 1;
 
     if (style.rayon > 0) {
       const apercu = this.prendreApercu(true);
       if (!apercu) return;
       apercu.mesh.position.set(cible.x, 0.05, cible.z);
-      apercu.mesh.scale.setScalar(style.rayon);
+      apercu.mesh.scale.setScalar(style.rayon * ampleur);
       apercu.mesh.rotation.z = 0;
       apercu.restant = duree;
       apercu.mesh.visible = true;
@@ -859,7 +946,7 @@ export class Game {
     // repere du quad avant le couchage : l'axe long (0,1,0) devient donc
     // (-sin z, 0, -cos z), d'ou l'angle ci-dessous. Mesure plutot que deduite —
     // la version evidente, -atan2(dx, dz), tombait a cote hors des axes.
-    const largeur = style.couloir > 0 ? style.couloir * 2 : 0.14;
+    const largeur = (style.couloir > 0 ? style.couloir * 2 : 0.14) * ampleur;
     apercu.mesh.scale.set(largeur, longueur, 1);
     apercu.mesh.position.set(tower.x + dx / 2, 0.05, tower.z + dz / 2);
     apercu.mesh.rotation.z = Math.atan2(-dx, -dz);
@@ -941,6 +1028,97 @@ export class Game {
     }
   }
 
+  /* ---------- Paliers de manche ---------- */
+
+  /**
+   * Fiche du Pokémon posé sélectionné, ou null.
+   *
+   * Elle se recalcule à chaque lecture plutôt que d'être mise en cache : le
+   * coût du palier ne bouge pas, mais le fait qu'il soit abordable change à
+   * chaque ennemi abattu, et un panneau qui ne suivrait pas la caisse serait
+   * pire que pas de panneau du tout.
+   */
+  get selection(): SelectionTour | null {
+    const tour = this.tourSelectionnee;
+    // Une tour retirée du terrain ne doit pas garder le panneau ouvert.
+    if (!tour || !this.towers.includes(tour)) return null;
+
+    const cout = coutPalier(tour.palier);
+    const suivante = prochaineForme(tour.owned.speciesId, tour.palier);
+    return {
+      ownedId: tour.owned.id,
+      nom: tour.species.name,
+      palier: tour.palier,
+      palierMax: PALIER_MAX,
+      formeSuivante: suivante?.name ?? null,
+      cout,
+      abordable: cout !== null && this.pokepieces >= cout,
+      ultime: tour.moveUltime.name,
+      ultimeDebloque: tour.ultimeDebloque,
+      modeleProvisoire: tour.species.modeleProvisoire === true,
+    };
+  }
+
+  /**
+   * Achète un palier sur le Pokémon sélectionné.
+   *
+   * Atomique : soit les pièces partent et la forme change, soit rien ne
+   * bouge. C'est la même règle que pour les cristaux, et pour la même raison
+   * — une dépense à moitié appliquée est impossible à expliquer au joueur.
+   */
+  monterPalierSelection(): boolean {
+    const tour = this.tourSelectionnee;
+    if (!tour || !this.towers.includes(tour)) return false;
+
+    const cout = coutPalier(tour.palier);
+    if (cout === null) {
+      this.notify('Palier maximum atteint');
+      return false;
+    }
+    if (this.pokepieces < cout) {
+      this.notify(`Il manque ${cout - this.pokepieces} Poképièces`);
+      return false;
+    }
+
+    const avant = tour.species;
+    const apres = tour.monterPalier();
+    if (!apres) return false;
+    this.pokepieces -= cout;
+
+    const index = this.towers.indexOf(tour);
+    this.ajusterSilhouette(index, avant, apres);
+
+    if (apres.id !== avant.id) {
+      this.notify(`${avant.name} évolue en ${apres.name} !`);
+    } else {
+      this.notify(`${apres.name} passe au palier ${tour.palier}`);
+    }
+    if (tour.ultimeDebloque) {
+      this.notify(`${apres.name} débloque ${tour.moveUltime.name}`);
+    }
+    return true;
+  }
+
+  /**
+   * Met la silhouette à l'échelle de la forme atteinte.
+   *
+   * Le modèle ne change pas : les .glb des évolutions ne sont pas convertis,
+   * et un Grolem s'affiche donc comme un gros Racaillou. C'est une
+   * approximation assumée — la taille est la seule chose qu'on peut rendre
+   * juste sans asset, et une évolution qui ne se verrait pas du tout serait
+   * pire.
+   */
+  private ajusterSilhouette(index: number, avant: Species, apres: Species): void {
+    const tour = this.towers[index];
+    if (!tour?.object) return;
+    const base = getSpecies(tour.owned.speciesId);
+    const facteur = base.height > 0 ? apres.height / base.height : 1;
+    tour.object.scale.setScalar(facteur);
+    // Le cercle de portée suit, sinon il mentirait dès le premier palier.
+    tour.place(tour.x, tour.z);
+    void avant;
+  }
+
   /** Le Pokemon pose le plus proche du point donne, dans le rayon de saisie. */
   private tourSous(x: number, z: number): Tower | null {
     let meilleure: Tower | null = null;
@@ -974,8 +1152,8 @@ export class Game {
     return {
       ownedId: tower.owned.id,
       nom: tower.species.name,
-      attaque: tower.move.name,
-      typeAttaque: tower.move.type,
+      attaque: tower.moveAuto.name,
+      typeAttaque: tower.moveAuto.type,
       style: tower.style.libelle,
       degats: tower.damage,
       cooldown: tower.cooldown,
@@ -987,6 +1165,11 @@ export class Game {
       enAction: tower.target !== null,
       degatsInfliges: contribution?.degats ?? 0,
       kills: contribution?.kills ?? 0,
+      palier: tower.palier,
+      palierMax: PALIER_MAX,
+      ultime: tower.moveUltime.name,
+      ultimeDebloque: tower.ultimeDebloque,
+      rechargeUltime: tower.rechargeUltime,
       ndcX: this.tmpVec.x,
       ndcY: this.tmpVec.y,
     };

@@ -11,7 +11,7 @@
  * de sa prochaine fusion.
  */
 
-import { SPECIES, getSpecies } from '@/data/content';
+import { SPECIES, getSpecies, rareteDe } from '@/data/content';
 import { LIBELLE_RARETE } from '@/data/gacha';
 import {
   ETOILES_MAX,
@@ -132,7 +132,7 @@ function remplirFiche(
   identite.appendChild(types);
 
   const compteur = elem('span', 'rarete');
-  compteur.dataset['rarete'] = entree.copies[0]?.rarity ?? 'normal';
+  compteur.dataset['rarete'] = entree.copies[0] ? rareteDe(entree.copies[0]) : 'normal';
   compteur.textContent = entree.copies.length
     ? `×${entree.copies.length}`
     : 'Jamais obtenu';
@@ -166,8 +166,9 @@ function remplirFiche(
   for (const copie of entree.copies) {
     const ligne = elem('div', 'collection-copie');
     const gauche = elem('div', 'collection-copie-texte');
-    const badge = elem('span', 'rarete', LIBELLE_RARETE[copie.rarity]);
-    badge.dataset['rarete'] = copie.rarity;
+    const rarete = rareteDe(copie);
+    const badge = elem('span', 'rarete', LIBELLE_RARETE[rarete]);
+    badge.dataset['rarete'] = rarete;
     gauche.append(
       badge,
       elem(

@@ -1,5 +1,5 @@
-import { MOVES, TRAITS } from '@/data/content';
-import { rollMove, rollTrait } from '@/data/roll';
+import { MOVES, SPECIES, TRAITS } from '@/data/content';
+import { rollAuto, rollTrait, rollUltime } from '@/data/roll';
 import { potentielNeutre } from '@/data/stats';
 import {
   CURRENT_SCHEMA_VERSION,
@@ -38,9 +38,24 @@ export class LocalStore implements SaveStore {
   }
 }
 
-/** Remonte une vieille sauvegarde au schéma courant. */
 /**
- * Rebranche les attaques sur le catalogue courant.
+ * Forme d'un membre tel qu'il a pu être écrit par une version antérieure.
+ *
+ * On ne lit jamais une sauvegarde au travers du type courant : celui-ci
+ * décrit ce que le jeu veut, pas ce que le disque contient. Les champs
+ * disparus (les quatre attaques, la rareté de l'exemplaire) sont déclarés ici
+ * pour pouvoir être récupérés sans mentir au compilateur.
+ */
+type MembreSauvegarde = Partial<OwnedPokemon> & {
+  speciesId?: string;
+  /** Ancien format : quatre attaques interchangeables. */
+  moves?: Array<{ id?: string } | null>;
+  /** Ancien format : la rareté vivait sur l'exemplaire. */
+  rarity?: string;
+};
+
+/**
+ * Retrouve une attaque du catalogue à partir de ce qui est sauvegardé.
  *
  * La sauvegarde stocke des **copies** des attaques, figées au moment du
  * tirage : tout champ ajouté au catalogue ensuite manque à jamais aux
@@ -49,32 +64,41 @@ export class LocalStore implements SaveStore {
  * comme `NaN <= 0` est faux, les Pokémon entraient en incantation sans
  * jamais en sortir : plus un seul tir.
  *
- * On ne conserve donc de la sauvegarde que **l'identifiant**, et le reste
- * vient du catalogue. Une attaque retirée du jeu est remplacée par un tirage
- * plutôt que de laisser une case vide.
+ * On ne conserve donc de la sauvegarde que **l'identifiant**, et tout le
+ * reste vient du catalogue.
  */
-function rebrancherAttaques(membre: OwnedPokemon): [Move, Move, Move, Move] {
-  const sorties: Move[] = [];
-  for (const move of membre.moves ?? []) {
-    const officielle = move && MOVES[move.id];
-    if (officielle && !sorties.some((deja) => deja.id === officielle.id)) {
-      sorties.push(officielle);
+function attaqueDuCatalogue(candidat: { id?: string } | null | undefined, sorte: Move['sorte']): Move | null {
+  if (!candidat?.id) return null;
+  const officielle = MOVES[candidat.id];
+  return officielle && officielle.sorte === sorte ? officielle : null;
+}
+
+/**
+ * Auto-attaque et ultime d'un membre.
+ *
+ * Les sauvegardes d'avant le passage à deux attaques portent un tableau de
+ * quatre : on en récupère la première qui est une auto-attaque valide, et
+ * l'ultime est tiré, puisqu'il n'en existait aucun. Une attaque retirée du
+ * jeu est remplacée par un tirage plutôt que de laisser une case vide.
+ */
+function rebrancherAttaques(membre: MembreSauvegarde): { auto: Move; ultime: Move } {
+  const speciesId = membre.speciesId ?? 'bulbasaur';
+
+  let auto = attaqueDuCatalogue(membre.auto, 'auto');
+  if (!auto) {
+    for (const ancienne of membre.moves ?? []) {
+      auto = attaqueDuCatalogue(ancienne, 'auto');
+      if (auto) break;
     }
   }
-  while (sorties.length < 4) {
-    sorties.push(
-      rollMove(
-        membre.speciesId,
-        sorties.map((move) => move.id),
-        Math.random
-      )
-    );
-  }
-  return [sorties[0]!, sorties[1]!, sorties[2]!, sorties[3]!];
+  if (!auto) auto = rollAuto(speciesId, [], Math.random);
+
+  const ultime = attaqueDuCatalogue(membre.ultime, 'ultime') ?? rollUltime(speciesId, [], Math.random);
+  return { auto, ultime };
 }
 
 /** Même principe pour les traits : l'identifiant reste, l'effet vient du jeu. */
-function rebrancherTraits(membre: OwnedPokemon): [Trait, Trait] {
+function rebrancherTraits(membre: MembreSauvegarde): [Trait, Trait] {
   const sorties: Trait[] = [];
   for (const trait of membre.traits ?? []) {
     const officiel = trait && TRAITS.find((candidat) => candidat.id === trait.id);
@@ -86,6 +110,33 @@ function rebrancherTraits(membre: OwnedPokemon): [Trait, Trait] {
   return [sorties[0]!, sorties[1]!];
 }
 
+/**
+ * Espèce sauvegardée, ou une espèce de repli.
+ *
+ * Une sauvegarde peut désigner une espèce retirée du catalogue — ou, depuis
+ * les paliers de manche, un **stade évolué** écrit par erreur. Les stades
+ * évolués ne doivent jamais dormir dans un roster : l'évolution est interne
+ * à la manche. On redescend donc à la base de la lignée.
+ */
+function especeDuRoster(speciesId: string | undefined): string {
+  if (!speciesId || !SPECIES[speciesId]) return 'bulbasaur';
+  if (!SPECIES[speciesId]!.modeleProvisoire) return speciesId;
+  const base = Object.values(SPECIES).find(
+    (candidate) => !candidate.modeleProvisoire && estDeLaLignee(candidate.id, speciesId)
+  );
+  return base?.id ?? speciesId;
+}
+
+/** Vrai si `cible` est atteignable depuis `baseId` en suivant les évolutions. */
+function estDeLaLignee(baseId: string, cible: string): boolean {
+  let courante = SPECIES[baseId];
+  while (courante) {
+    if (courante.id === cible) return true;
+    courante = courante.evolution ? SPECIES[courante.evolution] : undefined;
+  }
+  return false;
+}
+
 export function migrate(account: PlayerAccount): PlayerAccount {
   // Le tutoriel est arrivé après les premières sauvegardes : un compte qui
   // existe déjà a forcément dépassé ce stade.
@@ -95,19 +146,39 @@ export function migrate(account: PlayerAccount): PlayerAccount {
   };
   // Les etoiles sont arrivees apres les premieres sauvegardes : tout ce qui
   // existait deja part a une etoile, sans brillance.
-  const roster = (account.roster ?? []).map((membre) => ({
-    ...membre,
-    xp: membre.xp ?? 0,
-    stars: membre.stars ?? 1,
-    shiny: membre.shiny ?? false,
-    // Potentiel nul plutot qu'un tirage : re-tirer a la lecture donnerait une
-    // feuille de stats differente a chaque ouverture du jeu.
-    potentiel: membre.potentiel ?? potentielNeutre(),
-    favori: membre.favori ?? false,
-    // Attaques et traits sont relus dans le catalogue : voir rebrancherAttaques.
-    moves: rebrancherAttaques(membre),
-    traits: rebrancherTraits(membre),
-  }));
+  const roster = ((account.roster ?? []) as MembreSauvegarde[]).map((membre) => {
+    const speciesId = especeDuRoster(membre.speciesId);
+    const { auto, ultime } = rebrancherAttaques({ ...membre, speciesId });
+    // La rareté de l'exemplaire est supprimée du schéma : elle appartient à
+    // l'espèce. On la retire explicitement plutôt que de la laisser traîner —
+    // un champ mort qu'on continue de sérialiser finit toujours par être relu.
+    const { rarity: _rarity, moves: _moves, ...reste } = membre;
+    void _rarity;
+    void _moves;
+    return {
+      ...reste,
+      id: membre.id ?? crypto.randomUUID(),
+      speciesId,
+      level: membre.level ?? 1,
+      xp: membre.xp ?? 0,
+      stars: membre.stars ?? 1,
+      shiny: membre.shiny ?? false,
+      // Potentiel nul plutot qu'un tirage : re-tirer a la lecture donnerait une
+      // feuille de stats differente a chaque ouverture du jeu.
+      potentiel: membre.potentiel ?? potentielNeutre(),
+      favori: membre.favori ?? false,
+      // Attaques et traits sont relus dans le catalogue : voir rebrancherAttaques.
+      auto,
+      ultime,
+      traits: rebrancherTraits(membre),
+      subStats: membre.subStats ?? [
+        { statType: 'pv', stack: 0 },
+        { statType: 'atk', stack: 0 },
+        { statType: 'def', stack: 0 },
+        { statType: 'vitesse', stack: 0 },
+      ],
+    } as OwnedPokemon;
+  });
 
   // Armes, equipe et nom sont arrives apres les premieres sauvegardes.
   const complete = {

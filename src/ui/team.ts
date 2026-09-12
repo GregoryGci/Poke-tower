@@ -15,9 +15,10 @@
  * dans data/upgrades, l'écran ne fait qu'appeler et réafficher.
  */
 
-import { getSpecies } from '@/data/content';
+import { getSpecies, rareteDe } from '@/data/content';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
+import { PALIER_MAX } from '@/data/paliers';
 import { boutonFavori, selecteurTri, trier } from './tri';
 import {
   ETOILES_MAX,
@@ -33,14 +34,14 @@ import type { AccountManager } from '@/save';
 import {
   doublonsDisponibles,
   fusionner,
-  COUT_REROLL_ATTAQUE_UNITE,
-  COUT_REROLL_ATTAQUES,
+  COUT_REROLL_AUTO,
+  COUT_REROLL_ULTIME,
   COUT_REROLL_TRAIT_UNITE,
   COUT_REROLL_TRAITS,
   coutProchainPalier,
   monterSubStat,
-  rerollAttaque,
-  rerollAttaques,
+  rerollAuto,
+  rerollUltime,
   rerollTrait,
   rerollTraits,
 } from '@/data/upgrades';
@@ -124,8 +125,11 @@ function remplirDetail(
   identite.appendChild(types);
 
   const cote = elem('div', 'detail-cote');
-  const rarete = elem('span', 'rarete', owned.rarity);
-  rarete.dataset['rarete'] = owned.rarity;
+  // La rareté est celle de l'espèce : tous les Aspicot sont normaux, et
+  // c'est justement ce qu'on veut pouvoir lire d'un coup d'oeil.
+  const rareteEspece = rareteDe(owned);
+  const rarete = elem('span', 'rarete', rareteEspece);
+  rarete.dataset['rarete'] = rareteEspece;
   // La note de potentiel resume la part de hasard du tirage : c'est ce qu'on
   // regarde avant de sacrifier un doublon.
   cote.append(rarete, elem('span', 'note-potentiel', `Potentiel ${notePotentiel(owned)} %`));
@@ -133,14 +137,25 @@ function remplirDetail(
 
   // --- Attaques
   //
-  // Chaque case se relance seule. Relancer les quatre pour corriger une seule
-  // mauvaise attaque faisait perdre les trois bonnes, et c'etait le vrai
-  // reproche fait au reroll global.
+  // Deux lignes, deux emplois : l'auto-attaque tourne en boucle sur le
+  // terrain, l'ultime ne sort qu'au palier 3 — un palier qui s'achète en
+  // manche, en Poképièces. Il est affiché verrouillé plutôt que caché :
+  // c'est lui qui donne envie de monter les paliers.
   const attaques = elem('div', 'grille-paires');
-  owned.moves.forEach((move, index) => {
+
+  const ligneAttaque = (
+    move: typeof owned.auto,
+    etiquette: string,
+    cout: number,
+    id: string,
+    relancer: () => void,
+    verrouille: boolean
+  ): void => {
     const ligne = elem('div', 'paire');
+    ligne.dataset['verrouille'] = String(verrouille);
+
     const gauche = elem('div');
-    gauche.append(elem('b', undefined, move.name));
+    gauche.append(elem('span', 'attaque-role', etiquette), elem('b', undefined, move.name));
     const puce = elem('span', 'type', move.type);
     puce.dataset['type'] = move.type;
     puce.style.marginLeft = '8px';
@@ -151,24 +166,42 @@ function remplirDetail(
       elem(
         'code',
         undefined,
-        (move.power > 0 ? `${move.power} · ${move.cooldown}s` : `statut · ${move.cooldown}s`) +
-          (move.cast > 0 ? ` · cast ${move.cast}s` : '')
+        `${move.power} · ${move.cooldown}s` + (move.cast > 0 ? ` · cast ${move.cast}s` : '')
       )
     );
 
-    const relancer = elem('button', 'bouton-cout', `↻ ${COUT_REROLL_ATTAQUE_UNITE}`);
-    relancer.type = 'button';
-    relancer.id = `reroll-attaque-${index}`;
-    relancer.title = `Relancer cette attaque — ${COUT_REROLL_ATTAQUE_UNITE} cristaux`;
-    relancer.disabled = compte.crystals < COUT_REROLL_ATTAQUE_UNITE;
-    relancer.addEventListener('click', () => {
-      if (rerollAttaque(compte, owned, index).ok) surChangement();
-    });
-    droite.appendChild(relancer);
+    const bouton = elem('button', 'bouton-cout', `↻ ${cout}`);
+    bouton.type = 'button';
+    bouton.id = id;
+    bouton.title = `Relancer — ${cout} cristaux`;
+    bouton.disabled = compte.crystals < cout;
+    bouton.addEventListener('click', relancer);
+    droite.appendChild(bouton);
 
     ligne.append(gauche, droite);
     attaques.appendChild(ligne);
-  });
+  };
+
+  ligneAttaque(
+    owned.auto,
+    'Auto',
+    COUT_REROLL_AUTO,
+    'reroll-auto',
+    () => {
+      if (rerollAuto(compte, owned).ok) surChangement();
+    },
+    false
+  );
+  ligneAttaque(
+    owned.ultime,
+    `Ultime · palier ${PALIER_MAX}`,
+    COUT_REROLL_ULTIME,
+    'reroll-ultime',
+    () => {
+      if (rerollUltime(compte, owned).ok) surChangement();
+    },
+    true
+  );
 
   // --- Traits
   const traits = elem('div', 'grille-paires');
@@ -310,12 +343,6 @@ function remplirDetail(
     fusion.append(texteFusion, bouton);
   }
 
-  const relancerAttaques = boutonCout('Relancer', COUT_REROLL_ATTAQUES, compte.crystals);
-  relancerAttaques.id = 'reroll-attaques';
-  relancerAttaques.addEventListener('click', () => {
-    if (rerollAttaques(compte, owned).ok) surChangement();
-  });
-
   const relancerTraits = boutonCout('Relancer', COUT_REROLL_TRAITS, compte.crystals);
   relancerTraits.id = 'reroll-traits';
   relancerTraits.addEventListener('click', () => {
@@ -325,13 +352,35 @@ function remplirDetail(
   const solde = elem('span', 'solde-vivant');
   solde.append(document.createTextNode('Solde '), elem('b', undefined, String(compte.crystals)));
 
+  // --- Lignée
+  //
+  // Les paliers s'achètent en manche et rien n'en reste après : la fiche se
+  // contente donc de montrer où mène la lignée, pour qu'on sache ce qu'on
+  // achètera une fois sur le terrain.
+  const lignee = elem('div', 'lignee');
+  let forme: ReturnType<typeof getSpecies> | null = species;
+  for (let palier = 1; palier <= PALIER_MAX && forme; palier++) {
+    const etape = elem('div', 'lignee-etape');
+    etape.dataset['courant'] = String(palier === 1);
+    etape.append(
+      elem('span', 'etiquette', `Palier ${palier}`),
+      elem('b', undefined, forme.name)
+    );
+    if (forme.modeleProvisoire) {
+      etape.appendChild(elem('span', 'lignee-note', 'modèle provisoire'));
+    }
+    lignee.appendChild(etape);
+    forme = forme.evolution ? getSpecies(forme.evolution) : null;
+  }
+
   panneau.append(
     tete,
     bloc('Étoiles', fusion, rangeeEtoiles(owned.stars, owned.shiny)),
-    bloc('Attaques', attaques, relancerAttaques),
+    bloc('Attaques', attaques, elem('span', 'bloc-note', 'L’ultime se débloque en manche')),
     bloc('Traits', traits, relancerTraits),
     bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
-    bloc('Stats réelles', base)
+    bloc('Stats réelles', base),
+    bloc('Lignée — paliers achetés en manche', lignee)
   );
 }
 
@@ -439,7 +488,7 @@ export function ouvrirEquipe(account: AccountManager): Promise<void> {
       const texte = elem('span', 'unite-texte');
       texte.append(
         elem('span', 'unite-nom', species.name),
-        elem('span', 'unite-detail', `${owned.rarity} · niveau ${owned.level}`),
+        elem('span', 'unite-detail', `${rareteDe(owned)} · niveau ${owned.level}`),
         rangeeEtoiles(owned.stars, owned.shiny, 'vignette-etoiles')
       );
 

@@ -20,7 +20,7 @@ import {
   invoquerArmesMultiple,
   invoquerMultiple,
 } from '@/data/gacha';
-import { getSpecies } from '@/data/content';
+import { getSpecies, rareteDe } from '@/data/content';
 import { getWeapon, libelleStyle } from '@/data/weapons';
 import { rareteDominante, revelation } from './reveal';
 import type { AccountManager } from '@/save';
@@ -48,7 +48,7 @@ function badgeRarete(rarete: Rarity): HTMLSpanElement {
 function carteResultat(owned: OwnedPokemon): HTMLDivElement {
   const species = getSpecies(owned.speciesId);
   const carte = elem('div', 'resultat');
-  carte.dataset['rarete'] = owned.rarity;
+  carte.dataset['rarete'] = rareteDe(owned);
 
   const pastille = elem('span', 'pastille', species.name.slice(0, 1));
   pastille.dataset['type'] = species.types[0];
@@ -62,10 +62,10 @@ function carteResultat(owned: OwnedPokemon): HTMLDivElement {
 
   carte.append(
     pastille,
-    badgeRarete(owned.rarity),
+    badgeRarete(rareteDe(owned)),
     elem('div', 'resultat-nom', species.name),
     types,
-    elem('p', 'sous-titre', `${owned.moves[0].name} · ${owned.traits[0].name}`)
+    elem('p', 'sous-titre', `${owned.auto.name} · ${owned.ultime.name}`)
   );
   return carte;
 }
@@ -205,7 +205,7 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
     if (portail === 'pokemon') {
       const lot = multiple ? invoquerMultiple() : [invoquer()];
       compte.roster.push(...lot);
-      raretes = lot.map((membre) => membre.rarity);
+      raretes = lot.map((membre) => rareteDe(membre));
       contenu = multiple ? grille(lot.map(carteResultat)) : carteResultat(lot[0]!);
     } else {
       const lot = multiple ? invoquerArmesMultiple() : [invoquerArme()];

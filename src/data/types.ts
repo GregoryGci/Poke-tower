@@ -24,6 +24,17 @@ export type PokemonType = (typeof POKEMON_TYPES)[number];
 
 export type MoveCategory = 'physique' | 'special' | 'statut';
 
+/**
+ * Rôle d'une attaque.
+ *
+ * Le Pokémon n'en porte plus quatre interchangeables mais deux, aux emplois
+ * distincts : celle qu'il lance sans arrêt, et celle qu'il ne lance qu'une
+ * fois arrivé au bout de ses paliers. Quatre attaques de puissance voisine ne
+ * donnaient aucun relief — la tour retenait de toute façon la plus rentable
+ * et ignorait les trois autres.
+ */
+export type MoveSorte = 'auto' | 'ultime';
+
 export interface Move {
   id: string;
   name: string;
@@ -33,6 +44,8 @@ export interface Move {
   power: number;
   /** 0 à 1. Une attaque qui rate ne consomme pas le temps de recharge. */
   accuracy: number;
+  /** Auto-attaque, ou grosse attaque débloquée au palier 3. */
+  sorte: MoveSorte;
   /** Secondes entre deux utilisations, propre à l'attaque. */
   cooldown: number;
   /**
@@ -111,14 +124,37 @@ export interface Species {
   name: string;
   types: [PokemonType] | [PokemonType, PokemonType];
   baseStats: BaseStats;
+  /**
+   * Rareté de l'espèce.
+   *
+   * Elle appartient à l'espèce et non à l'exemplaire : un Aspicot est normal,
+   * toujours, et aucun tirage n'en fera un légendaire. Deux exemplaires de la
+   * même espèce à des raretés différentes ne voulaient rien dire — on ne
+   * pouvait pas savoir ce que valait un Aspicot sans ouvrir sa fiche.
+   *
+   * Ce qui distingue encore deux exemplaires : le potentiel, les traits et
+   * les sub-stats. La rareté, elle, décide du socle et de la puissance des
+   * attaques.
+   */
+  rarity: Rarity;
   /** Portée de base en unités monde (1 unité = 1 case). */
   range: number;
   /** Manière de frapper : décide du placement autant que la portée. */
   style: AttackStyle;
-  /** Identifiants des attaques réellement apprenables par l'espèce. */
+  /** Auto-attaques réellement apprenables par l'espèce. */
   movepool: string[];
+  /** Espèce suivante de la lignée, atteinte par un palier en manche. */
+  evolution: string | null;
   /** Nom du fichier .glb dans public/models, sans extension. */
   model: string;
+  /**
+   * Vrai quand le .glb est celui de la pré-évolution.
+   *
+   * Les modèles des évolutions ne sont pas convertis : la lignée existe en
+   * données et en règles, pas encore en assets. Autant le dire ici que de
+   * laisser croire que le rendu est juste.
+   */
+  modeleProvisoire?: boolean;
   /** Hauteur approximative, pour poser la barre de vie au-dessus. */
   height: number;
 }
@@ -169,7 +205,6 @@ export function doublonsRequis(etoilesCourantes: number): number | null {
 export interface OwnedPokemon {
   id: string;
   speciesId: string;
-  rarity: Rarity;
   level: number;
   /** Experience accumulee au niveau courant. */
   xp: number;
@@ -187,8 +222,16 @@ export interface OwnedPokemon {
   potentiel: BaseStats;
   /** Marque de favori : remonte l'exemplaire en tete des listes. */
   favori: boolean;
-  /** Exactement 4 attaques, tirées du movepool de l'espèce. */
-  moves: [Move, Move, Move, Move];
+  /** Auto-attaque : ce que le Pokémon lance en boucle sur le terrain. */
+  auto: Move;
+  /**
+   * Grosse attaque, tirée parmi celles du ou des types de l'espèce.
+   *
+   * Elle reste verrouillée jusqu'au palier 3, qui ne s'achète qu'en manche :
+   * la voir sur la fiche sans pouvoir s'en servir est justement ce qui donne
+   * envie de monter les paliers.
+   */
+  ultime: Move;
   /** Exactement 2 traits. */
   traits: [Trait, Trait];
   /** Exactement 4 sub-stats. */
