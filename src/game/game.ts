@@ -59,6 +59,17 @@ const CROWD_CAPACITY = 128;
 const LURE_TICKS = 90;
 /** Pokémon simultanément sur le terrain, doublons compris. */
 const MAX_POSES = 6;
+/**
+ * Cristaux rapportes par un ennemi abattu.
+ *
+ * L'invocation coute dix cristaux : a un par tete, une manche en finançait
+ * a peine deux. Le gacha doit pouvoir tourner souvent.
+ */
+const PRIME_KO = 3;
+/** Prime versee a chaque vague entierement contenue. */
+const PRIME_VAGUE = 12;
+/** Prime supplementaire quand la manche est gagnee. */
+const PRIME_VICTOIRE = 30;
 /** Ennemis qu'on peut laisser passer avant de perdre la manche. */
 const VIES = 10;
 
@@ -336,8 +347,14 @@ export class Game {
       if (event.kind === 'spawn') {
         this.spawnEnemy(event.request.species.id, event.request.hp, event.request.speed);
       }
-      if (event.kind === 'waveCleared') this.notify(`Vague ${event.index + 1} terminée`);
-      if (event.kind === 'allCleared') this.notify('Toutes les vagues sont passées');
+      if (event.kind === 'waveCleared') {
+        this.crystals += PRIME_VAGUE;
+        this.notify(`Vague ${event.index + 1} tenue — +${PRIME_VAGUE} cristaux`);
+      }
+      if (event.kind === 'allCleared') {
+        this.crystals += PRIME_VICTOIRE;
+        this.notify(`Terrain tenu — +${PRIME_VICTOIRE} cristaux`);
+      }
     }
 
     this.enemies.forEach((enemy) => {
@@ -352,7 +369,7 @@ export class Game {
       if (enemy.state === 'mort') {
         // Coup fatal : on encaisse la récompense une seule fois, puis on laisse
         // l'agonie se jouer avant de rendre l'unité au réservoir.
-        this.crystals += 1;
+        this.crystals += PRIME_KO;
         const entry = this.crowds.get(enemy.speciesId);
         const faint = entry?.faint ?? null;
         if (faint && entry) {

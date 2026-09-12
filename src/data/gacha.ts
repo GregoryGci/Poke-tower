@@ -18,11 +18,11 @@ export const COUT_INVOCATION = 10;
 
 /** Taux par rareté. La somme doit valoir 1. */
 export const TAUX: Record<Rarity, number> = {
-  normal: 0.6,
-  rare: 0.25,
-  epique: 0.11,
-  legendaire: 0.035,
-  prismatique: 0.005,
+  normal: 0.4,
+  rare: 0.3,
+  epique: 0.2,
+  legendaire: 0.08,
+  prismatique: 0.02,
 };
 
 export const LIBELLE_RARETE: Record<Rarity, string> = {
