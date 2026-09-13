@@ -23,18 +23,17 @@ export const COUT_INVOCATION = 10;
 /**
  * Taux par rareté. La somme doit valoir 1.
  *
- * Le palier `unique` est taillé pour rester un événement : 1,5 % veut dire
- * qu'un tirage multiple sur sept en contient un. Le prismatique garde sa
- * ligne dans la table, mais aucune espèce ne l'habite côté cristaux — le
- * tirage redescend alors d'un cran, ce qui gonfle d'autant le palier unique.
+ * Le prismatique est taillé pour rester un événement : à 2,5 %, un tirage
+ * multiple sur quatre en contient un. Il ne donne au portail à cristaux que
+ * les six espèces qui y sont déclarées — les huit légendes de la Master Ball
+ * partagent la rareté mais pas le portail.
  */
 export const TAUX: Record<Rarity, number> = {
   normal: 0.4,
   rare: 0.3,
   epique: 0.2,
   legendaire: 0.075,
-  unique: 0.015,
-  prismatique: 0.01,
+  prismatique: 0.025,
 };
 
 export const LIBELLE_RARETE: Record<Rarity, string> = {
@@ -42,7 +41,6 @@ export const LIBELLE_RARETE: Record<Rarity, string> = {
   rare: 'Rare',
   epique: 'Épique',
   legendaire: 'Légendaire',
-  unique: 'Unique',
   prismatique: 'Prismatique',
 };
 
@@ -85,6 +83,9 @@ function rareteServie(rng: () => number): Rarity {
   const depart = RARITIES.indexOf(voulue);
   for (let i = depart; i >= 0; i--) {
     const candidate = RARITIES[i];
+    // `especesDeRarete` ne compte que les espèces réellement invocables au
+    // portail à cristaux : un palier dont toutes les espèces sont réservées à
+    // la Master Ball est donc vu comme vide, et le tirage redescend.
     if (candidate && especesDeRarete(candidate).length > 0) return candidate;
   }
   // Aucun palier peuplé : le catalogue est cassé, mieux vaut le dire.

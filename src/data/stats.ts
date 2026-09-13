@@ -47,7 +47,6 @@ export const POTENTIEL_MAX: Record<Rarity, number> = {
   rare: 14,
   epique: 20,
   legendaire: 28,
-  unique: 32,
   prismatique: 36,
 };
 

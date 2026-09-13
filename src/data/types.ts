@@ -4,22 +4,15 @@
  */
 
 /**
- * Les six paliers, du plus commun au plus rare.
+ * Les cinq paliers, du plus commun au plus rare.
  *
- * `unique` s'intercale entre légendaire et prismatique, et la distinction
- * n'est pas cosmétique : c'est la frontière entre ce qui s'achète en cristaux
- * et ce qui ne s'obtient qu'à la Master Ball. Un unique est le sommet de ce
- * qu'on peut viser en jouant ; un prismatique demande d'avoir eu de la chance
- * en raid.
+ * Le prismatique est le sommet, et il ne se subdivise pas : ce qui distingue
+ * un Carchacrok d'un Mewtwo n'est pas leur rareté — elle est la même — mais
+ * **où on les trouve**. Le premier sort du portail à cristaux, le second de
+ * la Master Ball, et cette appartenance est déclarée espèce par espèce dans
+ * le catalogue plutôt que déduite d'un palier de plus.
  */
-export const RARITIES = [
-  'normal',
-  'rare',
-  'epique',
-  'legendaire',
-  'unique',
-  'prismatique',
-] as const;
+export const RARITIES = ['normal', 'rare', 'epique', 'legendaire', 'prismatique'] as const;
 export type Rarity = (typeof RARITIES)[number];
 
 /** Multiplicateur de stats appliqué selon la rareté du Pokémon. */
@@ -28,7 +21,6 @@ export const RARITY_MULTIPLIER: Record<Rarity, number> = {
   rare: 1.15,
   epique: 1.35,
   legendaire: 1.6,
-  unique: 1.8,
   prismatique: 2,
 };
 
