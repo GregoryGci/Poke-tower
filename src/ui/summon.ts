@@ -26,6 +26,7 @@ import { ESPECES_LEGENDAIRES, getSpecies, rareteDe } from '@/data/content';
 import { pastilleArme, pastillePokemon } from './pastille';
 import { getWeapon, libelleStyle } from '@/data/weapons';
 import { cascader, rareteDominante, revelation } from './reveal';
+import { illustrationPortail } from './illustrations';
 import type { AccountManager } from '@/save';
 import type { OwnedPokemon, OwnedWeapon, Rarity } from '@/data/types';
 
@@ -141,9 +142,15 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   onglets.append(ongletPoke, ongletArme, ongletLegende);
 
   const scene = elem('div', 'invocation-scene');
+  // La bannière est un panorama : elle montre ce que le portail contient,
+  // ce qu'une capsule à glyphe ne pouvait pas faire. Elle remplace la capsule
+  // quand elle existe, et la capsule reste pour les portails sans asset.
+  const banniere = elem('img', 'portail-banniere');
+  banniere.alt = '';
+  banniere.decoding = 'async';
   const capsule = elem('div', 'capsule', '?');
   const consigne = elem('p', 'sous-titre');
-  scene.append(capsule, consigne);
+  scene.append(banniere, capsule, consigne);
 
   const taux = elem('div', 'taux');
   for (const [rarete, part] of Object.entries(TAUX) as Array<[Rarity, number]>) {
@@ -194,8 +201,11 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
     ongletLegende.setAttribute('aria-selected', String(portail === 'legendaire'));
     racine.dataset['portail'] = portail;
 
-    capsule.textContent =
-      portail === 'pokemon' ? '?' : portail === 'arme' ? '✦' : '◉';
+    const dessin = illustrationPortail(portail);
+    banniere.hidden = !dessin;
+    capsule.hidden = Boolean(dessin);
+    if (dessin) banniere.src = dessin;
+    else capsule.textContent = portail === 'pokemon' ? '?' : portail === 'arme' ? '✦' : '◉';
 
     // Le portail des légendes n'a pas de tirage multiple : une Ball ne se
     // dépense pas par dix, et un bouton désactivé en permanence n'apprendrait
@@ -233,14 +243,16 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
         : `Il te manque ${COUT_MULTIPLE - compte.crystals} cristaux`;
   };
 
-  /** Rappel du solde sous la capsule, après un tirage. */
+  /** Rappel du solde sous le portail, après un tirage. */
   const rappelSolde = (): void => {
     scene.innerHTML = '';
     const reste =
       portail === 'legendaire'
         ? `Il te reste ${compte.balls ?? 0} Master Ball${(compte.balls ?? 0) > 1 ? 's' : ''}.`
         : `Il te reste ${compte.crystals} cristaux.`;
-    scene.append(capsule, consigne, elem('p', 'sous-titre', reste));
+    // La bannière est réinjectée avec le reste : `innerHTML = ''` détache
+    // tout, et la reconstruire perdrait l'image déjà chargée.
+    scene.append(banniere, capsule, consigne, elem('p', 'sous-titre', reste));
   };
 
   const tirer = async (multiple: boolean): Promise<void> => {

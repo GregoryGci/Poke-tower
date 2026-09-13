@@ -26,6 +26,7 @@ import { pierresDisponibles } from '@/data/pierres';
 import { bonbonsDisponibles } from '@/data/bonbons';
 import { niveauDresseur } from '@/data/types';
 import { pastillePokemon } from './pastille';
+import { illustrationPortail } from './illustrations';
 import type { PlayerAccount } from '@/data/types';
 
 export type Destination =
@@ -41,6 +42,8 @@ interface Carte {
   id: Destination;
   /** Glyphe de la destination. Une forme, pas une illustration. */
   glyphe: string;
+  /** Identifiant d'illustration, quand la destination en a une. */
+  illustration?: string;
   etiquette: string;
   titre: string;
   description: string;
@@ -100,6 +103,7 @@ const CARTES: Carte[] = [
   {
     id: 'invocation',
     glyphe: '◈',
+    illustration: 'pokemon',
     etiquette: 'Gacha',
     titre: 'Invocation',
     description: 'Dépense tes cristaux pour agrandir ton équipe.',
@@ -245,6 +249,17 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
       }
 
       const corps = elem('div');
+      // L'illustration se pose en bandeau au-dessus du texte : sur une carte
+      // de menu, un panorama recadré en vignette carrée ne montrerait qu'un
+      // morceau de vortex.
+      const dessin = carte.illustration ? illustrationPortail(carte.illustration) : null;
+      if (dessin) {
+        const image = elem('img', 'destination-bandeau');
+        image.src = dessin;
+        image.alt = '';
+        image.decoding = 'async';
+        corps.appendChild(image);
+      }
       corps.append(elem('p', 'destination-desc', carte.description));
 
       bouton.append(haut, corps, pied);
