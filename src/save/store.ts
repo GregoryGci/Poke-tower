@@ -11,6 +11,15 @@ export interface SaveStore {
   readonly kind: 'local' | 'supabase';
   load(accountId: string): Promise<PlayerAccount | null>;
   save(account: PlayerAccount): Promise<void>;
+  /**
+   * Vide la file d'envoi et attend qu'elle soit partie.
+   *
+   * Optionnel : seul un magasin qui differe ses ecritures en a un. Il existe
+   * pour la fermeture d'onglet — `save()` rend la main des que le navigateur
+   * a ecrit, et sans ce point d'attente la derniere poussee serait tuee avec
+   * la page.
+   */
+  pousserMaintenant?(): Promise<void>;
 }
 
 /** Erreur de sauvegarde : jamais fatale, le jeu continue en mémoire. */

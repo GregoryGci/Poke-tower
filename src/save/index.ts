@@ -1,6 +1,7 @@
 import { emptyAccount, type PlayerAccount } from '@/data/types';
 import { LocalStore } from './local';
 import { SupabaseStore } from './supabase';
+import { SyncStore } from './sync';
 import type { SaveStore } from './store';
 
 export type { SaveStore } from './store';
@@ -11,18 +12,29 @@ export { SaveError } from './store';
  *
  * Sans clés Supabase dans l'environnement, on retombe sur le navigateur : le
  * jeu doit rester lançable par quelqu'un qui vient de cloner le dépôt.
+ *
+ * Avec les clés, on n'écrit jamais **que** en ligne : `SyncStore` enveloppe
+ * le magasin distant et garde le navigateur comme source de vérité pendant
+ * la session. Une coupure réseau ne doit jamais coûter une manche.
  */
 export function createStore(): SaveStore {
   const url = import.meta.env['VITE_SUPABASE_URL'];
   const key = import.meta.env['VITE_SUPABASE_ANON_KEY'];
-  if (url && key) return new SupabaseStore(url, key);
+  if (url && key) return new SyncStore(new SupabaseStore(url, key));
   console.info('Supabase non configuré : sauvegarde dans le navigateur.');
   return new LocalStore();
 }
 
 const ACCOUNT_ID_KEY = 'poke-tower:account-id';
 
-/** Identifiant local du joueur, créé au premier lancement. */
+/**
+ * Identifiant local du joueur, créé au premier lancement.
+ *
+ * Il reste utile hors ligne : c'est la clé de la sauvegarde navigateur. En
+ * ligne, c'est l'uid d'authentification qui fait foi — le magasin distant
+ * ignore celui-ci, justement pour qu'un client ne puisse pas réclamer la
+ * ligne d'un autre.
+ */
 export function resolveAccountId(): string {
   try {
     const existing = localStorage.getItem(ACCOUNT_ID_KEY);
@@ -70,6 +82,9 @@ export class AccountManager {
     }
     try {
       await this.store.save(this.account);
+      // Un magasin qui differe ses ecritures doit avoir fini avant qu'on
+      // rende la main : `flush` est appele a la fermeture de l'onglet.
+      await this.store.pousserMaintenant?.();
     } catch (error) {
       console.warn('Sauvegarde impossible, la progression reste en mémoire.', error);
     }
