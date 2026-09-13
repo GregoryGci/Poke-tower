@@ -2,6 +2,10 @@ import { emptyAccount, type PlayerAccount } from '@/data/types';
 import { LocalStore } from './local';
 import { SupabaseStore } from './supabase';
 import { SyncStore } from './sync';
+
+// L'identifiant vit dans son propre module : `sync.ts` doit pouvoir l'adopter
+// quand le serveur en impose un autre, et l'importer d'ici ferait un cycle.
+export { resolveAccountId } from './identite';
 import type { SaveStore } from './store';
 
 export type { SaveStore } from './store';
@@ -25,27 +29,6 @@ export function createStore(): SaveStore {
   return new LocalStore();
 }
 
-const ACCOUNT_ID_KEY = 'poke-tower:account-id';
-
-/**
- * Identifiant local du joueur, créé au premier lancement.
- *
- * Il reste utile hors ligne : c'est la clé de la sauvegarde navigateur. En
- * ligne, c'est l'uid d'authentification qui fait foi — le magasin distant
- * ignore celui-ci, justement pour qu'un client ne puisse pas réclamer la
- * ligne d'un autre.
- */
-export function resolveAccountId(): string {
-  try {
-    const existing = localStorage.getItem(ACCOUNT_ID_KEY);
-    if (existing) return existing;
-    const id = crypto.randomUUID();
-    localStorage.setItem(ACCOUNT_ID_KEY, id);
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 /**
  * Sauvegarde différée : le gameplay appelle `touch()` autant qu'il veut,

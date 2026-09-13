@@ -69,7 +69,7 @@ export class SupabaseStore implements SaveStore {
    * tard une identité à une session anonyme, sans perdre l'uid — donc sans
    * perdre la sauvegarde.
    */
-  async identifier(): Promise<string> {
+  async identifiant(): Promise<string> {
     if (this.session) return this.session;
 
     this.session = (async () => {
@@ -101,7 +101,7 @@ export class SupabaseStore implements SaveStore {
    * la ligne de quelqu'un d'autre.
    */
   async load(_accountId: string): Promise<PlayerAccount | null> {
-    const uid = await this.identifier();
+    const uid = await this.identifiant();
 
     const { data, error } = await this.client
       .from('comptes')
@@ -129,7 +129,7 @@ export class SupabaseStore implements SaveStore {
    * inventer une ferait apparaître des Pokémon qu'on n'a pas obtenus.
    */
   async save(account: PlayerAccount): Promise<void> {
-    const uid = await this.identifier();
+    const uid = await this.identifiant();
     // L'identifiant applicatif suit l'identité : sans ça, la ligne serait
     // rejetée par la politique d'insertion.
     account.id = uid;

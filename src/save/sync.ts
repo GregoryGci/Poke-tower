@@ -19,6 +19,7 @@
  */
 
 import type { PlayerAccount } from '@/data/types';
+import { adopterIdentite } from './identite';
 import { LocalStore } from './local';
 import type { SaveStore } from './store';
 
@@ -62,30 +63,35 @@ export class SyncStore implements SaveStore {
    * traîner ou échouer, et le jeu doit démarrer quand même.
    */
   async load(accountId: string): Promise<PlayerAccount | null> {
+    // Le local est lu sous l'identifiant courant, AVANT toute adoption : c'est
+    // sous celui-là que la session précédente a écrit.
     const local = await this.local.load(accountId).catch(() => null);
 
     let distant: PlayerAccount | null = null;
+    let uid: string | null = null;
     try {
       distant = await this.distant.load(accountId);
+      uid = (await this.distant.identifiant?.()) ?? null;
     } catch (erreur) {
       this.noter(erreur);
       console.warn('Lecture en ligne impossible, on reprend la partie locale.', erreur);
       return local;
     }
 
-    if (!distant) return local;
-    if (!local) {
-      // Premier lancement sur cet appareil : on recopie la sauvegarde en ligne
-      // dans le navigateur, pour qu'une coupure immédiate ne la perde pas.
-      await this.local.save(distant).catch(() => undefined);
-      return distant;
-    }
+    // L'identité du serveur devient la seule : sans ça, la copie locale
+    // retombe sous une clé que le prochain démarrage n'ira pas lire, et une
+    // coupure après une reprise en ligne perdrait la partie.
+    if (uid) adopterIdentite(uid, accountId);
 
-    const plusRecent = (distant.updatedAt ?? 0) > (local.updatedAt ?? 0) ? distant : local;
-    if (plusRecent === distant) {
-      await this.local.save(distant).catch(() => undefined);
-    }
-    return plusRecent;
+    const gagnant =
+      !distant || (local && (local.updatedAt ?? 0) >= (distant.updatedAt ?? 0)) ? local : distant;
+    if (!gagnant) return null;
+
+    // On réaligne l'identifiant applicatif puis on réécrit en local sous la
+    // bonne clé, y compris quand c'est la partie locale qui gagne.
+    if (uid) gagnant.id = uid;
+    await this.local.save(gagnant).catch(() => undefined);
+    return gagnant;
   }
 
   /**

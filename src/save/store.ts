@@ -20,6 +20,14 @@ export interface SaveStore {
    * la page.
    */
   pousserMaintenant?(): Promise<void>;
+  /**
+   * Identifiant que le serveur reconnaît, une fois la session ouverte.
+   *
+   * Optionnel : un magasin local n'a pas d'identité à imposer. Quand il y en
+   * a une, c'est elle qui fait foi — le client ne choisit pas sous quel nom
+   * sa ligne est enregistrée.
+   */
+  identifiant?(): Promise<string>;
 }
 
 /** Erreur de sauvegarde : jamais fatale, le jeu continue en mémoire. */
