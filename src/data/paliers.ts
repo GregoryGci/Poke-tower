@@ -70,5 +70,6 @@ export const CADENCE_ULTIME: Record<Rarity, number> = {
   rare: 0.9,
   epique: 0.8,
   legendaire: 0.68,
+  unique: 0.62,
   prismatique: 0.58,
 };

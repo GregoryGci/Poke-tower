@@ -20,12 +20,21 @@ import type { OwnedPokemon, OwnedWeapon, Rarity } from './types';
 export const COUT_INVOCATION = 10;
 
 /** Taux par rareté. La somme doit valoir 1. */
+/**
+ * Taux par rareté. La somme doit valoir 1.
+ *
+ * Le palier `unique` est taillé pour rester un événement : 1,5 % veut dire
+ * qu'un tirage multiple sur sept en contient un. Le prismatique garde sa
+ * ligne dans la table, mais aucune espèce ne l'habite côté cristaux — le
+ * tirage redescend alors d'un cran, ce qui gonfle d'autant le palier unique.
+ */
 export const TAUX: Record<Rarity, number> = {
   normal: 0.4,
   rare: 0.3,
   epique: 0.2,
-  legendaire: 0.08,
-  prismatique: 0.02,
+  legendaire: 0.075,
+  unique: 0.015,
+  prismatique: 0.01,
 };
 
 export const LIBELLE_RARETE: Record<Rarity, string> = {
@@ -33,6 +42,7 @@ export const LIBELLE_RARETE: Record<Rarity, string> = {
   rare: 'Rare',
   epique: 'Épique',
   legendaire: 'Légendaire',
+  unique: 'Unique',
   prismatique: 'Prismatique',
 };
 

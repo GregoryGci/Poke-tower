@@ -309,6 +309,50 @@ const BASES: Record<string, Species> = {
     range: 9.5, style: 'zone', movepool: ['flammeche', 'tornade', 'griffe'],
     evolutions: [], model: 'moltres', height: 2.32, echelle: 0.28,
   },
+  mew: {
+    id: 'mew', dexNumber: 151, name: 'Mew', types: ['psy'],
+    baseStats: stats(100, 100, 100, 100, 100, 100), rarity: 'prismatique',
+    range: 9, style: 'unique', movepool: ['choc_mental', 'vive_attaque', 'charge'],
+    evolutions: [], model: 'mew', height: 1.22, echelle: 0.8,
+  },
+
+  // --- Uniques : le sommet de ce qu'on peut viser en cristaux
+  //
+  // Cinq lignées dont seul le dernier stade existe ici : leurs pré-évolutions
+  // ne sont pas converties, et les ajouter pour elles-mêmes aurait rempli le
+  // portail de Minidraco sans intérêt. Ils s'obtiennent donc directement, à
+  // 1,5 % — assez rare pour rester un événement, assez atteignable pour se
+  // viser.
+  dragonite: {
+    id: 'dragonite', dexNumber: 149, name: 'Dracolosse', types: ['dragon', 'vol'],
+    baseStats: stats(91, 134, 95, 100, 100, 80), rarity: 'unique',
+    range: 7.5, style: 'cac', movepool: ['draco_griffe', 'tornade', 'ecras_face'],
+    evolutions: [], model: 'dragonite', height: 2.73, echelle: 0.7,
+  },
+  tyranitar: {
+    id: 'tyranitar', dexNumber: 248, name: 'Tyranocif', types: ['roche', 'tenebres'],
+    baseStats: stats(100, 134, 110, 95, 100, 61), rarity: 'unique',
+    range: 6.5, style: 'zone', movepool: ['jet_pierres', 'morsure', 'ecras_face'],
+    evolutions: [], model: 'tyranitar', height: 2.63, echelle: 0.75,
+  },
+  salamence: {
+    id: 'salamence', dexNumber: 373, name: 'Drattak', types: ['dragon', 'vol'],
+    baseStats: stats(95, 135, 80, 110, 80, 100), rarity: 'unique',
+    range: 8.5, style: 'ligne', movepool: ['draco_griffe', 'tornade', 'morsure'],
+    evolutions: [], model: 'salamence', height: 1.85, echelle: 0.55,
+  },
+  metagross: {
+    id: 'metagross', dexNumber: 376, name: 'Métalosse', types: ['acier', 'psy'],
+    baseStats: stats(80, 135, 130, 95, 90, 70), rarity: 'unique',
+    range: 5.5, style: 'cac', movepool: ['choc_mental', 'ecras_face', 'charge'],
+    evolutions: [], model: 'metagross', height: 2.04, echelle: 0.75,
+  },
+  garchomp: {
+    id: 'garchomp', dexNumber: 445, name: 'Carchacrok', types: ['dragon', 'sol'],
+    baseStats: stats(108, 130, 95, 80, 85, 102), rarity: 'unique',
+    range: 4.5, style: 'cac', movepool: ['draco_griffe', 'morsure', 'ecras_face'],
+    evolutions: [], model: 'garchomp', height: 2.7, echelle: 0.8,
+  },
 };
 
 /**
@@ -324,6 +368,16 @@ interface StadeEvolue {
   name: string;
   types?: [PokemonType] | [PokemonType, PokemonType];
   baseStats: BaseStats;
+  /**
+   * Rareté propre, quand elle diffère de celle de la lignée.
+   *
+   * Un seul cas aujourd'hui : Dracaufeu. Il figure au portail des uniques, et
+   * une espèce ne peut avoir qu'une rareté — c'est la règle du jeu. Le faire
+   * monter d'un cran au dernier stade est plus juste que de dédoubler
+   * l'espèce : évoluer un Salamèche jusqu'au bout rapporte alors exactement
+   * ce que le portail vend.
+   */
+  rarity?: Rarity;
   /** Hauteur mesurée sur le .glb converti. */
   height: number;
   /** Niveau auquel la forme précédente évolue vers celle-ci. */
@@ -347,7 +401,7 @@ const LIGNEES: Record<string, StadeEvolue[]> = {
   ],
   charmander: [
     { id: 'charmeleon', dexNumber: 5, name: 'Reptincel', baseStats: stats(58, 64, 58, 80, 65, 80), height: 1.8, niveau: 16, evolution: 'charizard' },
-    { id: 'charizard', dexNumber: 6, name: 'Dracaufeu', types: ['feu', 'vol'], baseStats: stats(78, 84, 78, 109, 85, 100), height: 2.72, niveau: 36 },
+    { id: 'charizard', dexNumber: 6, name: 'Dracaufeu', types: ['feu', 'vol'], baseStats: stats(78, 84, 78, 109, 85, 100), height: 2.72, niveau: 36, rarity: 'unique' },
   ],
   squirtle: [
     { id: 'wartortle', dexNumber: 8, name: 'Carabaffe', baseStats: stats(59, 63, 80, 65, 80, 58), height: 1.86, niveau: 16, evolution: 'blastoise' },
@@ -417,9 +471,9 @@ export const SPECIES: Record<string, Species> = (() => {
         name: stade.name,
         types: stade.types ?? base.types,
         baseStats: stade.baseStats,
-        // Un stade évolué garde la rareté de sa lignée : faire évoluer un
-        // Pokémon ne doit pas changer ce qu'il vaut sur le papier.
-        rarity: base.rarity,
+        // Un stade évolué garde la rareté de sa lignée, sauf s'il en déclare
+        // une : voir `StadeEvolue.rarity`.
+        rarity: stade.rarity ?? base.rarity,
         // Un peu plus d'allonge par stade, sans changer de rôle : une évolution
         // qui se mettrait à tirer de loin demanderait de la replacer.
         range: Math.round(base.range * (1 + 0.08 * (rang + 1)) * 10) / 10,
@@ -491,9 +545,16 @@ export const ENEMY_IDS = ['rattata', 'pidgey', 'caterpie', 'weedle', 'zigzagoon'
  */
 const HORS_PORTAIL = new Set(['vaporeon', 'jolteon', 'flareon']);
 
-export const ESPECES_OBTENABLES = Object.keys(BASES).filter(
-  (id) => !HORS_PORTAIL.has(id) && BASES[id]!.rarity !== 'prismatique'
-);
+export const ESPECES_OBTENABLES = [
+  ...Object.keys(BASES).filter(
+    (id) => !HORS_PORTAIL.has(id) && BASES[id]!.rarity !== 'prismatique'
+  ),
+  // Dracaufeu est le seul stade évolué qu'on peut aussi invoquer : il porte
+  // la rareté « unique », et c'est à ce titre qu'il y entre. Les autres
+  // évolutions restent hors portail, sans quoi la progression par
+  // l'expérience n'aurait plus d'objet.
+  'charizard',
+];
 
 /** Espèces du portail à Balls : les prismatiques, et elles seules. */
 export const ESPECES_LEGENDAIRES = Object.keys(BASES).filter(

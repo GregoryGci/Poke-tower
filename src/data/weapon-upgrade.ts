@@ -74,6 +74,7 @@ const SUBSTATS_DE_DEPART: Record<Rarity, number> = {
   rare: 1,
   epique: 2,
   legendaire: 3,
+  unique: 3,
   prismatique: 4,
 };
 
@@ -93,6 +94,7 @@ const MULTIPLICATEUR_ROLL: Record<Rarity, number> = {
   rare: 1.2,
   epique: 1.45,
   legendaire: 1.75,
+  unique: 1.9,
   prismatique: 2.1,
 };
 

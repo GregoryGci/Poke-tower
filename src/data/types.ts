@@ -3,7 +3,23 @@
  * s'y conforme, et la couche de sauvegarde les sérialise tels quels.
  */
 
-export const RARITIES = ['normal', 'rare', 'epique', 'legendaire', 'prismatique'] as const;
+/**
+ * Les six paliers, du plus commun au plus rare.
+ *
+ * `unique` s'intercale entre légendaire et prismatique, et la distinction
+ * n'est pas cosmétique : c'est la frontière entre ce qui s'achète en cristaux
+ * et ce qui ne s'obtient qu'à la Master Ball. Un unique est le sommet de ce
+ * qu'on peut viser en jouant ; un prismatique demande d'avoir eu de la chance
+ * en raid.
+ */
+export const RARITIES = [
+  'normal',
+  'rare',
+  'epique',
+  'legendaire',
+  'unique',
+  'prismatique',
+] as const;
 export type Rarity = (typeof RARITIES)[number];
 
 /** Multiplicateur de stats appliqué selon la rareté du Pokémon. */
@@ -12,6 +28,7 @@ export const RARITY_MULTIPLIER: Record<Rarity, number> = {
   rare: 1.15,
   epique: 1.35,
   legendaire: 1.6,
+  unique: 1.8,
   prismatique: 2,
 };
 

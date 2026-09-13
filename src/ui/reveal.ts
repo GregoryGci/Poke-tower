@@ -24,7 +24,8 @@ const POIDS: Record<Rarity, number> = {
   rare: 1,
   epique: 2,
   legendaire: 3,
-  prismatique: 4,
+  unique: 4,
+  prismatique: 5,
 };
 
 /** Duree du defile, en millisecondes. Plus c'est rare, plus on fait attendre. */
@@ -33,6 +34,7 @@ const DUREE_DEFILE: Record<Rarity, number> = {
   rare: 1200,
   epique: 1600,
   legendaire: 2200,
+  unique: 2600,
   prismatique: 2900,
 };
 

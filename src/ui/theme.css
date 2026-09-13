@@ -987,6 +987,7 @@
 .rarete[data-rarete='rare'] { background: #e2eefb; color: #24578f; }
 .rarete[data-rarete='epique'] { background: #f0e6f5; color: #6d3b80; }
 .rarete[data-rarete='legendaire'] { background: #fbeade; color: #a4521d; }
+.rarete[data-rarete='unique'] { background: #fdf0d8; color: #8a5a10; }
 .rarete[data-rarete='prismatique'] { background: #e8f3ee; color: var(--emeraude); }
 
 .bloc { display: flex; flex-direction: column; gap: 9px; }
@@ -3155,6 +3156,7 @@
 
 .resultat[data-rarete='epique'],
 .resultat[data-rarete='legendaire'],
+.resultat[data-rarete='unique'],
 .resultat[data-rarete='prismatique'] {
   /* L'entrée est plus lente et plus ample : le poids se lit dans le temps que
      met la carte à se poser, autant que dans sa couleur. */
@@ -3172,6 +3174,7 @@
    grille, et une carte sans aura n'en paie pas le coût. */
 .resultat[data-rarete='epique']::after,
 .resultat[data-rarete='legendaire']::after,
+.resultat[data-rarete='unique']::after,
 .resultat[data-rarete='prismatique']::after {
   content: '';
   position: absolute;
@@ -3390,4 +3393,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ecran-invocation[data-portail='legendaire'] .capsule { animation: none; }
+}
+
+/* L'unique : un anneau blanc-or plus vif que le légendaire, mais qui ne bouge
+   pas — le frisson reste réservé au prismatique. */
+.resultat[data-rarete='unique']::after {
+  box-shadow: 0 0 0 3px #fff3d0, 0 0 0 6px var(--or), 0 0 24px 6px rgba(224, 169, 59, 0.8);
+  animation: aura-carte 700ms steps(2, end) infinite;
+}
+
+.revelation[data-rarete='unique'][data-phase='revele']::before {
+  box-shadow: inset 0 0 0 10px #fff3d0, inset 0 0 0 20px var(--or);
+  animation: aura-pulse 380ms steps(2, end) 8;
 }
