@@ -14,6 +14,7 @@
 import {
   BUTIN_PAR_DIFFICULTE,
   CHANCE_HAUTE,
+  CHANCE_PIERRE,
   DIFFICULTES,
   LIBELLE_DIFFICULTE,
   RAIDS,
@@ -95,14 +96,21 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<SortieRaids> {
         );
         carte.appendChild(ligne);
       }
-      for (const drop of raid.butin) {
-        const modele = getPierre(drop.pierreId);
+      // Les pierres dépendent du cran : on annonce la fourchette ici, et le
+      // taux exact sur chaque bouton de difficulté. Un seul chiffre aurait été
+      // faux pour deux crans sur trois.
+      for (const pierreId of raid.butin) {
+        const modele = getPierre(pierreId);
         if (!modele) continue;
         const ligne = elem('div', 'raid-drop');
         ligne.append(
           elem('span', 'raid-glyphe', modele.glyphe),
           elem('span', undefined, modele.name),
-          elem('code', undefined, `${Math.round(drop.chance * 100)} %`)
+          elem(
+            'code',
+            undefined,
+            `${Math.round(CHANCE_PIERRE.facile * 100)} à ${Math.round(CHANCE_PIERRE.difficile * 100)} %`
+          )
         );
         carte.appendChild(ligne);
       }
@@ -127,6 +135,8 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<SortieRaids> {
         const paliers = BUTIN_PAR_DIFFICULTE[difficulte];
         // La rareté basse est la plus fréquente : on l'annonce en premier,
         // parce que c'est ce qu'on obtiendra le plus souvent.
+        // Le cran change trois choses : les points de vie, le palier de
+        // l objet, et la chance de pierre. Les trois sont annoncees.
         const butin = famille
           ? `${LIBELLE_RARETE[paliers[0]!]} · ${LIBELLE_RARETE[paliers[1]!]} à ${Math.round(CHANCE_HAUTE * 100)} %`
           : 'Pierres et Ball seulement';
@@ -134,7 +144,14 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<SortieRaids> {
         bouton.append(
           elem('b', undefined, LIBELLE_DIFFICULTE[difficulte]),
           elem('span', 'raid-vie', `PV ennemis ×${VIE_PAR_DIFFICULTE[difficulte]}`),
-          elem('span', 'raid-butin-cran', butin)
+          elem('span', 'raid-butin-cran', butin),
+          elem(
+            'span',
+            'raid-butin-cran',
+            raid.butin.length
+              ? `Pierre ${Math.round(CHANCE_PIERRE[difficulte] * 100)} %`
+              : ''
+          )
         );
         bouton.addEventListener('click', () => {
           if (!ouvert) return;

@@ -71,12 +71,6 @@ export const BUTIN_PAR_DIFFICULTE: Record<Difficulte, readonly Rarity[]> = {
  */
 export const CHANCE_HAUTE = 0.25;
 
-export interface DropPierre {
-  pierreId: string;
-  /** Probabilité par manche gagnée, de 0 à 1. */
-  chance: number;
-}
-
 export interface Raid {
   id: string;
   nom: string;
@@ -94,8 +88,13 @@ export interface Raid {
    * de farmer au hasard en espérant tomber sur la bonne pièce.
    */
   familleItem: string | null;
-  /** Pierres d'évolution, pour le raid qui en donne. */
-  butin: DropPierre[];
+  /**
+   * Pierres d'évolution que ce raid peut faire tomber.
+   *
+   * Des identifiants, sans probabilité : celle-ci ne dépend plus du raid mais
+   * du cran, et la porter ici aurait laissé deux barèmes coexister.
+   */
+  butin: string[];
   /** Probabilité qu'une Master Ball tombe, par manche gagnée. */
   chanceBall: number;
 }
@@ -146,11 +145,7 @@ export const RAIDS: Raid[] = [
     rang: 18,
     requis: 10,
     familleItem: null,
-    butin: [
-      { pierreId: 'pierre-eau', chance: 0.12 },
-      { pierreId: 'pierre-foudre', chance: 0.12 },
-      { pierreId: 'pierre-feu', chance: 0.12 },
-    ],
+    butin: ['pierre-eau', 'pierre-foudre', 'pierre-feu'],
     chanceBall: 0.07,
   },
 ];
@@ -199,9 +194,37 @@ export function niveauDuRaid(raid: Raid, difficulte: Difficulte): Niveau {
   };
 }
 
-/** Tire le butin en pierres d'un raid gagné. Chaque pierre est tirée à part. */
-export function butinDuRaid(raid: Raid, rng: () => number = Math.random): string[] {
-  return raid.butin.filter((drop) => rng() < drop.chance).map((drop) => drop.pierreId);
+/**
+ * Chance qu'une pierre tombe, par cran.
+ *
+ * Le cran ne changeait rien au butin en pierres : un raid Facile en donnait
+ * autant qu'un Difficile, et il n'y avait donc aucune raison de monter. Le pas
+ * est large — cinq fois entre les extrêmes — parce qu'un écart qu'on ne sent
+ * pas ne fait pas changer d'avis.
+ *
+ * La valeur remplace celle déclarée sur le raid : il n'y a qu'une seule
+ * grotte, et faire cohabiter deux barèmes donnerait des taux qu'on ne saurait
+ * plus lire.
+ */
+export const CHANCE_PIERRE: Record<Difficulte, number> = {
+  facile: 0.02,
+  normal: 0.04,
+  difficile: 0.1,
+};
+
+/**
+ * Tire le butin en pierres d'un raid gagné.
+ *
+ * Chaque pierre est tirée à part : on peut donc repartir avec deux pierres
+ * d'un coup, et c'est rare au point d'être mémorable.
+ */
+export function butinDuRaid(
+  raid: Raid,
+  difficulte: Difficulte,
+  rng: () => number = Math.random
+): string[] {
+  const chance = CHANCE_PIERRE[difficulte];
+  return raid.butin.filter(() => rng() < chance);
 }
 
 /** Vrai si le raid gagné fait tomber une Master Ball. Tirage indépendant. */

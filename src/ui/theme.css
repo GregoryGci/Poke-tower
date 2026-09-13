@@ -3919,3 +3919,29 @@
 }
 .sac-cible:hover { border-color: var(--ligne); background: var(--ivoire); }
 .sac-cible:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+
+/* ---------- Carte en vedette ----------
+   L'invocation occupe toute la largeur, juste sous la principale. C'est la
+   boucle du jeu — on joue pour des cristaux, on les dépense là — et une
+   vignette parmi six ne le disait pas. */
+
+.destination.vedette {
+  grid-column: span 3;
+  border-color: var(--or);
+  box-shadow: var(--ombre-portee), inset 0 0 0 3px var(--blanc), inset 0 0 0 5px var(--or);
+}
+
+.destination.vedette .destination-titre { font-size: clamp(22px, 2.4vw, 30px); }
+
+.destination.vedette .destination-bandeau {
+  /* La bannière passe en bandeau large : à pleine largeur, le rapport 11:6
+     ferait trois cent cinquante pixels de haut et repousserait tout le reste
+     de la grille sous le pli. */
+  aspect-ratio: auto;
+  height: clamp(120px, 18vh, 190px);
+  object-position: center 45%;
+}
+
+@media (max-width: 720px) {
+  .destination.vedette { grid-column: auto; }
+}

@@ -48,6 +48,14 @@ interface Carte {
   titre: string;
   description: string;
   principale?: boolean;
+  /**
+   * Carte mise en avant, sous la principale.
+   *
+   * Une seule : c est ce qui lui donne sa valeur. L invocation la porte parce
+   * que c'est la boucle du jeu — on joue pour des cristaux, on les dépense
+   * ici, et une vignette parmi six ne le disait pas.
+   */
+  vedette?: boolean;
   /** Renvoie null si la destination est ouverte, sinon la raison du verrou. */
   verrou?(compte: PlayerAccount): string | null;
   pied?(compte: PlayerAccount): string;
@@ -67,6 +75,16 @@ const CARTES: Carte[] = [
       const niveau = niveauParIndex(atteint);
       return `${getMonde(niveau.mondeId).nom} · ${niveau.nom}`;
     },
+  },
+  {
+    id: 'invocation',
+    glyphe: '◈',
+    illustration: 'pokemon',
+    vedette: true,
+    etiquette: 'Gacha',
+    titre: 'Invocation',
+    description: 'Dépense tes cristaux pour agrandir ton équipe.',
+    pied: (compte) => `${compte.crystals} cristaux`,
   },
   {
     id: 'equipe',
@@ -99,15 +117,6 @@ const CARTES: Carte[] = [
       const portee = compte.weapons.find((arme) => arme.id === compte.equippedWeaponId);
       return portee ? `Équipée : +${portee.niveau}` : `${compte.weapons.length} en stock`;
     },
-  },
-  {
-    id: 'invocation',
-    glyphe: '◈',
-    illustration: 'pokemon',
-    etiquette: 'Gacha',
-    titre: 'Invocation',
-    description: 'Dépense tes cristaux pour agrandir ton équipe.',
-    pied: (compte) => `${compte.crystals} cristaux`,
   },
   {
     id: 'sac',
@@ -252,7 +261,10 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
 
     for (const carte of CARTES) {
       const raison = carte.verrou?.(compte) ?? null;
-      const bouton = elem('button', `destination${carte.principale ? ' principale' : ''}`);
+      const bouton = elem(
+        'button',
+        `destination${carte.principale ? ' principale' : ''}${carte.vedette ? ' vedette' : ''}`
+      );
       bouton.type = 'button';
       bouton.id = `menu-${carte.id}`;
       if (raison) bouton.setAttribute('aria-disabled', 'true');

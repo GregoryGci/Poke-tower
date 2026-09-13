@@ -262,6 +262,36 @@ const BASES: Record<string, Species> = {
     evolutions: [], model: 'flareon', height: 1.5,
   },
 
+  // --- Légendaire : des Pokémon forts et sans lignée
+  //
+  // Le palier s'était retrouvé vide quand les six starters sont passés en
+  // normal, et ses 5 % glissaient vers l'épique. Il fallait donc le peupler.
+  //
+  // Le critère de recrutement est explicite : **aucune évolution, ni avant ni
+  // après**. Un Pokémon qu'on peut aussi obtenir en faisant monter un starter
+  // n'a rien à faire dans un palier qui se paie en probabilité — le tirage
+  // deviendrait un raccourci pour ce que la progression donne déjà. Absol,
+  // Latias et Latios n'ont aucun stade : les invoquer est le seul moyen de
+  // les avoir.
+  absol: {
+    id: 'absol', dexNumber: 359, name: 'Absol', types: ['tenebres'],
+    baseStats: stats(65, 130, 60, 75, 60, 75), rarity: 'legendaire',
+    range: 6.5, style: 'cac', movepool: ['machouille', 'vive_attaque', 'griffe'],
+    evolutions: [], model: 'absol', height: 1.36, echelle: 0.45,
+  },
+  latias: {
+    id: 'latias', dexNumber: 380, name: 'Latias', types: ['dragon', 'psy'],
+    baseStats: stats(80, 80, 90, 110, 130, 110), rarity: 'legendaire',
+    range: 9.5, style: 'zone', movepool: ['choc_mental', 'draco_griffe', 'psyko'],
+    evolutions: [], model: 'latias', height: 1.5, echelle: 0.58,
+  },
+  latios: {
+    id: 'latios', dexNumber: 381, name: 'Latios', types: ['dragon', 'psy'],
+    baseStats: stats(80, 90, 80, 130, 110, 110), rarity: 'legendaire',
+    range: 10, style: 'ligne', movepool: ['choc_mental', 'draco_griffe', 'draco_meteor'],
+    evolutions: [], model: 'latios', height: 1.89, echelle: 0.76,
+  },
+
   // --- Prismatique : le premier Pokémon unique
   //
   // Rayquaza est un serpent : son modèle mesure seize unités de long pour une
@@ -563,14 +593,25 @@ export const ESPECES_LEGENDAIRES = [
 
 const RESERVE_BALL = new Set(ESPECES_LEGENDAIRES);
 
-export const ESPECES_OBTENABLES = [
-  ...Object.keys(BASES).filter((id) => !HORS_PORTAIL.has(id) && !RESERVE_BALL.has(id)),
-  // Dracaufeu est le seul stade évolué qu'on peut aussi invoquer : il porte
-  // la rareté prismatique, et c'est à ce titre qu'il y entre. Les autres
-  // évolutions restent hors portail, sans quoi la progression par
-  // l'expérience n'aurait plus d'objet.
-  'charizard',
-];
+/**
+ * Ce que le portail à cristaux peut donner.
+ *
+ * **Aucun stade évolué.** Dracaufeu y figurait, au titre de sa rareté
+ * prismatique, et c'était la seule incohérence du catalogue : on pouvait
+ * l'invoquer à 0,5 % tout en l'obtenant par ailleurs en faisant monter un
+ * Salamèche à 36. Le tirage était donc un raccourci pour ce que la
+ * progression donne déjà, et la rareté ne voulait plus rien dire.
+ *
+ * Les cinq autres prismatiques — Dracolosse, Tyranocif, Drattak, Métalosse,
+ * Carchacrok — restent au portail, et ce n'est pas une exception : leurs
+ * pré-évolutions (Minidraco, Embrylex, Draby, Terhal, Griknot) n'existent pas
+ * dans ce jeu. Aucun chemin d'expérience n'y mène, le tirage est donc le seul.
+ *
+ * Dracaufeu, lui, reste parfaitement obtenable : en élevant un Salamèche.
+ */
+export const ESPECES_OBTENABLES = Object.keys(BASES).filter(
+  (id) => !HORS_PORTAIL.has(id) && !RESERVE_BALL.has(id)
+);
 
 export function getSpecies(id: string): Species {
   const species = SPECIES[id];

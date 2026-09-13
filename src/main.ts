@@ -362,7 +362,7 @@ async function jouerManche(
     if (raid) {
       // Le butin d'un raid est tiré ici et nulle part ailleurs : c'est la
       // seule source de pierres du jeu.
-      const pierres = butinDuRaid(raid.raid);
+      const pierres = butinDuRaid(raid.raid, raid.difficulte);
       for (const pierreId of pierres) ajouterPierres(account.account, pierreId, 1);
 
       // La Master Ball se tire a part, et plus rarement : une pierre debloque
