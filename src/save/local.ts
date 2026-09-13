@@ -183,6 +183,8 @@ export function migrate(account: PlayerAccount): PlayerAccount {
       subStats: arme.subStats ?? [],
     })),
     equippedWeaponId: account.equippedWeaponId ?? null,
+    // La Master Ball est arrivée après les premières sauvegardes.
+    balls: account.balls ?? 0,
     team: account.team ?? roster.slice(0, 6).map((membre) => membre.id),
     trainerName: account.trainerName ?? '',
   };

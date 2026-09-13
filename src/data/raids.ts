@@ -37,6 +37,13 @@ export interface Raid {
   /** Niveaux de campagne terminés pour qu'il s'ouvre. */
   requis: number;
   butin: DropPierre[];
+  /**
+   * Probabilité qu'une Master Ball tombe, par manche gagnée.
+   *
+   * Volontairement plus basse que celle des pierres : une pierre débloque une
+   * évolution qu'on a déjà choisie, une Ball ouvre un légendaire.
+   */
+  chanceBall: number;
 }
 
 /**
@@ -62,6 +69,7 @@ export const RAIDS: Raid[] = [
       { pierreId: 'pierre-foudre', chance: 0.12 },
       { pierreId: 'pierre-feu', chance: 0.12 },
     ],
+    chanceBall: 0.07,
   },
 ];
 
@@ -99,4 +107,9 @@ export function niveauDuRaid(raid: Raid): Niveau {
 /** Tire le butin d'un raid gagné. Chaque pierre est tirée séparément. */
 export function butinDuRaid(raid: Raid, rng: () => number = Math.random): string[] {
   return raid.butin.filter((drop) => rng() < drop.chance).map((drop) => drop.pierreId);
+}
+
+/** Vrai si le raid gagné fait tomber une Master Ball. Tirage indépendant. */
+export function ballDuRaid(raid: Raid, rng: () => number = Math.random): boolean {
+  return rng() < raid.chanceBall;
 }

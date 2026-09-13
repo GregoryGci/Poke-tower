@@ -25,7 +25,7 @@ affiliation ni approbation de Valve, dans un projet **non commercial et non
 distribué publiquement**.
 
 Les six autres armes du jeu n'ont pas de modèle : leur vignette est un sprite
-pixel écrit dans , sous la licence du projet.
+pixel écrit dans `src/ui/weapon-sprites.ts`, sous la licence du projet.
 
 ## Propriété intellectuelle
 

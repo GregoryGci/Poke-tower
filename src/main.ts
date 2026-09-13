@@ -25,7 +25,7 @@ import { ouvrirCollection } from '@/ui/collection';
 import { ouvrirArmes } from '@/ui/weapons';
 import { ouvrirCampagne } from '@/ui/campaign';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
-import { butinDuRaid, niveauDuRaid, type Raid } from '@/data/raids';
+import { ballDuRaid, butinDuRaid, niveauDuRaid, type Raid } from '@/data/raids';
 import { ajouterPierres, getPierre } from '@/data/pierres';
 import { recolter } from '@/data/recolte';
 import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
@@ -270,10 +270,15 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean, raid: Raid | null 
       // seule source de pierres du jeu.
       const pierres = butinDuRaid(raid);
       for (const pierreId of pierres) ajouterPierres(account.account, pierreId, 1);
-      if (pierres.length) {
-        const noms = pierres.map((id) => getPierre(id)?.name ?? id).join(', ');
-        await alerterButin(noms);
-      }
+
+      // La Master Ball se tire a part, et plus rarement : une pierre debloque
+      // une evolution qu'on a deja choisie, une Ball ouvre un legendaire.
+      const ball = ballDuRaid(raid);
+      if (ball) account.account.balls = (account.account.balls ?? 0) + 1;
+
+      const lots = pierres.map((id) => getPierre(id)?.name ?? id);
+      if (ball) lots.push('Master Ball');
+      if (lots.length) await alerterButin(lots.join(', '));
     } else {
       if (!progression.clearedLevels.includes(niveau.id)) {
         progression.clearedLevels.push(niveau.id);

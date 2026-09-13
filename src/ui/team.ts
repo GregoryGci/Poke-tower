@@ -107,12 +107,35 @@ function boutonCout(libelle: string, cout: number, solde: number): HTMLButtonEle
  * place : c'est l'assurance que ce qui s'affiche est bien l'état du compte,
  * jamais une vue qui aurait dérivé.
  */
+/**
+ * Ce qui vient d'être acheté, pour l'animer au prochain rendu.
+ *
+ * Le panneau est reconstruit entièrement après chaque dépense — c'est ce qui
+ * garantit qu'il montre l'état réel du compte. Mais un élément reconstruit
+ * perd toute animation en cours : sans cette trace, monter une sub-stat ne
+ * produisait aucun retour visible, et se lisait comme un achat qui a échoué.
+ *
+ * Le marqueur est consommé à la lecture : l'animation joue une fois, pas à
+ * chaque réaffichage de la fiche.
+ */
+let dernierEffet:
+  | { genre: 'substat'; index: number }
+  | { genre: 'trait'; index: number; rarete: string }
+  | null = null;
+
+function consommerEffet(): typeof dernierEffet {
+  const effet = dernierEffet;
+  dernierEffet = null;
+  return effet;
+}
+
 function remplirDetail(
   panneau: HTMLElement,
   owned: OwnedPokemon,
   compte: PlayerAccount,
   surChangement: () => void
 ): void {
+  const effetRecent = consommerEffet();
   const species = getSpecies(owned.speciesId);
   panneau.innerHTML = '';
 
@@ -222,6 +245,10 @@ function remplirDetail(
             ? `recharge −${effet.percent} %`
             : `${NOM_STAT[effet.stat]} +${effet.percent} %`;
     const ligne = elem('div', 'paire');
+    if (effetRecent?.genre === 'trait' && effetRecent.index === index) {
+      // La rareté pilote l'éclat : voir les keyframes `tire-*`.
+      ligne.dataset['tire'] = effetRecent.rarete;
+    }
     const gauche = elem('div');
     gauche.append(elem('b', undefined, trait.name));
     const badge = elem('span', 'rarete', trait.rarity);
@@ -238,7 +265,11 @@ function remplirDetail(
     relancer.title = `Relancer ce trait — ${COUT_REROLL_TRAIT_UNITE} cristaux`;
     relancer.disabled = compte.crystals < COUT_REROLL_TRAIT_UNITE;
     relancer.addEventListener('click', () => {
-      if (rerollTrait(compte, owned, index).ok) surChangement();
+      if (!rerollTrait(compte, owned, index).ok) return;
+      // La rareté est relue APRÈS le tirage : c'est celle qu'on vient
+      // d'obtenir qui décide de l'éclat, pas celle qu'on remplaçait.
+      dernierEffet = { genre: 'trait', index, rarete: owned.traits[index]?.rarity ?? 'normal' };
+      surChangement();
     });
     droite.appendChild(relancer);
 
@@ -256,10 +287,16 @@ function remplirDetail(
     ligne.disabled = cout === null || compte.crystals < cout;
     ligne.title = cout === null ? 'Palier maximum atteint' : `Palier suivant : ${cout} cristaux`;
 
+    const vientDeMonter = effetRecent?.genre === 'substat' && effetRecent.index === index;
+    if (vientDeMonter) ligne.dataset['proc'] = 'true';
+
     const paliers = elem('div', 'paliers');
     for (let i = 0; i < SUBSTAT_MAX_STACK; i++) {
       const palier = elem('span', 'palier');
       palier.dataset['plein'] = String(i < sub.stack);
+      // Seul le palier qui vient d'être acheté éclate : les précédents sont
+      // déjà acquis, les animer tous ferait clignoter toute la ligne.
+      if (vientDeMonter && i === sub.stack - 1) palier.dataset['neuf'] = 'true';
       paliers.appendChild(palier);
     }
 
@@ -271,7 +308,9 @@ function remplirDetail(
 
     ligne.append(gauche, paliers);
     ligne.addEventListener('click', () => {
-      if (monterSubStat(compte, owned, index).ok) surChangement();
+      if (!monterSubStat(compte, owned, index).ok) return;
+      dernierEffet = { genre: 'substat', index };
+      surChangement();
     });
     subs.appendChild(ligne);
   });

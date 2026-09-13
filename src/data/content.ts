@@ -48,6 +48,9 @@ const AUTOS: Record<string, Omit<Move, 'sorte'>> = {
   jet_pierres: { id: 'jet_pierres', name: 'Jet-Pierres', type: 'roche', category: 'physique', power: 50, accuracy: 0.9, cooldown: 1.3, cast: 0.35 },
   balayage: { id: 'balayage', name: 'Balayage', type: 'combat', category: 'physique', power: 60, accuracy: 1, cooldown: 1.5, cast: 0.3 },
   draco_griffe: { id: 'draco_griffe', name: 'Draco-Griffe', type: 'dragon', category: 'physique', power: 80, accuracy: 1, cooldown: 1.6, cast: 0.4 },
+  choc_mental: { id: 'choc_mental', name: 'Choc Mental', type: 'psy', category: 'special', power: 50, accuracy: 1, cooldown: 1.2, cast: 0.28 },
+  eclair: { id: 'eclair', name: 'Éclair', type: 'electrik', category: 'special', power: 40, accuracy: 1, cooldown: 0.9, cast: 0.2 },
+  vent_glace: { id: 'vent_glace', name: 'Vent Glace', type: 'glace', category: 'special', power: 55, accuracy: 0.95, cooldown: 1.3, cast: 0.3 },
 };
 
 /**
@@ -75,6 +78,9 @@ const ULTIMES: Record<string, Omit<Move, 'sorte'>> = {
   mitra_poing: { id: 'mitra_poing', name: 'Mitra-Poing', type: 'combat', category: 'physique', power: 100, accuracy: 1, cooldown: 4.4, cast: 0.9 },
   machouille: { id: 'machouille', name: 'Mâchouille', type: 'tenebres', category: 'physique', power: 80, accuracy: 1, cooldown: 3.6, cast: 0.7 },
   draco_meteor: { id: 'draco_meteor', name: 'Draco-Météore', type: 'dragon', category: 'special', power: 130, accuracy: 0.9, cooldown: 5.5, cast: 1.3 },
+  psyko: { id: 'psyko', name: 'Psyko', type: 'psy', category: 'special', power: 90, accuracy: 1, cooldown: 4, cast: 0.9 },
+  fatal_foudre: { id: 'fatal_foudre', name: 'Fatal-Foudre', type: 'electrik', category: 'special', power: 110, accuracy: 0.7, cooldown: 4.8, cast: 1.15 },
+  blizzard: { id: 'blizzard', name: 'Blizzard', type: 'glace', category: 'special', power: 110, accuracy: 0.7, cooldown: 5, cast: 1.2 },
 };
 
 /** Le catalogue complet, chaque entrée portant son rôle. */
@@ -265,7 +271,43 @@ const BASES: Record<string, Species> = {
     id: 'rayquaza', dexNumber: 384, name: 'Rayquaza', types: ['dragon', 'vol'],
     baseStats: stats(105, 150, 90, 150, 90, 95), rarity: 'prismatique',
     range: 11, style: 'ligne', movepool: ['draco_griffe', 'tornade', 'ecras_face'],
-    evolutions: [], model: 'rayquaza', height: 1.5, echelle: 0.4,
+    evolutions: [], model: 'rayquaza', height: 0.6, echelle: 0.4,
+  },
+  mewtwo: {
+    id: 'mewtwo', dexNumber: 150, name: 'Mewtwo', types: ['psy'],
+    baseStats: stats(106, 110, 90, 154, 90, 130), rarity: 'prismatique',
+    range: 10.5, style: 'unique', movepool: ['choc_mental', 'vive_attaque', 'ecras_face'],
+    evolutions: [], model: 'mewtwo', height: 2.26, echelle: 0.75,
+  },
+  lugia: {
+    id: 'lugia', dexNumber: 249, name: 'Lugia', types: ['psy', 'vol'],
+    baseStats: stats(106, 90, 130, 90, 154, 110), rarity: 'prismatique',
+    range: 12, style: 'ligne', movepool: ['choc_mental', 'tornade', 'charge'],
+    evolutions: [], model: 'lugia', height: 2.34, echelle: 0.3,
+  },
+  'ho-oh': {
+    id: 'ho-oh', dexNumber: 250, name: 'Ho-Oh', types: ['feu', 'vol'],
+    baseStats: stats(106, 130, 90, 110, 154, 90), rarity: 'prismatique',
+    range: 9.5, style: 'zone', movepool: ['flammeche', 'tornade', 'griffe'],
+    evolutions: [], model: 'ho-oh', height: 1.31, echelle: 0.32,
+  },
+  articuno: {
+    id: 'articuno', dexNumber: 144, name: 'Artikodin', types: ['glace', 'vol'],
+    baseStats: stats(90, 85, 100, 95, 125, 85), rarity: 'prismatique',
+    range: 9, style: 'zone', movepool: ['vent_glace', 'tornade', 'charge'],
+    evolutions: [], model: 'articuno', height: 1.6, echelle: 0.32,
+  },
+  zapdos: {
+    id: 'zapdos', dexNumber: 145, name: 'Électhor', types: ['electrik', 'vol'],
+    baseStats: stats(90, 90, 85, 125, 90, 100), rarity: 'prismatique',
+    range: 11.5, style: 'ligne', movepool: ['eclair', 'tornade', 'charge'],
+    evolutions: [], model: 'zapdos', height: 1.17, echelle: 0.45,
+  },
+  moltres: {
+    id: 'moltres', dexNumber: 146, name: 'Sulfura', types: ['feu', 'vol'],
+    baseStats: stats(90, 100, 90, 125, 85, 90), rarity: 'prismatique',
+    range: 9.5, style: 'zone', movepool: ['flammeche', 'tornade', 'griffe'],
+    evolutions: [], model: 'moltres', height: 2.32, echelle: 0.28,
   },
 };
 
@@ -437,15 +479,26 @@ export const ENEMY_IDS = ['rattata', 'pidgey', 'caterpie', 'weedle', 'zigzagoon'
  * son intérêt.
  */
 /**
- * Espèces obtenues autrement qu'au portail.
+ * Espèces obtenues autrement qu'au portail à cristaux.
  *
- * Les trois évolutions d'Évoli vivent dans BASES — elles n'ont pas de
- * pré-évolution par niveau, donc pas de lignée au sens du générateur — mais
- * les invoquer directement rendrait les pierres inutiles.
+ * Deux familles :
+ *
+ *  - les trois évolutions d'Évoli, qui demandent une pierre. Les invoquer
+ *    directement rendrait les pierres inutiles ;
+ *  - les **prismatiques**, qui ne sortent qu'au portail à Balls. C'est toute
+ *    la raison d'être de cette monnaie : les laisser aussi tomber à 2 % au
+ *    portail ordinaire aurait vidé la Master Ball de son sens.
  */
 const HORS_PORTAIL = new Set(['vaporeon', 'jolteon', 'flareon']);
 
-export const ESPECES_OBTENABLES = Object.keys(BASES).filter((id) => !HORS_PORTAIL.has(id));
+export const ESPECES_OBTENABLES = Object.keys(BASES).filter(
+  (id) => !HORS_PORTAIL.has(id) && BASES[id]!.rarity !== 'prismatique'
+);
+
+/** Espèces du portail à Balls : les prismatiques, et elles seules. */
+export const ESPECES_LEGENDAIRES = Object.keys(BASES).filter(
+  (id) => BASES[id]!.rarity === 'prismatique'
+);
 
 export function getSpecies(id: string): Species {
   const species = SPECIES[id];

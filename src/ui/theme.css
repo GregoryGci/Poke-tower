@@ -3042,3 +3042,352 @@
 .campagne-auto:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
 
 .campagne-case { position: relative; }
+
+/* ===================================================================
+   Passe visuelle : couleurs de type, monnaies, auras de rareté
+   =================================================================== */
+
+/* ---------- Les dix-huit types ----------
+
+   Quatre types seulement étaient colorés sur les badges, huit sur les
+   pastilles : tous les autres tombaient sur un gris commun. Or le type est
+   l'information la plus utile d'une vignette depuis que la table des
+   affinités décide de la moitié des dégâts — il doit se reconnaître à la
+   couleur, avant d'être lu.
+
+   Deux jeux, et c'est voulu : le badge est un fond clair avec du texte foncé,
+   la pastille un aplat saturé qui doit tenir derrière un portrait. */
+
+.type[data-type='normal']   { background: #eceee9; color: #575f56; }
+.type[data-type='feu']      { background: #fbeade; color: #a4521d; }
+.type[data-type='eau']      { background: #e2eefb; color: #24578f; }
+.type[data-type='plante']   { background: #e6f2e3; color: #2f6b33; }
+.type[data-type='electrik'] { background: #fbf3d9; color: #8a6a13; }
+.type[data-type='glace']    { background: #e2f4f6; color: #23707a; }
+.type[data-type='combat']   { background: #f7e3df; color: #8f3a27; }
+.type[data-type='poison']   { background: #f0e6f5; color: #6d3b80; }
+.type[data-type='sol']      { background: #f4eddc; color: #7a6127; }
+.type[data-type='vol']      { background: #e8edfa; color: #3f5591; }
+.type[data-type='psy']      { background: #fae4ea; color: #93334d; }
+.type[data-type='insecte']  { background: #eef4dd; color: #4f6618; }
+.type[data-type='roche']    { background: #f0ebdf; color: #6b5a31; }
+.type[data-type='spectre']  { background: #eae6f5; color: #493a75; }
+.type[data-type='dragon']   { background: #e5e8f8; color: #333f8c; }
+.type[data-type='tenebres'] { background: #e8e8ea; color: #3a3940; }
+.type[data-type='acier']    { background: #ecf0f4; color: #4e5a66; }
+.type[data-type='fee']      { background: #fae8f2; color: #97426f; }
+
+.pastille[data-type='normal']   { background: #9aa29c; }
+.pastille[data-type='feu']      { background: #d2762f; }
+.pastille[data-type='eau']      { background: #3d7fc1; }
+.pastille[data-type='plante']   { background: #4f9e55; }
+.pastille[data-type='electrik'] { background: #d8b13a; }
+.pastille[data-type='glace']    { background: #6fbcc6; }
+.pastille[data-type='combat']   { background: #b6543f; }
+.pastille[data-type='poison']   { background: #8b57a5; }
+.pastille[data-type='sol']      { background: #b79a5e; }
+.pastille[data-type='vol']      { background: #7f9ad4; }
+.pastille[data-type='psy']      { background: #d1657f; }
+.pastille[data-type='insecte']  { background: #7fa03a; }
+.pastille[data-type='roche']    { background: #a08a5c; }
+.pastille[data-type='spectre']  { background: #6a5b96; }
+.pastille[data-type='dragon']   { background: #5b6bc0; }
+.pastille[data-type='tenebres'] { background: #5b5a63; }
+.pastille[data-type='acier']    { background: #8f9aa6; }
+.pastille[data-type='fee']      { background: #d987b8; }
+
+/* ---------- Monnaies ----------
+
+   Le cristal passe au rouge. Il était bleu, comme les boutons d'action et les
+   badges de raid : trois choses différentes de la même couleur sur le même
+   écran, et le solde s'y perdait. Le rouge n'est utilisé par rien d'autre. */
+
+:root {
+  --cristal: #d4483b;
+  --ball: #7d3fb5;
+}
+
+.butin-icone { color: var(--cristal); font-size: 17px; }
+
+/* Le chiffre suit son glyphe : un solde en noir à côté d'une icône rouge se
+   lit comme deux informations, pas comme une. */
+.mesure[data-monnaie='cristaux'] b { color: var(--cristal); }
+.mesure[data-monnaie='ball'] b { color: var(--ball); }
+
+.mesure[data-monnaie] .etiquette::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border: 2px solid var(--ligne);
+}
+
+.mesure[data-monnaie='cristaux'] .etiquette::before {
+  background: var(--cristal);
+  transform: rotate(45deg);
+}
+
+.mesure[data-monnaie='ball'] .etiquette::before {
+  background: var(--ball);
+  border-radius: 50%;
+}
+
+/* ---------- Aura de rareté autour de la carte ----------
+
+   L'aura existait au niveau de l'écran : un liseré sur les bords du voile.
+   Elle disait « ce tirage contient quelque chose de rare » sans jamais dire
+   lequel, ce qui est précisément l'information qu'on cherche dans un tirage
+   multiple. Elle est donc descendue sur la carte.
+
+   Les deux paliers bas n'en ont pas, et c'est le point : une aura sur tout
+   rend l'aura muette. */
+
+.resultat {
+  position: relative;
+  animation: carte-chute 320ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+@keyframes carte-chute {
+  from { transform: translateY(-14px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.resultat[data-rarete='epique'],
+.resultat[data-rarete='legendaire'],
+.resultat[data-rarete='prismatique'] {
+  /* L'entrée est plus lente et plus ample : le poids se lit dans le temps que
+     met la carte à se poser, autant que dans sa couleur. */
+  animation: carte-impact 520ms cubic-bezier(0.18, 1.5, 0.36, 1) both;
+}
+
+@keyframes carte-impact {
+  0% { transform: translateY(-26px) scale(0.72); opacity: 0; }
+  55% { transform: translateY(0) scale(1.06); opacity: 1; }
+  72% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+/* L'anneau est un pseudo-élément : il déborde du cadre sans pousser la
+   grille, et une carte sans aura n'en paie pas le coût. */
+.resultat[data-rarete='epique']::after,
+.resultat[data-rarete='legendaire']::after,
+.resultat[data-rarete='prismatique']::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: var(--rayon);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.resultat[data-rarete='epique']::after {
+  box-shadow: 0 0 0 3px #8b57a5, 0 0 14px 3px rgba(139, 87, 165, 0.5);
+  animation: aura-carte 1400ms steps(2, end) infinite;
+}
+
+.resultat[data-rarete='legendaire']::after {
+  box-shadow: 0 0 0 3px var(--or), 0 0 20px 5px rgba(224, 169, 59, 0.62);
+  animation: aura-carte 900ms steps(2, end) infinite;
+}
+
+/* Le prismatique est le seul à bouger tout seul : il est unique, il a le
+   droit. */
+.resultat[data-rarete='prismatique'] {
+  animation:
+    carte-impact 520ms cubic-bezier(0.18, 1.5, 0.36, 1) both,
+    carte-frisson 2600ms ease-in-out 520ms infinite;
+}
+
+.resultat[data-rarete='prismatique']::after {
+  box-shadow:
+    0 0 0 3px var(--emeraude),
+    0 0 0 6px var(--or),
+    0 0 26px 8px rgba(177, 94, 168, 0.7);
+  animation: aura-prisme 900ms steps(6, end) infinite;
+}
+
+@keyframes aura-carte {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.42; }
+}
+
+@keyframes carte-frisson {
+  0%, 92%, 100% { transform: translate(0, 0) rotate(0deg); }
+  94% { transform: translate(-1.5px, 1px) rotate(-0.4deg); }
+  96% { transform: translate(1.5px, -1px) rotate(0.4deg); }
+  98% { transform: translate(-1px, -1px) rotate(-0.2deg); }
+}
+
+/* La cascade du tirage multiple : chaque carte tombe après la précédente. Le
+   retard est posé par le code, qui seul connaît le rang de la carte. */
+.revelation-grille .resultat { animation-delay: var(--retard, 0ms); }
+
+.revelation-grille .resultat[data-rarete='prismatique'] {
+  animation-delay: var(--retard, 0ms), calc(var(--retard, 0ms) + 520ms);
+}
+
+/* ---------- Micro-animations de dépense ----------
+
+   Un achat qui ne se voit pas se lit comme un achat qui a échoué. Le panneau
+   étant reconstruit après chaque dépense, c'est au code de marquer ce qui
+   vient de changer. */
+
+.palier[data-neuf='true'] {
+  animation: palier-proc 420ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes palier-proc {
+  0% { transform: scale(0.2); background: var(--or); }
+  60% { transform: scale(1.5); background: var(--or); }
+  100% { transform: scale(1); }
+}
+
+/* La ligne entière frémit, pour que l'oeil trouve le palier qui a bougé même
+   s'il regardait ailleurs. */
+.paire[data-proc='true'] { animation: ligne-proc 380ms ease-out both; }
+
+@keyframes ligne-proc {
+  0% { transform: translateX(0); box-shadow: var(--ombre-douce), 0 0 0 3px var(--or); }
+  25% { transform: translateX(-3px); }
+  55% { transform: translateX(3px); }
+  100% { transform: translateX(0); box-shadow: var(--ombre-douce); }
+}
+
+/* Le reroll de trait : l'éclat suit la rareté obtenue. Un trait légendaire
+   sorti sans bruit serait la pire des récompenses. */
+.paire[data-tire='normal'],
+.paire[data-tire='rare'] { animation: tire-modeste 420ms ease-out both; }
+
+.paire[data-tire='epique'] { animation: tire-notable 640ms ease-out both; }
+
+.paire[data-tire='legendaire'],
+.paire[data-tire='prismatique'] { animation: tire-eclat 900ms ease-out both; }
+
+@keyframes tire-modeste {
+  0% { box-shadow: var(--ombre-douce), 0 0 0 3px var(--argent); }
+  100% { box-shadow: var(--ombre-douce); }
+}
+
+@keyframes tire-notable {
+  0% {
+    transform: scale(1.03);
+    box-shadow: var(--ombre-douce), 0 0 0 4px #8b57a5, 0 0 16px 2px rgba(139, 87, 165, 0.55);
+  }
+  60% { transform: scale(1); }
+  100% { box-shadow: var(--ombre-douce); }
+}
+
+@keyframes tire-eclat {
+  0% {
+    transform: scale(1.05);
+    box-shadow: var(--ombre-douce), 0 0 0 5px var(--or), 0 0 26px 6px rgba(224, 169, 59, 0.75);
+  }
+  35% { transform: scale(0.99); }
+  60% { transform: scale(1.01); }
+  100% { transform: scale(1); box-shadow: var(--ombre-douce); }
+}
+
+/* ---------- Micro-animations d'interface ----------
+
+   De la respiration, pas du spectacle : chaque durée reste sous 250 ms, et
+   rien ne bouge tant que le joueur ne fait rien. */
+
+.destination,
+.raid-carte,
+.equipe-vignette,
+.unite,
+.bonbon {
+  transition:
+    transform 0.14s cubic-bezier(0.2, 1.2, 0.4, 1),
+    box-shadow 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.equipe-vignette:hover:not([aria-pressed='true']) { transform: translateX(2px); }
+.bonbon:hover:not(:disabled) { transform: translateX(2px); }
+
+.bouton-cout:active:not(:disabled),
+.palier-monter:active:not(:disabled),
+.bonbon:active:not(:disabled) { transform: translate(1px, 1px); }
+
+/* Le solde qui change : un bref éclat, sans déplacer le chiffre. */
+.mesure b[data-change='true'] { animation: solde-change 380ms ease-out both; }
+
+@keyframes solde-change {
+  0% { transform: scale(1.22); filter: brightness(1.5); }
+  100% { transform: scale(1); filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resultat,
+  .resultat[data-rarete],
+  .resultat::after,
+  .palier[data-neuf='true'],
+  .paire[data-proc='true'],
+  .paire[data-tire] {
+    animation: none !important;
+  }
+}
+
+/* ---------- Portail des légendes ----------
+
+   L'onglet porte la couleur de la Ball, et rien d'autre sur l'écran ne la
+   porte : c'est le seul repère qui dit « ici on paie dans une autre monnaie ».
+   Sans ça, trois onglets identiques donneraient l'impression de trois
+   variantes du même tirage. */
+
+.onglet-ball[aria-selected='true'] {
+  background: var(--ball);
+  border-color: var(--ligne);
+  color: var(--blanc);
+}
+
+.legendes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--blanc);
+  border: 3px solid var(--ligne);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-douce);
+}
+
+.legendes-noms { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Chaque légende porte la couleur de son type : la liste se parcourt comme un
+   aperçu de ce qu'on peut viser, pas comme un pavé de noms. */
+.legende-puce {
+  font: 600 10.5px var(--mono);
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  background: var(--argent-clair);
+  color: var(--encre);
+}
+
+.legende-puce[data-type='psy']      { background: #fae4ea; color: #93334d; }
+.legende-puce[data-type='feu']      { background: #fbeade; color: #a4521d; }
+.legende-puce[data-type='glace']    { background: #e2f4f6; color: #23707a; }
+.legende-puce[data-type='electrik'] { background: #fbf3d9; color: #8a6a13; }
+.legende-puce[data-type='dragon']   { background: #e5e8f8; color: #333f8c; }
+
+/* La capsule prend la teinte de la Ball sur ce portail : c'est l'objet qu'on
+   s'apprête à dépenser qui doit être à l'écran, pas un point d'interrogation
+   générique. */
+.ecran-invocation[data-portail='legendaire'] .capsule {
+  background: var(--ball);
+  color: var(--blanc);
+  animation: capsule-ball 1800ms ease-in-out infinite;
+}
+
+@keyframes capsule-ball {
+  0%, 100% { transform: scale(1); box-shadow: var(--ombre-portee); }
+  50% { transform: scale(1.04); box-shadow: var(--ombre-portee), 0 0 24px 6px rgba(125, 63, 181, 0.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecran-invocation[data-portail='legendaire'] .capsule { animation: none; }
+}

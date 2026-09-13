@@ -187,7 +187,15 @@ export interface Species {
    * dépendent toutes les deux.
    */
   echelle?: number;
-  /** Hauteur approximative, pour poser la barre de vie au-dessus. */
+  /**
+   * Hauteur **rendue**, pour poser la barre de vie au-dessus.
+   *
+   * Mesurée sur le .glb puis multipliée par `echelle` : c'est la hauteur que
+   * le joueur voit, pas celle du fichier. La distinction n'existait pas tant
+   * qu'aucune espèce n'était mise à l'échelle ; depuis Rayquaza et les
+   * légendaires, stocker la hauteur brute plaçait leur barre de vie à trois
+   * fois leur taille au-dessus d'eux.
+   */
   height: number;
 }
 
@@ -384,6 +392,16 @@ export interface PlayerAccount {
   /** Nom choisi a la creation. */
   trainerName: string;
   crystals: number;
+  /**
+   * Master Balls.
+   *
+   * La seconde monnaie du jeu, et volontairement la plus maigre : elle ne
+   * tombe que dans les raids, à taux faible, et n'ouvre qu'une chose — le
+   * portail des légendaires. Une monnaie qui sert à plusieurs choses devient
+   * un budget à répartir ; celle-ci est une décision unique : invoquer, ou
+   * attendre d'en avoir assez pour retenter.
+   */
+  balls: number;
   inventory: Item[];
   progression: Progression;
   updatedAt: number;
@@ -402,6 +420,7 @@ export function emptyAccount(id: string): PlayerAccount {
     team: [],
     trainerName: '',
     crystals: 0,
+    balls: 0,
     inventory: [],
     progression: {
       storyLevel: 1,

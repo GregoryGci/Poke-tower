@@ -10,7 +10,7 @@
  */
 
 import { RARITIES } from './types';
-import { especesDeRarete, ESPECES_OBTENABLES, rareteDe } from './content';
+import { especesDeRarete, ESPECES_LEGENDAIRES, ESPECES_OBTENABLES, rareteDe } from './content';
 import { createPokemon } from './roll';
 import { armePourRarete } from './weapons';
 import { initialiserArme } from './weapon-upgrade';
@@ -94,6 +94,29 @@ export function invoquer(rng: () => number = Math.random): OwnedPokemon {
   const pool = especesDeRarete(rarete);
   const speciesId = pool[Math.floor(rng() * pool.length)];
   if (!speciesId) throw new Error('Aucune espèce invocable');
+  return createPokemon(speciesId, rng);
+}
+
+/**
+ * Coût d'une invocation légendaire, en Master Balls.
+ *
+ * Une seule, et c'est le point : la rareté est déjà dans la difficulté
+ * d'obtenir la Ball, pas dans le prix affiché. Demander trois Balls par
+ * tirage aurait simplement triplé l'attente sans rien ajouter à la décision.
+ */
+export const COUT_BALL = 1;
+
+/**
+ * Un tirage au portail des légendaires.
+ *
+ * Pas de table de raretés ici : toutes les espèces du portail sont
+ * prismatiques, le hasard ne porte donc que sur **laquelle**. C'est
+ * volontaire — on ne doit jamais repartir déçu d'une Master Ball.
+ */
+export function invoquerLegendaire(rng: () => number = Math.random): OwnedPokemon {
+  const pool = ESPECES_LEGENDAIRES;
+  const speciesId = pool[Math.floor(rng() * pool.length)];
+  if (!speciesId) throw new Error('Aucun légendaire au catalogue');
   return createPokemon(speciesId, rng);
 }
 

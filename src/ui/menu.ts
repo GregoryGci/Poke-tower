@@ -145,8 +145,16 @@ function elem<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function solde(etiquette: string, valeur: string): HTMLDivElement {
+/**
+ * Un solde du bandeau.
+ *
+ * `monnaie` colore le chiffre et lui donne son glyphe. Les objets — bonbons,
+ * pierres — n'en portent pas : ce sont des stocks, pas des monnaies, et leur
+ * donner la même couleur qu'un solde les ferait passer pour tel.
+ */
+function solde(etiquette: string, valeur: string, monnaie?: string): HTMLDivElement {
   const bloc = elem('div', 'mesure');
+  if (monnaie) bloc.dataset['monnaie'] = monnaie;
   bloc.append(elem('span', 'etiquette', etiquette), elem('b', undefined, valeur));
   return bloc;
 }
@@ -185,7 +193,10 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
   // Les monnaies, toutes visibles d'un coup : c'est la première chose qu'on
   // regarde en rentrant d'une manche, et elles avaient disparu de cet écran.
   const soldes = elem('div', 'fiche-soldes');
-  soldes.append(solde('Cristaux', String(compte.crystals)));
+  soldes.append(solde('Cristaux', String(compte.crystals), 'cristaux'));
+  // La Master Ball n'apparaît qu'une fois la première tombée : un solde à
+  // zéro pour une monnaie qu'on ne sait pas encore obtenir n'est que du bruit.
+  if ((compte.balls ?? 0) > 0) soldes.appendChild(solde('Master Ball', String(compte.balls), 'ball'));
   for (const { modele, quantite } of pierresDisponibles(compte)) {
     soldes.appendChild(solde(modele.name, String(quantite)));
   }

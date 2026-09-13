@@ -1,7 +1,7 @@
 /**
  * Écran d'invocation.
  *
- * Deux portails, une seule grammaire : on choisit le portail, puis un tirage
+ * Trois portails, une seule grammaire : on choisit le portail, puis un tirage
  * simple ou un ×10. Les taux restent affichés en permanence — le joueur doit
  * pouvoir vérifier ce qu'il achète avant de dépenser, pas après.
  *
@@ -10,24 +10,26 @@
  */
 
 import {
+  COUT_BALL,
   COUT_INVOCATION,
   COUT_MULTIPLE,
   LIBELLE_RARETE,
   TAUX,
   TIRAGE_MULTIPLE,
   invoquer,
+  invoquerLegendaire,
   invoquerArme,
   invoquerArmesMultiple,
   invoquerMultiple,
 } from '@/data/gacha';
-import { getSpecies, rareteDe } from '@/data/content';
+import { ESPECES_LEGENDAIRES, getSpecies, rareteDe } from '@/data/content';
 import { pastilleArme, pastillePokemon } from './pastille';
 import { getWeapon, libelleStyle } from '@/data/weapons';
-import { rareteDominante, revelation } from './reveal';
+import { cascader, rareteDominante, revelation } from './reveal';
 import type { AccountManager } from '@/save';
 import type { OwnedPokemon, OwnedWeapon, Rarity } from '@/data/types';
 
-type Portail = 'pokemon' | 'arme';
+type Portail = 'pokemon' | 'arme' | 'legendaire';
 
 function elem<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -101,6 +103,9 @@ function carteArme(arme: OwnedWeapon): HTMLDivElement {
 function grille(cartes: readonly HTMLElement[]): HTMLDivElement {
   const bloc = elem('div', 'revelation-grille');
   for (const carte of cartes) bloc.appendChild(carte);
+  // Les dix cartes tombent l'une après l'autre : apparues ensemble, l'oeil ne
+  // sait pas où regarder et l'aura de la seule carte rare se noie dans le lot.
+  cascader(cartes);
   return bloc;
 }
 
@@ -130,7 +135,10 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   const ongletArme = elem('button', 'onglet', '✦ Armes');
   ongletArme.type = 'button';
   ongletArme.id = 'portail-arme';
-  onglets.append(ongletPoke, ongletArme);
+  const ongletLegende = elem('button', 'onglet onglet-ball', '◉ Légendes');
+  ongletLegende.type = 'button';
+  ongletLegende.id = 'portail-legendaire';
+  onglets.append(ongletPoke, ongletArme, ongletLegende);
 
   const scene = elem('div', 'invocation-scene');
   const capsule = elem('div', 'capsule', '?');
@@ -157,13 +165,56 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   const boutons = elem('div', 'invocation-boutons');
   boutons.append(boutonUn, boutonDix);
 
+  /**
+   * Ce que le portail des légendes contient, en clair.
+   *
+   * Sept espèces, toutes prismatiques : le hasard ne porte que sur laquelle.
+   * L'afficher évite la seule déception possible — croire qu'on peut tomber
+   * sur un mauvais tirage.
+   */
+  const listeLegendes = elem('div', 'legendes');
+  listeLegendes.appendChild(
+    elem('p', 'etiquette', `${ESPECES_LEGENDAIRES.length} légendes, toutes au même taux`)
+  );
+  const noms = elem('div', 'legendes-noms');
+  for (const id of ESPECES_LEGENDAIRES) {
+    const espece = getSpecies(id);
+    const puce = elem('span', 'legende-puce', espece.name);
+    puce.dataset['type'] = espece.types[0];
+    noms.appendChild(puce);
+  }
+  listeLegendes.appendChild(noms);
+
   const pied = elem('div', 'invocation-pied');
-  pied.append(taux, boutons);
+  pied.append(taux, listeLegendes, boutons);
 
   const majEtat = (): void => {
     ongletPoke.setAttribute('aria-selected', String(portail === 'pokemon'));
     ongletArme.setAttribute('aria-selected', String(portail === 'arme'));
-    capsule.textContent = portail === 'pokemon' ? '?' : '✦';
+    ongletLegende.setAttribute('aria-selected', String(portail === 'legendaire'));
+    racine.dataset['portail'] = portail;
+
+    capsule.textContent =
+      portail === 'pokemon' ? '?' : portail === 'arme' ? '✦' : '◉';
+
+    // Le portail des légendes n'a pas de tirage multiple : une Ball ne se
+    // dépense pas par dix, et un bouton désactivé en permanence n'apprendrait
+    // rien de plus qu'un bouton absent.
+    boutonDix.hidden = portail === 'legendaire';
+    taux.hidden = portail === 'legendaire';
+    listeLegendes.hidden = portail !== 'legendaire';
+
+    if (portail === 'legendaire') {
+      consigne.textContent = `Un légendaire pour ${COUT_BALL} Master Ball.`;
+      const balls = compte.balls ?? 0;
+      boutonUn.disabled = occupe || balls < COUT_BALL;
+      boutonUn.textContent =
+        balls >= COUT_BALL
+          ? `Invoquer — ${COUT_BALL} ◉`
+          : 'Aucune Master Ball — elles tombent en raid';
+      return;
+    }
+
     consigne.textContent =
       portail === 'pokemon'
         ? `Un Pokémon pour ${COUT_INVOCATION} cristaux.`
@@ -185,14 +236,33 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   /** Rappel du solde sous la capsule, après un tirage. */
   const rappelSolde = (): void => {
     scene.innerHTML = '';
-    scene.append(
-      capsule,
-      consigne,
-      elem('p', 'sous-titre', `Il te reste ${compte.crystals} cristaux.`)
-    );
+    const reste =
+      portail === 'legendaire'
+        ? `Il te reste ${compte.balls ?? 0} Master Ball${(compte.balls ?? 0) > 1 ? 's' : ''}.`
+        : `Il te reste ${compte.crystals} cristaux.`;
+    scene.append(capsule, consigne, elem('p', 'sous-titre', reste));
   };
 
   const tirer = async (multiple: boolean): Promise<void> => {
+    // Le portail des légendes se paie dans une autre monnaie : il sort donc
+    // du chemin commun avant même de calculer un coût en cristaux.
+    if (portail === 'legendaire') {
+      if (occupe || (compte.balls ?? 0) < COUT_BALL) return;
+      occupe = true;
+      compte.balls -= COUT_BALL;
+      majEtat();
+
+      const legende = invoquerLegendaire();
+      compte.roster.push(legende);
+      account.touch();
+      await revelation('prismatique', carteResultat(legende));
+
+      occupe = false;
+      rappelSolde();
+      majEtat();
+      return;
+    }
+
     const cout = multiple ? COUT_MULTIPLE : COUT_INVOCATION;
     if (occupe || compte.crystals < cout) return;
     occupe = true;
@@ -232,6 +302,10 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   });
   ongletArme.addEventListener('click', () => {
     portail = 'arme';
+    majEtat();
+  });
+  ongletLegende.addEventListener('click', () => {
+    portail = 'legendaire';
     majEtat();
   });
 

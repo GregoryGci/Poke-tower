@@ -39,6 +39,30 @@ const DUREE_DEFILE: Record<Rarity, number> = {
 /** Nombre de silhouettes distinctes dans le jeu de formes. */
 const FORMES = 8;
 
+/**
+ * Retard entre deux cartes d'un tirage multiple, en millisecondes.
+ *
+ * Dix cartes qui apparaissent ensemble ne se lisent pas : l'oeil ne sait pas
+ * où regarder et l'aura de la seule carte rare se noie dans le lot. En
+ * cascade, chacune a son instant.
+ */
+export const RETARD_CASCADE = 90;
+
+/**
+ * Applique la cascade à une grille de cartes déjà construite.
+ *
+ * Le retard est posé en variable CSS plutôt qu'en animation inline : la
+ * feuille de style décide **quelle** animation joue selon la rareté, le code
+ * décide seulement quand elle part.
+ */
+export function cascader(cartes: Iterable<HTMLElement>): void {
+  let rang = 0;
+  for (const carte of cartes) {
+    carte.style.setProperty('--retard', `${rang * RETARD_CASCADE}ms`);
+    rang += 1;
+  }
+}
+
 export function rareteDominante(raretes: readonly Rarity[]): Rarity {
   let meilleure: Rarity = 'normal';
   for (const rarete of raretes) {
