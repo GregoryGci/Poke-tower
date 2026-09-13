@@ -3921,27 +3921,25 @@
 .sac-cible:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
 
 /* ---------- Carte en vedette ----------
-   L'invocation occupe toute la largeur, juste sous la principale. C'est la
-   boucle du jeu — on joue pour des cristaux, on les dépense là — et une
-   vignette parmi six ne le disait pas. */
+   L invocation garde la taille d une carte ordinaire, mais elle a sa propre
+   rangee et s y place au centre. Elle occupait toute la largeur : elle pesait
+   alors autant que la carte principale, et la grille se lisait comme deux
+   modes principaux au lieu d un.
+
+   La rangee lui est reservee — grid-column: 1 / -1 — puis sa largeur est
+   ramenee a celle d une colonne. La soustraction n a rien d arbitraire : la
+   grille fait trois colonnes separees par deux gouttieres de 14 px, donc une
+   colonne vaut exactement (100% - 28px) / 3 de la rangee. */
 
 .destination.vedette {
-  grid-column: span 3;
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc((100% - 28px) / 3);
+  /* Un liset dore, et rien de plus : le double cadre en incrustation criait
+     plus fort que la carte principale, qui est pourtant le mode du jeu. */
   border-color: var(--or);
-  box-shadow: var(--ombre-portee), inset 0 0 0 3px var(--blanc), inset 0 0 0 5px var(--or);
-}
-
-.destination.vedette .destination-titre { font-size: clamp(22px, 2.4vw, 30px); }
-
-.destination.vedette .destination-bandeau {
-  /* La bannière passe en bandeau large : à pleine largeur, le rapport 11:6
-     ferait trois cent cinquante pixels de haut et repousserait tout le reste
-     de la grille sous le pli. */
-  aspect-ratio: auto;
-  height: clamp(120px, 18vh, 190px);
-  object-position: center 45%;
 }
 
 @media (max-width: 720px) {
-  .destination.vedette { grid-column: auto; }
+  .destination.vedette { width: 100%; }
 }
