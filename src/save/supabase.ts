@@ -23,7 +23,8 @@
  *    le jeu continue, en écrivant toujours dans le navigateur d'abord.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { clientSupabase } from './client';
 import type { PlayerAccount } from '@/data/types';
 import { migrate } from './local';
 import { SaveError, type SaveStore } from './store';
@@ -49,15 +50,12 @@ export class SupabaseStore implements SaveStore {
   /** Session en cours d'ouverture, pour ne pas s'authentifier deux fois. */
   private session: Promise<string> | null = null;
 
-  constructor(url: string, anonKey: string) {
-    this.client = createClient(url, anonKey, {
-      auth: {
-        // La session est persistée par la bibliothèque : au rechargement, on
-        // retrouve le même uid, donc le même compte.
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    });
+  constructor() {
+    const client = clientSupabase();
+    // La fabrique ne construit ce magasin que si les variables existent : un
+    // client absent ici serait un defaut de cablage, pas une configuration.
+    if (!client) throw new SaveError("Supabase n'est pas configure");
+    this.client = client;
   }
 
   /**
