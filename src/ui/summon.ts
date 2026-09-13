@@ -159,7 +159,7 @@ function ouvrirContenu(portail: Portail): Promise<void> {
       null
     );
   } else if (portail === 'arme') {
-    const servis = tauxServis();
+    const servis = tauxServis('arme');
     for (const rarete of ordre) {
       section(
         rarete,
@@ -352,15 +352,21 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
   // pourcentage qu'aucun tirage ne peut honorer. Les paliers à zéro
   // disparaissent — annoncer « 0,0 % » n'apprend rien.
   const taux = elem('div', 'taux');
-  for (const [rarete, part] of Object.entries(tauxServis()) as Array<[Rarity, number]>) {
-    if (part <= 0) continue;
-    const ligne = elem('div', 'taux-ligne');
-    ligne.append(
-      elem('span', 'etiquette', LIBELLE_RARETE[rarete]),
-      elem('b', undefined, `${(part * 100).toFixed(1)} %`)
-    );
-    taux.appendChild(ligne);
-  }
+  const majTaux = (): void => {
+    taux.replaceChildren();
+    const genre = portail === 'arme' ? 'arme' : 'pokemon';
+    for (const [rarete, part] of Object.entries(tauxServis(genre)) as Array<[Rarity, number]>) {
+      if (part <= 0) continue;
+      const ligne = elem('div', 'taux-ligne');
+      ligne.append(
+        elem('span', 'etiquette', LIBELLE_RARETE[rarete]),
+        // Deux décimales : à 0,5 %, un arrondi au dixième afficherait « 0,5 »
+        // et « 0,0 » selon le palier, ce qui se lit comme « impossible ».
+        elem('b', undefined, `${(part * 100).toFixed(part < 0.01 ? 2 : 1)} %`)
+      );
+      taux.appendChild(ligne);
+    }
+  };
 
   const boutonUn = elem('button', 'bouton bouton-primaire');
   boutonUn.type = 'button';
@@ -404,6 +410,7 @@ export function ouvrirInvocation(account: AccountManager): Promise<void> {
     voirContenu.textContent =
       portail === 'arme' ? 'Voir les armes du portail' : 'Voir les Pokémon du portail';
     racine.dataset['portail'] = portail;
+    majTaux();
 
     const dessin = illustrationPortail(portail);
     banniere.hidden = !dessin;

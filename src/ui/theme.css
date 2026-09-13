@@ -3841,3 +3841,81 @@
 
 .contenu-groupe { display: grid; gap: 6px; }
 .contenu-entete { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Sac ----------
+   Deux colonnes, et la séparation porte du sens : à gauche ce qui se dépense,
+   à droite ce qui se porte. */
+
+.sac-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .sac-corps { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sac-colonne { display: grid; gap: 8px; align-content: start; }
+
+.sac-consommable {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  box-shadow: var(--ombre-douce);
+  cursor: pointer;
+}
+.sac-consommable:hover { background: var(--ivoire); }
+.sac-consommable:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
+.sac-consommable b { display: block; font-family: var(--ui); font-size: 14px; color: var(--encre); }
+
+.sac-cible-detail {
+  display: block;
+  font-family: var(--corps);
+  font-size: 11px;
+  color: var(--gris);
+}
+
+.sac-objet {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne-douce);
+  border-left-width: 6px;
+  border-radius: var(--rayon-petit);
+}
+.sac-objet[data-rarete='rare'] { border-left-color: #4b86d4; }
+.sac-objet[data-rarete='epique'] { border-left-color: #8b57a5; }
+.sac-objet[data-rarete='legendaire'] { border-left-color: var(--or); }
+.sac-objet[data-rarete='prismatique'] { border-left-color: var(--emeraude); }
+
+.sac-objet-tete { display: flex; align-items: center; gap: 8px; }
+.sac-objet-pied { display: flex; justify-content: space-between; gap: 8px; }
+.sac-porteur { font-family: var(--corps); font-size: 11px; color: var(--gris); }
+
+.sac-sets { display: grid; gap: 6px; margin-top: 10px; }
+
+.sac-cibles { display: grid; gap: 6px; }
+
+.sac-cible {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+}
+.sac-cible:hover { border-color: var(--ligne); background: var(--ivoire); }
+.sac-cible:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }

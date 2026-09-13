@@ -12,28 +12,30 @@
 import { RARITIES } from './types';
 import { especesDeRarete, ESPECES_LEGENDAIRES, ESPECES_OBTENABLES, rareteDe } from './content';
 import { createPokemon } from './roll';
-import { armePourRarete } from './weapons';
+import { WEAPONS, armePourRarete } from './weapons';
 import { initialiserArme } from './weapon-upgrade';
 import type { OwnedPokemon, OwnedWeapon, Rarity } from './types';
 
 /** Coût d'une invocation, en cristaux. */
 export const COUT_INVOCATION = 10;
 
-/** Taux par rareté. La somme doit valoir 1. */
 /**
- * Taux par rareté. La somme doit valoir 1.
+ * Taux par rareté. La somme doit valoir 1 — `sommeDesTaux` le vérifie.
  *
- * Le prismatique est taillé pour rester un événement : à 2,5 %, un tirage
- * multiple sur quatre en contient un. Il ne donne au portail à cristaux que
- * les six espèces qui y sont déclarées — les huit légendes de la Master Ball
- * partagent la rareté mais pas le portail.
+ * Le prismatique est taillé pour rester rarissime : à 0,5 %, il faut une
+ * vingtaine de tirages multiples pour en voir un. C'est le palier
+ * multicolore, celui qu'on raconte.
+ *
+ * `normal` est le palier de **remplissage** : c'est lui qui absorbe le reste
+ * quand les autres sont fixés, et c'est pour ça qu'il ne tombe pas sur un
+ * chiffre rond. Les quatre autres portent le sens, il ferme la somme.
  */
 export const TAUX: Record<Rarity, number> = {
   normal: 0.4,
-  rare: 0.3,
+  rare: 0.345,
   epique: 0.2,
-  legendaire: 0.075,
-  prismatique: 0.025,
+  legendaire: 0.05,
+  prismatique: 0.005,
 };
 
 export const LIBELLE_RARETE: Record<Rarity, string> = {
@@ -79,18 +81,25 @@ export function especesInvocables(): string[] {
  * jusqu'à trouver un palier habité, au lieu de renvoyer un lot vide.
  */
 function rareteServie(rng: () => number): Rarity {
-  return redescendre(tirerRarete(rng));
+  return redescendre(tirerRarete(rng), 'pokemon');
+}
+
+/** Ce que le portail peut donner à ce palier. */
+function peuple(rarete: Rarity, genre: 'pokemon' | 'arme'): boolean {
+  // `especesDeRarete` ne compte que les espèces réellement invocables au
+  // portail à cristaux : un palier dont toutes les espèces sont réservées à
+  // la Master Ball est donc vu comme vide.
+  return genre === 'pokemon'
+    ? especesDeRarete(rarete).length > 0
+    : Object.values(WEAPONS).some((arme) => arme.rarity === rarete);
 }
 
 /** Le premier palier peuplé à partir de celui-ci, en descendant. */
-function redescendre(voulue: Rarity): Rarity {
+function redescendre(voulue: Rarity, genre: 'pokemon' | 'arme'): Rarity {
   const depart = RARITIES.indexOf(voulue);
   for (let i = depart; i >= 0; i--) {
     const candidate = RARITIES[i];
-    // `especesDeRarete` ne compte que les espèces réellement invocables au
-    // portail à cristaux : un palier dont toutes les espèces sont réservées à
-    // la Master Ball est donc vu comme vide, et le tirage redescend.
-    if (candidate && especesDeRarete(candidate).length > 0) return candidate;
+    if (candidate && peuple(candidate, genre)) return candidate;
   }
   // Aucun palier peuplé : le catalogue est cassé, mieux vaut le dire.
   throw new Error('Aucune espèce invocable');
@@ -108,8 +117,12 @@ function redescendre(voulue: Rarity): Rarity {
  * C'est donc cette table que l'interface affiche. Elle se corrige d'elle-même
  * le jour où une espèce légendaire entre au catalogue, sans que personne ait
  * à penser à retoucher un libellé.
+ *
+ * Le genre compte : l'arsenal, lui, possède bien des armes légendaires. Les
+ * deux portails partagent la table d'intention mais pas les paliers peuplés,
+ * et afficher les mêmes chiffres des deux côtés serait faux d'un côté.
  */
-export function tauxServis(): Record<Rarity, number> {
+export function tauxServis(genre: 'pokemon' | 'arme' = 'pokemon'): Record<Rarity, number> {
   const servis: Record<Rarity, number> = {
     normal: 0,
     rare: 0,
@@ -118,7 +131,7 @@ export function tauxServis(): Record<Rarity, number> {
     prismatique: 0,
   };
   for (const [rarete, part] of Object.entries(TAUX) as Array<[Rarity, number]>) {
-    servis[redescendre(rarete)] += part;
+    servis[redescendre(rarete, genre)] += part;
   }
   return servis;
 }

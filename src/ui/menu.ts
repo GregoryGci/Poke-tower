@@ -22,8 +22,6 @@
 import { getSpecies } from '@/data/content';
 import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
 import { RAIDS, raidOuvert } from '@/data/raids';
-import { pierresDisponibles } from '@/data/pierres';
-import { bonbonsDisponibles } from '@/data/bonbons';
 import { niveauDresseur } from '@/data/types';
 import { pastillePokemon } from './pastille';
 import { illustrationPortail } from './illustrations';
@@ -37,7 +35,8 @@ export type Destination =
   | 'collection'
   | 'armes'
   | 'invocation'
-  | 'raid';
+  | 'raid'
+  | 'sac';
 
 interface Carte {
   id: Destination;
@@ -109,6 +108,19 @@ const CARTES: Carte[] = [
     titre: 'Invocation',
     description: 'Dépense tes cristaux pour agrandir ton équipe.',
     pied: (compte) => `${compte.crystals} cristaux`,
+  },
+  {
+    id: 'sac',
+    glyphe: '🎒',
+    etiquette: 'Inventaire',
+    titre: 'Sac',
+    description:
+      'Pierres d’évolution, bonbons d’expérience et objets à équiper. C’est ici qu’on les dépense.',
+    pied: (compte) => {
+      const consommables = compte.inventory.reduce((total, item) => total + item.quantity, 0);
+      const objets = (compte.items ?? []).length;
+      return `${consommables} consommable${consommables > 1 ? 's' : ''} · ${objets} objet${objets > 1 ? 's' : ''}`;
+    },
   },
   {
     id: 'arene',
@@ -197,19 +209,20 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
 
   // Les monnaies, toutes visibles d'un coup : c'est la première chose qu'on
   // regarde en rentrant d'une manche, et elles avaient disparu de cet écran.
+  //
+  // Deux monnaies, et deux seulement. Les pierres et les bonbons y figuraient
+  // aussi : ce sont des stocks d'objets, pas des monnaies, et ils faisaient
+  // grossir la bande d'une case à chaque nouvelle pierre ramassée. Ils ont
+  // maintenant leur écran — le sac — où on peut les lire et s'en servir.
+  //
+  // La Master Ball reste affichée même à zéro, contrairement à avant : c'est
+  // une monnaie qu'on cherche, et une case vide dit « il y en a une à
+  // trouver » là où l'absence ne disait rien du tout.
   const soldes = elem('div', 'fiche-soldes');
-  soldes.append(solde('Cristaux', String(compte.crystals), 'cristaux'));
-  // La Master Ball n'apparaît qu'une fois la première tombée : un solde à
-  // zéro pour une monnaie qu'on ne sait pas encore obtenir n'est que du bruit.
-  if ((compte.balls ?? 0) > 0) soldes.appendChild(solde('Master Ball', String(compte.balls), 'ball'));
-  for (const { modele, quantite } of pierresDisponibles(compte)) {
-    soldes.appendChild(solde(modele.name, String(quantite)));
-  }
-  const bonbons = bonbonsDisponibles(compte).reduce(
-    (total, entree) => total + entree.item.quantity,
-    0
+  soldes.append(
+    solde('Cristaux', String(compte.crystals), 'cristaux'),
+    solde('Master Ball', String(compte.balls ?? 0), 'ball')
   );
-  if (bonbons > 0) soldes.appendChild(solde('Bonbons', String(bonbons)));
 
   // Le rouage vit dans la bande du dresseur, à droite des monnaies : c'est le
   // seul endroit permanent de l'écran, donc le seul où on saura le retrouver.

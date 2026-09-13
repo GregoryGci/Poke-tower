@@ -14,9 +14,13 @@
  * Le tirage multiple se joue **une carte a la fois**. La grille de dix cartes
  * qui tombaient en cascade montrait tout en une seconde et demie : le seul
  * legendaire du lot arrivait en meme temps que neuf normaux, et son aura se
- * noyait dans le tas. En chaine, chaque tirage a son defile, et le rythme
- * suit la rarete — les communes s'enchainent toutes seules, un legendaire
- * attend qu'on le regarde.
+ * noyait dans le tas.
+ *
+ * Une invocation, puis dix revelations. Le defile d'ombres ouvre la sequence
+ * **une fois** — on paie une fois, on ouvre une fois — et les cartes se
+ * succedent ensuite sans ceremonie repetee. Le rythme suit la rarete : les
+ * communes s'enchainent toutes seules, un legendaire ou un prismatique
+ * attend qu'on le regarde et recoit son eclat.
  *
  * Faute de sprites 2D, les ombres sont des formes CSS tirees d'un petit jeu
  * de silhouettes. On ne cherche pas a reconnaitre l'espece dans l'ombre — on
@@ -44,22 +48,6 @@ const DUREE_DEFILE: Record<Rarity, number> = {
 };
 
 /**
- * Defile raccourci quand on enchaine dix tirages.
- *
- * Dix fois neuf cents millisecondes de defile, c'est quinze secondes rien que
- * d'attente pour des Pokemon communs : la sequence devient une corvee des le
- * deuxieme x10. Les paliers bas sont donc expedies. Les deux hauts gardent
- * leur duree pleine — c'est pour eux qu'on regarde.
- */
-const DUREE_CHAINE: Record<Rarity, number> = {
-  normal: 420,
-  rare: 620,
-  epique: 1000,
-  legendaire: 2200,
-  prismatique: 2900,
-};
-
-/**
  * Temps d'affichage d'une carte avant de passer a la suivante, en chaine.
  *
  * `null` veut dire : on attend un clic. Reserve aux deux paliers du haut —
@@ -67,9 +55,9 @@ const DUREE_CHAINE: Record<Rarity, number> = {
  * l'impression d'avoir rate quelque chose.
  */
 const MAINTIEN: Record<Rarity, number | null> = {
-  normal: 520,
-  rare: 700,
-  epique: 1100,
+  normal: 700,
+  rare: 900,
+  epique: 1300,
   legendaire: null,
   prismatique: null,
 };
@@ -260,6 +248,17 @@ export async function revelationEnChaine(
   const voile = creerVoile();
   let passerTout = false;
 
+  /**
+   * L'invocation : **une seule**, en ouverture, puis les cartes défilent.
+   *
+   * Un défilé d'ombres avant chacune des dix cartes, c'était dix fois la même
+   * cérémonie pour un geste unique — on paie une fois, on ouvre une fois. Et
+   * le défilé est volontairement neutre : lui donner la couleur et la durée du
+   * meilleur tirage du lot annoncerait le résultat avant de l'avoir montré.
+   * La surprise appartient aux cartes.
+   */
+  await jouerDefile(voile, 'epique', DUREE_DEFILE.epique);
+
   const passer = elem('button', 'bouton-discret revelation-passer');
   passer.type = 'button';
   passer.id = 'revelation-passer';
@@ -280,8 +279,10 @@ export async function revelationEnChaine(
     compteur.textContent = `${i + 1} / ${entrees.length}`;
     compteur.hidden = entrees.length < 2;
 
-    await jouerDefile(voile, entree.rarete, DUREE_CHAINE[entree.rarete]);
-    if (passerTout) break;
+    // La rareté de la carte courante pilote l'aura du voile : c'est elle qui
+    // colore le cadre pendant qu'on la regarde.
+    voile.dataset['rarete'] = entree.rarete;
+    voile.dataset['phase'] = 'revele';
 
     const scene = elem('div', 'revelation-scene');
     scene.appendChild(entree.carte);

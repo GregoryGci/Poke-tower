@@ -22,6 +22,7 @@ import { afficherBilan } from '@/ui/result';
 import { ouvrirEquipe } from '@/ui/team';
 import { invocationOfferte, ouvrirInvocation } from '@/ui/summon';
 import { ouvrirCollection } from '@/ui/collection';
+import { ouvrirSac } from '@/ui/sac';
 import { ouvrirArmes } from '@/ui/weapons';
 import { ouvrirCampagne } from '@/ui/campaign';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
@@ -485,6 +486,11 @@ for (;;) {
 
   if (destination === 'armes') {
     await ouvrirArmes(account);
+    continue;
+  }
+
+  if (destination === 'sac') {
+    await ouvrirSac(account);
     continue;
   }
 
