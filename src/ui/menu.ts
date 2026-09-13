@@ -88,7 +88,6 @@ const CARTES: Carte[] = [
   {
     id: 'invocation',
     glyphe: '◈',
-    illustration: 'pokemon',
     vedette: true,
     etiquette: 'Gacha',
     titre: 'Invocation',
