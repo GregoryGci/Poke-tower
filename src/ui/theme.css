@@ -3921,25 +3921,14 @@
 .sac-cible:focus-visible { outline: 2px solid var(--emeraude); outline-offset: 2px; }
 
 /* ---------- Carte en vedette ----------
-   L invocation garde la taille d une carte ordinaire, mais elle a sa propre
-   rangee et s y place au centre. Elle occupait toute la largeur : elle pesait
-   alors autant que la carte principale, et la grille se lisait comme deux
+   L invocation est une carte comme les autres, a sa place dans la grille :
+   au milieu de la rangee, encadree par « Mon equipe » et « Armes » — les deux
+   ecrans ou l on emploie ce qu elle donne. Elle a eu droit tour a tour a une
+   rangee pleine largeur puis a une rangee pour elle seule : dans les deux cas
+   elle pesait autant que le mode principal, et la grille se lisait comme deux
    modes principaux au lieu d un.
 
-   La rangee lui est reservee — grid-column: 1 / -1 — puis sa largeur est
-   ramenee a celle d une colonne. La soustraction n a rien d arbitraire : la
-   grille fait trois colonnes separees par deux gouttieres de 14 px, donc une
-   colonne vaut exactement (100% - 28px) / 3 de la rangee. */
+   Il ne lui reste qu un liseret dore. C est assez pour la trouver du regard,
+   et pas assez pour prendre le pas sur « Defendre la tour ». */
 
-.destination.vedette {
-  grid-column: 1 / -1;
-  justify-self: center;
-  width: calc((100% - 28px) / 3);
-  /* Un liset dore, et rien de plus : le double cadre en incrustation criait
-     plus fort que la carte principale, qui est pourtant le mode du jeu. */
-  border-color: var(--or);
-}
-
-@media (max-width: 720px) {
-  .destination.vedette { width: 100%; }
-}
+.destination.vedette { border-color: var(--or); }

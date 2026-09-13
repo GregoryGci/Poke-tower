@@ -77,16 +77,6 @@ const CARTES: Carte[] = [
     },
   },
   {
-    id: 'invocation',
-    glyphe: '◈',
-    illustration: 'pokemon',
-    vedette: true,
-    etiquette: 'Gacha',
-    titre: 'Invocation',
-    description: 'Dépense tes cristaux pour agrandir ton équipe.',
-    pied: (compte) => `${compte.crystals} cristaux`,
-  },
-  {
     id: 'equipe',
     glyphe: '⬢',
     etiquette: 'Composition',
@@ -96,15 +86,14 @@ const CARTES: Carte[] = [
     pied: (compte) => `${compte.team.length}/6 engagés`,
   },
   {
-    id: 'collection',
-    glyphe: '❑',
-    etiquette: 'Pokédex',
-    titre: 'Collection',
-    description: 'Tout ce que tu possèdes : exemplaires, étoiles, lignées, stats de base.',
-    pied: (compte) => {
-      const especes = new Set(compte.roster.map((membre) => membre.speciesId)).size;
-      return `${especes} espèce${especes > 1 ? 's' : ''}`;
-    },
+    id: 'invocation',
+    glyphe: '◈',
+    illustration: 'pokemon',
+    vedette: true,
+    etiquette: 'Gacha',
+    titre: 'Invocation',
+    description: 'Dépense tes cristaux pour agrandir ton équipe.',
+    pied: (compte) => `${compte.crystals} cristaux`,
   },
   {
     id: 'armes',
@@ -116,6 +105,17 @@ const CARTES: Carte[] = [
     pied: (compte) => {
       const portee = compte.weapons.find((arme) => arme.id === compte.equippedWeaponId);
       return portee ? `Équipée : +${portee.niveau}` : `${compte.weapons.length} en stock`;
+    },
+  },
+  {
+    id: 'collection',
+    glyphe: '❑',
+    etiquette: 'Pokédex',
+    titre: 'Collection',
+    description: 'Tout ce que tu possèdes : exemplaires, étoiles, lignées, stats de base.',
+    pied: (compte) => {
+      const especes = new Set(compte.roster.map((membre) => membre.speciesId)).size;
+      return `${especes} espèce${especes > 1 ? 's' : ''}`;
     },
   },
   {
