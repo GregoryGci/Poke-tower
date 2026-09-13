@@ -43,6 +43,8 @@ import { ajouterPierres, getPierre } from '@/data/pierres';
 import { recolter } from '@/data/recolte';
 import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
 import { ouvrirRaids } from '@/ui/raids';
+import { ouvrirArene } from '@/ui/arene';
+import { niveauDeLArene, type Champion } from '@/data/arene';
 import { ouvrirSalon } from '@/ui/salon';
 import type { SessionCoop } from '@/net/partie';
 import { demanderNomDresseur } from '@/ui/creation';
@@ -154,7 +156,8 @@ async function jouerManche(
   niveau: Niveau,
   tutoriel: boolean,
   raid: ChoixRaidComplet | null = null,
-  coop: SessionCoop | null = null
+  coop: SessionCoop | null = null,
+  champion: Champion | null = null
 ): Promise<void> {
   input.reset();
 
@@ -179,7 +182,8 @@ async function jouerManche(
     niveau,
     tutoriel,
     armeEquipee(account.account),
-    raid ? VIE_PAR_DIFFICULTE[raid.difficulte] : null
+    raid ? VIE_PAR_DIFFICULTE[raid.difficulte] : null,
+    champion
   );
 
   // Les cris partent en telechargement pendant le chargement des modeles :
@@ -390,7 +394,24 @@ async function jouerManche(
     progression.dresseurXp =
       (progression.dresseurXp ?? 0) + 40 + niveau.index * 12;
 
-    if (raid) {
+    if (champion) {
+      // Le badge ne se gagne qu'une fois, et la Master Ball avec lui. Sans ce
+      // relevé, refaire le premier champion en boucle serait de loin la
+      // meilleure source de Balls du jeu.
+      progression.championsVaincus = progression.championsVaincus ?? [];
+      const premiere = !progression.championsVaincus.includes(champion.id);
+      if (premiere) {
+        progression.championsVaincus.push(champion.id);
+        account.account.balls = (account.account.balls ?? 0) + 1;
+      }
+      await alerterInfo(
+        premiere ? 'Badge remporté' : 'Champion battu',
+        champion.nom,
+        premiere
+          ? ['Son équipe est tombée jusqu’au dernier.', '+1 Master Ball']
+          : ['Son équipe est tombée jusqu’au dernier.']
+      );
+    } else if (raid) {
       // Le butin d'un raid est tiré ici et nulle part ailleurs : c'est la
       // seule source de pierres du jeu.
       const pierres = butinDuRaid(raid.raid, raid.difficulte);
@@ -517,6 +538,14 @@ for (;;) {
 
   if (destination === 'armes') {
     await ouvrirArmes(account);
+    continue;
+  }
+
+  if (destination === 'arene') {
+    const champion = await ouvrirArene(account.account);
+    if (champion) {
+      await jouerManche(niveauDeLArene(champion), false, null, null, champion);
+    }
     continue;
   }
 

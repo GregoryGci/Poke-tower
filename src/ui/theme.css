@@ -3947,3 +3947,62 @@
   cursor: pointer;
 }
 .reglages-curseur:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---------- Arène ----------
+   L'équipe du champion est affichée d'avance : c'est la mécanique du mode,
+   pas une décoration. Elle doit donc se lire vite. */
+
+/* Deux colonnes et non trois. A trois, chaque case faisait quatre-vingt-dix
+   pixels de large : la pastille en prenait trente-deux, il en restait moins de
+   soixante pour un nom comme « Roucarnage » et deux puces de type, qui
+   debordaient donc sur la case voisine. */
+.arene-equipe {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+@media (max-width: 720px) {
+  .arene-equipe { grid-template-columns: minmax(0, 1fr); }
+}
+
+.arene-membre {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne-douce);
+  border-radius: var(--rayon-petit);
+  /* Sans ce min-width, la colonne de texte refuse de descendre sous la
+     largeur de son contenu : les noms longs debordaient sur les puces de type
+     de la carte voisine. */
+  min-width: 0;
+}
+.arene-membre > div { min-width: 0; }
+.arene-membre b {
+  display: block;
+  font-family: var(--ui);
+  font-size: 12px;
+  color: var(--encre);
+  /* Un nom trop long est coupe plutot que de pousser la puce de type hors de
+     la carte. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arene-membre .types { flex-wrap: wrap; gap: 3px; }
+.arene-membre .type { font-size: 9px; padding: 1px 4px; }
+/* L'as du champion : le sixième, plus gros et plus solide que les cinq
+   autres. Le liseré doré le dit avant que le combat ne le prouve. */
+.arene-membre[data-as='true'] { border-color: var(--or); background: #fffaf0; }
+
+.arene-conseil { display: grid; gap: 4px; margin-bottom: 10px; }
+
+.badge[data-gagne='true'] {
+  background: var(--emeraude-clair);
+  color: var(--emeraude);
+  border-color: var(--emeraude);
+}

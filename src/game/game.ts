@@ -52,6 +52,7 @@ import { construireDecor, type Decor } from '@/world/decor';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
+import type { Champion } from '@/data/arene';
 import type { Instantane, Intention, TourRepliquee } from '@/net/protocole';
 import {
   sonFuite,
@@ -65,6 +66,7 @@ import {
   WAVES,
   WaveRunner,
   especesDuNiveau,
+  vaguesDeLArene,
   vaguesDeRaid,
   vaguesDuNiveau,
   vaguesTutoriel,
@@ -499,16 +501,24 @@ export class Game {
      * ordinaire. C'est lui qui distingue les deux formes de vague : une
      * campagne enchaîne des vagues séparées, un raid n'en a qu'une.
      */
-    vieRaid: number | null
+    vieRaid: number | null,
+    /**
+     * Champion affronte, ou null. Une arene n envoie pas des vagues du monde
+     * mais SON equipe, une par vague et sans repit : c est la seule forme ou
+     * le bestiaire est fixe d avance et connu du joueur.
+     */
+    champion: Champion | null
   ) {
     this.arme = arme ? statsArme(arme) : null;
     this.niveau = niveau;
     this.waves = new WaveRunner(
       tutoriel
         ? vaguesTutoriel()
-        : vieRaid !== null
-          ? vaguesDeRaid(niveau, vieRaid)
-          : vaguesDuNiveau(niveau)
+        : champion
+          ? vaguesDeLArene(champion, niveau)
+          : vieRaid !== null
+            ? vaguesDeRaid(niveau, vieRaid)
+            : vaguesDuNiveau(niveau)
     );
 
     // La carte est tiree de l'identifiant du niveau : deux tentatives du meme
@@ -621,16 +631,19 @@ export class Game {
     niveau: Niveau | number = 1,
     tutoriel = false,
     arme: OwnedWeapon | null = null,
-    vieRaid: number | null = null
+    vieRaid: number | null = null,
+    champion: Champion | null = null
   ): Promise<Game> {
     // Un numero suffit a designer un niveau : les appels anciens continuent
     // donc de marcher, et le tutoriel n'a pas a connaitre la campagne.
     const cible = typeof niveau === 'number' ? niveauParIndex(niveau) : niveau;
-    const game = new Game(scene, camera, input, cible, tutoriel, arme, vieRaid);
+    const game = new Game(scene, camera, input, cible, tutoriel, arme, vieRaid, champion);
 
     const enemySpecies = tutoriel
       ? [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))]
-      : especesDuNiveau(cible);
+      : champion
+        ? [...new Set(champion.equipe)]
+        : especesDuNiveau(cible);
     await preloadModels([...enemySpecies, ...rosterSpeciesIds].map((id) => getSpecies(id).model));
 
     for (const speciesId of enemySpecies) {

@@ -22,6 +22,7 @@
 import { getSpecies } from '@/data/content';
 import { NIVEAUX, niveauParIndex, getMonde } from '@/data/campaign';
 import { RAIDS, raidOuvert } from '@/data/raids';
+import { CHAMPIONS, championOuvert } from '@/data/arene';
 import { niveauDresseur } from '@/data/types';
 import { pastillePokemon } from './pastille';
 import { illustrationPortail } from './illustrations';
@@ -136,8 +137,19 @@ const CARTES: Carte[] = [
     etiquette: 'Compétitif',
     titre: 'Arène',
     description:
-      'Six vagues d’affilée, une par Pokémon du champion — le sixième est son ace. Pas de route, et aucun répit entre deux vagues.',
-    verrou: () => 'À construire',
+      'Six vagues d’affilée, une par Pokémon du champion — le sixième est son as. Aucun répit entre deux vagues.',
+    verrou: (compte) => {
+      const ouvert = CHAMPIONS.some((champion) =>
+        championOuvert(champion, compte.progression.clearedLevels.length)
+      );
+      if (ouvert) return null;
+      const prochain = Math.min(...CHAMPIONS.map((champion) => champion.requis));
+      return `${prochain} lieux requis`;
+    },
+    pied: (compte) => {
+      const battus = (compte.progression.championsVaincus ?? []).length;
+      return `${battus}/${CHAMPIONS.length} badges`;
+    },
   },
   {
     id: 'raid',

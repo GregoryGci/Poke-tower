@@ -379,6 +379,14 @@ export interface Progression {
    * main forcée. Il ne se rejoue jamais, d'où ce drapeau.
    */
   invocationOfferteFaite?: boolean;
+  /**
+   * Champions d'arène déjà battus.
+   *
+   * Sert au badge affiché sur leur carte, et à ne donner la Master Ball de
+   * première victoire qu'une fois : sans ce relevé, refaire le premier
+   * champion en boucle serait la meilleure source de Balls du jeu.
+   */
+  championsVaincus?: string[];
 }
 
 /**

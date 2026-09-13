@@ -9,6 +9,7 @@
 import type { Species } from '@/data/types';
 import { getSpecies } from '@/data/content';
 import { getMonde, type Niveau } from '@/data/campaign';
+import type { Champion } from '@/data/arene';
 
 export interface SpawnBatch {
   speciesId: string;
@@ -268,6 +269,53 @@ export function vaguesDeRaid(niveau: Niveau, multiplicateurVie: number): Wave[] 
   });
 
   return [{ batches, restAfter: 0 }];
+}
+
+/**
+ * Les six vagues d'une arène.
+ *
+ * Une vague, un Pokémon. Pas de lot, pas de piétaille : le champion envoie
+ * son équipe un par un, et chacun est un adversaire sérieux — gros, lent, et
+ * très dur à abattre.
+ *
+ * `restAfter: 0` sur les six, et c'est le coeur du mode : le suivant entre
+ * pendant qu'on achève le précédent. Dans la campagne, la pause entre deux
+ * vagues sert à poser et à monter un palier ; ici il n'y en a pas, donc
+ * chaque Poképièce dépensée l'est au milieu du combat.
+ *
+ * La montée est forte — le sixième a près du double des points de vie du
+ * premier — parce que c'est l'as du champion et qu'il doit se sentir comme
+ * tel après cinq adversaires déjà éprouvants.
+ */
+export function vaguesDeLArene(champion: Champion, niveau: Niveau): Wave[] {
+  const monde = getMonde(niveau.mondeId);
+  const palier = niveau.rang - 1;
+  const vie = (1 + palier * 0.22) * monde.durete;
+
+  return champion.equipe.map((speciesId, rang) => {
+    const espece = getSpecies(speciesId);
+    // La taille suit la stature réelle de l'espèce, ramenée autour de 1,6 :
+    // un Chenipan de champion doit rester un Chenipan, en plus imposant.
+    const stature = Math.min(2.2, Math.max(1.25, 1.15 + espece.height * 0.22));
+    return {
+      batches: [
+        {
+          speciesId,
+          count: 1,
+          interval: 1,
+          // Les points de vie montent d'un tiers à chaque rang, et l'as
+          // reçoit encore la moitié en plus.
+          hp: Math.round(220 * vie * (1 + rang * 0.34) * (rang === 5 ? 1.5 : 1)),
+          // Lent : un boss rapide ne laisse pas le temps de le voir arriver,
+          // et l'Arène se joue sur la durée, pas sur la surprise.
+          speed: 1.15 * (1 + palier * 0.01),
+          scale: stature * (rang === 5 ? 1.18 : 1),
+          boss: true,
+        },
+      ],
+      restAfter: 0,
+    };
+  });
 }
 
 /** Toutes les especes qu'un niveau peut faire apparaitre. */
