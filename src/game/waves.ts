@@ -198,6 +198,78 @@ export function vaguesDuNiveau(niveau: Niveau): Wave[] {
   return vagues;
 }
 
+/**
+ * La vague unique d'un raid.
+ *
+ * Un raid, c'est **une seule vague** : elle ne s'arrête jamais avant la fin.
+ * Un `Wave` unique, sans `restAfter` — le terrain ne se vide donc à aucun
+ * moment, et c'est ça qui en fait un siège plutôt qu'une succession de
+ * manches. Monter un palier doit se décider pendant que ça passe.
+ *
+ * Le spawner draine les lots **en séquence**, un par un : c'est donc l'ordre
+ * de déclaration qui place les mini-boss. On alterne flot et mini-boss pour
+ * qu'ils jalonnent la vague au lieu de s'enchaîner à la fin — et comme un
+ * mini-boss marche lentement, le flot suivant le rattrape et le double. Ils
+ * arrivent bien **dedans**, ce qui est précisément ce qui les rend durs.
+ *
+ * Seuls les points de vie changent d'une difficulté à l'autre. La
+ * composition est identique aux trois crans — même bestiaire, mêmes effectifs,
+ * même cadence — pour qu'on puisse monter d'un cran sans tout réapprendre.
+ */
+export function vaguesDeRaid(niveau: Niveau, multiplicateurVie: number): Wave[] {
+  const monde = getMonde(niveau.mondeId);
+  const palier = niveau.rang - 1;
+
+  const vie = (1 + palier * 0.22) * monde.durete * multiplicateurVie;
+  const vitesse = 2 * (1 + palier * 0.02);
+  const espece = (rang: number): string =>
+    monde.bestiaire[rang % monde.bestiaire.length] ?? monde.bestiaire[0]!;
+
+  const batches: SpawnBatch[] = [];
+
+  const flot = (i: number): SpawnBatch =>
+    lot(
+      espece(i),
+      22 + i * 4,
+      Math.max(0.35, 0.8 - i * 0.05),
+      Math.round((24 + i * 8) * vie),
+      vitesse * (1 - i * 0.04)
+    );
+
+  const miniBoss = (rang: number): SpawnBatch => {
+    const durete = PALIERS_BOSS[rang] ?? PALIERS_BOSS[0]!;
+    return {
+      speciesId: monde.boss[rang % monde.boss.length] ?? monde.boss[0]!,
+      count: 1,
+      interval: 1,
+      hp: Math.round(durete.pv * vie * 0.8),
+      speed: vitesse * durete.vitesse,
+      scale: durete.taille * 0.85,
+      boss: true,
+    };
+  };
+
+  // Flot, mini-boss, flot, mini-boss… : les trois rendez-vous sont répartis
+  // sur la longueur de la vague plutôt qu'empilés au bout.
+  batches.push(flot(0), miniBoss(0), flot(1), miniBoss(1), flot(2), miniBoss(2), flot(3));
+
+  // Le boss ultime : le dernier palier, sans remise. Il arrive en queue de
+  // vague parce que son lot est le dernier déclaré et que le spawner respecte
+  // l'ordre.
+  const ultime = PALIERS_BOSS[PALIERS_BOSS.length - 1]!;
+  batches.push({
+    speciesId: monde.boss[monde.boss.length - 1] ?? monde.boss[0]!,
+    count: 1,
+    interval: 1,
+    hp: Math.round(ultime.pv * vie * 1.6),
+    speed: vitesse * ultime.vitesse * 0.9,
+    scale: ultime.taille * 1.15,
+    boss: true,
+  });
+
+  return [{ batches, restAfter: 0 }];
+}
+
 /** Toutes les especes qu'un niveau peut faire apparaitre. */
 export function especesDuNiveau(niveau: Niveau): string[] {
   const monde = getMonde(niveau.mondeId);

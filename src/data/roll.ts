@@ -149,5 +149,7 @@ export function createPokemon(speciesId: string, rng: () => number = Math.random
     ultime: rollUltime(speciesId, [], rng),
     traits: rollTraits(rng),
     subStats: rollSubStats(rng),
+    // Trois emplacements vides : ils se remplissent au butin de raid.
+    items: [null, null, null],
   };
 }

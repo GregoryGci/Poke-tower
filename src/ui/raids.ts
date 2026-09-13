@@ -1,15 +1,29 @@
 /**
- * Choix du raid.
+ * Choix du raid et de sa difficulté.
  *
- * Un seul raid pour l'instant, et l'écran est volontairement minuscule : il
- * n'a qu'une chose à dire, ce que le raid fait tomber et à quel taux. Les
- * annoncer noir sur blanc est un choix — un taux de 12 % qu'on découvre après
- * quinze manches infructueuses se lit comme une arnaque, alors que le même
- * taux affiché d'avance se lit comme un pari.
+ * Deux décisions, dans cet ordre : où l'on va, puis à quel cran. La seconde
+ * est la vraie — la composition de la vague ne change pas d'un cran à
+ * l'autre, seuls les points de vie montent, et c'est donc là que se décide si
+ * l'équipe tiendra.
+ *
+ * Les butins sont annoncés noir sur blanc, par difficulté. Un taux qu'on
+ * découvre après quinze tentatives se lit comme une arnaque ; le même affiché
+ * d'avance se lit comme un pari.
  */
 
-import { RAIDS, raidOuvert, type Raid } from '@/data/raids';
+import {
+  BUTIN_PAR_DIFFICULTE,
+  CHANCE_HAUTE,
+  DIFFICULTES,
+  LIBELLE_DIFFICULTE,
+  RAIDS,
+  VIE_PAR_DIFFICULTE,
+  raidOuvert,
+  type ChoixRaidComplet,
+} from '@/data/raids';
+import { getFamille } from '@/data/items';
 import { getPierre } from '@/data/pierres';
+import { LIBELLE_RARETE } from '@/data/gacha';
 import { getMonde } from '@/data/campaign';
 import type { PlayerAccount } from '@/data/types';
 
@@ -25,13 +39,13 @@ function elem<K extends keyof HTMLElementTagNameMap>(
 }
 
 /** Affiche les raids et rend celui choisi, ou null si le joueur repart. */
-export function ouvrirRaids(compte: PlayerAccount): Promise<Raid | null> {
+export function ouvrirRaids(compte: PlayerAccount): Promise<ChoixRaidComplet | null> {
   const faits = compte.progression.clearedLevels.length;
   const racine = elem('div', 'ecran-equipe');
 
   const titre = elem('div');
   titre.append(
-    elem('p', 'etiquette', 'Chasse aux pierres'),
+    elem('p', 'etiquette', 'Une seule vague, sans répit'),
     elem('h1', 'titre titre-xl', 'Raids')
   );
 
@@ -44,23 +58,20 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<Raid | null> {
 
   const liste = elem('div', 'raids-liste');
 
-  return new Promise<Raid | null>((resolve) => {
-    const partir = (raid: Raid | null): void => {
+  return new Promise<ChoixRaidComplet | null>((resolve) => {
+    const partir = (choix: ChoixRaidComplet | null): void => {
       racine.style.transition = 'opacity .22s ease';
       racine.style.opacity = '0';
       setTimeout(() => {
         racine.remove();
-        resolve(raid);
+        resolve(choix);
       }, 220);
     };
 
     for (const raid of RAIDS) {
       const ouvert = raidOuvert(raid, faits);
-      const carte = elem('button', 'raid-carte');
-      carte.type = 'button';
-      carte.id = `raid-${raid.id}`;
-      carte.disabled = !ouvert;
-      carte.setAttribute('aria-disabled', String(!ouvert));
+      const carte = elem('div', 'raid-carte');
+      carte.dataset['ouvert'] = String(ouvert);
 
       const tete = elem('div', 'raid-tete');
       tete.append(
@@ -68,8 +79,19 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<Raid | null> {
         elem('span', 'badge', ouvert ? getMonde(raid.mondeId).nom : `${raid.requis} lieux requis`)
       );
 
-      const butin = elem('div', 'raid-butin');
-      butin.appendChild(elem('p', 'etiquette', 'Butin possible, par manche gagnée'));
+      carte.append(tete, elem('p', 'destination-desc', raid.description));
+
+      // Ce que le raid donne, indépendamment du cran : pierres, Master Ball.
+      const famille = raid.familleItem ? getFamille(raid.familleItem) : null;
+      if (famille) {
+        const ligne = elem('div', 'raid-drop');
+        ligne.append(
+          elem('span', 'raid-glyphe', famille.glyphe),
+          elem('span', undefined, `Un objet ${famille.nom} à chaque victoire`),
+          elem('code', undefined, '100 %')
+        );
+        carte.appendChild(ligne);
+      }
       for (const drop of raid.butin) {
         const modele = getPierre(drop.pierreId);
         if (!modele) continue;
@@ -79,20 +101,61 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<Raid | null> {
           elem('span', undefined, modele.name),
           elem('code', undefined, `${Math.round(drop.chance * 100)} %`)
         );
-        butin.appendChild(ligne);
+        carte.appendChild(ligne);
       }
+      const ligneBall = elem('div', 'raid-drop');
+      ligneBall.append(
+        elem('span', 'raid-glyphe', '◉'),
+        elem('span', undefined, 'Master Ball'),
+        elem('code', undefined, `${Math.round(raid.chanceBall * 100)} %`)
+      );
+      carte.appendChild(ligneBall);
 
-      carte.append(tete, elem('p', 'destination-desc', raid.description), butin);
-      carte.addEventListener('click', () => {
-        if (!ouvert) return;
-        partir(raid);
-      });
+      /* ---- Les trois crans ---- */
+
+      const crans = elem('div', 'raid-crans');
+      for (const difficulte of DIFFICULTES) {
+        const bouton = elem('button', 'raid-cran');
+        bouton.type = 'button';
+        bouton.id = `raid-${raid.id}-${difficulte}`;
+        bouton.disabled = !ouvert;
+        bouton.dataset['cran'] = difficulte;
+
+        const paliers = BUTIN_PAR_DIFFICULTE[difficulte];
+        // La rareté basse est la plus fréquente : on l'annonce en premier,
+        // parce que c'est ce qu'on obtiendra le plus souvent.
+        const butin = famille
+          ? `${LIBELLE_RARETE[paliers[0]!]} · ${LIBELLE_RARETE[paliers[1]!]} à ${Math.round(CHANCE_HAUTE * 100)} %`
+          : 'Pierres et Ball seulement';
+
+        bouton.append(
+          elem('b', undefined, LIBELLE_DIFFICULTE[difficulte]),
+          elem('span', 'raid-vie', `PV ennemis ×${VIE_PAR_DIFFICULTE[difficulte]}`),
+          elem('span', 'raid-butin-cran', butin)
+        );
+        bouton.addEventListener('click', () => {
+          if (!ouvert) return;
+          partir({ raid, difficulte });
+        });
+        crans.appendChild(bouton);
+      }
+      carte.appendChild(crans);
+
       liste.appendChild(carte);
     }
 
+    // Les raids sont pensés pour être joués à plusieurs, et la coopération en
+    // réseau n'existe pas : autant le dire ici plutôt que de laisser croire
+    // que la difficulté est mal calibrée.
+    const note = elem(
+      'p',
+      'affinites-vide',
+      'Prévus pour être joués à plusieurs — la coopération n’est pas encore branchée. En solo, « Facile » est le cran d’entrée.'
+    );
+
     retour.addEventListener('click', () => partir(null));
 
-    racine.append(haut, liste);
+    racine.append(haut, note, liste);
     document.body.appendChild(racine);
   });
 }

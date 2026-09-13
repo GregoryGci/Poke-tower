@@ -52,12 +52,20 @@ import { construireDecor, type Decor } from '@/world/decor';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
-import { WAVES, WaveRunner, especesDuNiveau, vaguesDuNiveau, vaguesTutoriel } from './waves';
+import {
+  WAVES,
+  WaveRunner,
+  especesDuNiveau,
+  vaguesDeRaid,
+  vaguesDuNiveau,
+  vaguesTutoriel,
+} from './waves';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
 import type { OwnedPokemon, PokemonType } from '@/data/types';
 import { getSpecies } from '@/data/content';
 import { PALIER_MAX, PIECES_DEPART, PIECES_KO, PIECES_VAGUE, coutPalier } from '@/data/paliers';
 import { affinite } from '@/data/affinites';
+import { itemsEquipes, type OwnedItem } from '@/data/items';
 import { statsArme, type StatsArme } from '@/data/weapon-upgrade';
 import type { OwnedWeapon } from '@/data/types';
 import { STYLES } from '@/data/types';
@@ -374,6 +382,13 @@ export class Game {
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
+  /**
+   * Inventaire d'objets du compte, pour équiper les Pokémon posés.
+   *
+   * Le jeu ne connaît pas le compte : on lui passe la liste, ce qui garde la
+   * manche indépendante de la couche de sauvegarde.
+   */
+  inventaireItems: readonly OwnedItem[] = [];
 
   private readonly tmpMatrix = new Matrix4();
   private readonly tmpVec = new Vector3();
@@ -387,11 +402,23 @@ export class Game {
     private readonly input: InputState,
     niveau: Niveau,
     tutoriel: boolean,
-    arme: OwnedWeapon | null
+    arme: OwnedWeapon | null,
+    /**
+     * Multiplicateur de points de vie d'un raid, ou null pour une manche
+     * ordinaire. C'est lui qui distingue les deux formes de vague : une
+     * campagne enchaîne des vagues séparées, un raid n'en a qu'une.
+     */
+    vieRaid: number | null
   ) {
     this.arme = arme ? statsArme(arme) : null;
     this.niveau = niveau;
-    this.waves = new WaveRunner(tutoriel ? vaguesTutoriel() : vaguesDuNiveau(niveau));
+    this.waves = new WaveRunner(
+      tutoriel
+        ? vaguesTutoriel()
+        : vieRaid !== null
+          ? vaguesDeRaid(niveau, vieRaid)
+          : vaguesDuNiveau(niveau)
+    );
 
     // La carte est tiree de l'identifiant du niveau : deux tentatives du meme
     // niveau donnent la meme carte, ce qui permet de preparer un placement.
@@ -496,12 +523,13 @@ export class Game {
     rosterSpeciesIds: readonly string[],
     niveau: Niveau | number = 1,
     tutoriel = false,
-    arme: OwnedWeapon | null = null
+    arme: OwnedWeapon | null = null,
+    vieRaid: number | null = null
   ): Promise<Game> {
     // Un numero suffit a designer un niveau : les appels anciens continuent
     // donc de marcher, et le tutoriel n'a pas a connaitre la campagne.
     const cible = typeof niveau === 'number' ? niveauParIndex(niveau) : niveau;
-    const game = new Game(scene, camera, input, cible, tutoriel, arme);
+    const game = new Game(scene, camera, input, cible, tutoriel, arme, vieRaid);
 
     const enemySpecies = tutoriel
       ? [...new Set(WAVES.flatMap((wave) => wave.batches.map((b) => b.speciesId)))]
@@ -1121,6 +1149,11 @@ export class Game {
   }
 
   /** Le Pokemon pose le plus proche du point donne, dans le rayon de saisie. */
+  /** Les objets réellement portés par un membre, dans l'ordre des emplacements. */
+  private itemsDe(owned: OwnedPokemon): OwnedItem[] {
+    return itemsEquipes(owned, this.inventaireItems);
+  }
+
   private tourSous(x: number, z: number): Tower | null {
     let meilleure: Tower | null = null;
     let meilleurEcart = RAYON_SURVOL * RAYON_SURVOL;
@@ -1245,7 +1278,9 @@ export class Game {
     // asynchrone : sans cela deux clics rapides passeraient tous les deux et
     // dépasseraient la limite. Elle est positionnée dès maintenant pour que
     // les règles de pose la voient, et reçoit son visuel une fois chargé.
-    const tower = new Tower(pending, species);
+    // Les objets viennent du compte, pas du Pokémon : celui-ci n'en porte
+    // que les identifiants.
+    const tower = new Tower(pending, species, this.itemsDe(pending));
     tower.place(x, z);
     this.towers.push(tower);
 

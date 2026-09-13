@@ -25,7 +25,16 @@ import { ouvrirCollection } from '@/ui/collection';
 import { ouvrirArmes } from '@/ui/weapons';
 import { ouvrirCampagne } from '@/ui/campaign';
 import { getMonde, niveauParIndex, type Niveau } from '@/data/campaign';
-import { ballDuRaid, butinDuRaid, niveauDuRaid, type Raid } from '@/data/raids';
+import {
+  VIE_PAR_DIFFICULTE,
+  ballDuRaid,
+  butinDuRaid,
+  niveauDuRaid,
+  rareteButin,
+  type ChoixRaidComplet,
+} from '@/data/raids';
+import { LIBELLE_RARETE } from '@/data/gacha';
+import { getFamille, itemNeuf } from '@/data/items';
 import { ajouterPierres, getPierre } from '@/data/pierres';
 import { recolter } from '@/data/recolte';
 import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
@@ -108,7 +117,11 @@ function armeEquipee(compte: typeof account.account): OwnedWeapon | null {
 /* ---------- Une manche ---------- */
 
 /** Joue une manche et rend la main quand le joueur la quitte. */
-async function jouerManche(niveau: Niveau, tutoriel: boolean, raid: Raid | null = null): Promise<void> {
+async function jouerManche(
+  niveau: Niveau,
+  tutoriel: boolean,
+  raid: ChoixRaidComplet | null = null
+): Promise<void> {
   input.reset();
 
   // Le ciel suit le monde : le Mont Braise ne peut pas avoir le fond clair de
@@ -127,8 +140,12 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean, raid: Raid | null 
     rosterSpecies,
     niveau,
     tutoriel,
-    armeEquipee(account.account)
+    armeEquipee(account.account),
+    raid ? VIE_PAR_DIFFICULTE[raid.difficulte] : null
   );
+
+  // Les objets équipés doivent être connus avant la première pose.
+  game.inventaireItems = account.account.items ?? [];
 
   let selectionActive = false;
   let terminer: ((abandon: boolean) => void) | null = null;
@@ -268,16 +285,30 @@ async function jouerManche(niveau: Niveau, tutoriel: boolean, raid: Raid | null 
     if (raid) {
       // Le butin d'un raid est tiré ici et nulle part ailleurs : c'est la
       // seule source de pierres du jeu.
-      const pierres = butinDuRaid(raid);
+      const pierres = butinDuRaid(raid.raid);
       for (const pierreId of pierres) ajouterPierres(account.account, pierreId, 1);
 
       // La Master Ball se tire a part, et plus rarement : une pierre debloque
       // une evolution qu'on a deja choisie, une Ball ouvre un legendaire.
-      const ball = ballDuRaid(raid);
+      const ball = ballDuRaid(raid.raid);
       if (ball) account.account.balls = (account.account.balls ?? 0) + 1;
 
       const lots = pierres.map((id) => getPierre(id)?.name ?? id);
       if (ball) lots.push('Master Ball');
+
+      // L'objet, lui, tombe a coup sur : c'est la recompense garantie du
+      // raid, et seul son palier depend du cran. Une vague de trois minutes
+      // qui peut ne rien donner serait insupportable.
+      const famille = raid.raid.familleItem ? getFamille(raid.raid.familleItem) : null;
+      if (famille) {
+        const rarete = rareteButin(raid.difficulte);
+        const emplacement = 1 + Math.floor(Math.random() * 3);
+        const objet = itemNeuf(famille.id, rarete, emplacement);
+        account.account.items = account.account.items ?? [];
+        account.account.items.push(objet);
+        lots.push(`${famille.nom} ${LIBELLE_RARETE[rarete]} (emplacement ${emplacement})`);
+      }
+
       if (lots.length) await alerterButin(lots.join(', '));
     } else {
       if (!progression.clearedLevels.includes(niveau.id)) {
@@ -380,8 +411,10 @@ for (;;) {
   }
 
   if (destination === 'raid') {
-    const raid = await ouvrirRaids(account.account);
-    if (raid) await jouerManche(niveauDuRaid(raid), false, raid);
+    const choix = await ouvrirRaids(account.account);
+    if (choix) {
+      await jouerManche(niveauDuRaid(choix.raid, choix.difficulte), false, choix);
+    }
     continue;
   }
 

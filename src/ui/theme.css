@@ -3393,3 +3393,76 @@
 }
 
 
+
+/* ---------- Raids : les trois crans ---------- */
+
+.raid-carte { cursor: default; }
+.raid-carte[data-ouvert='false'] { opacity: 0.55; }
+
+.raid-crans {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Chaque cran annonce ce qu'il coûte et ce qu'il donne : c'est la vraie
+   décision de l'écran, pas le choix du raid. */
+.raid-cran {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 8px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  background: var(--ivoire);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+  cursor: pointer;
+}
+
+.raid-cran:hover:not(:disabled) { background: var(--emeraude-clair); }
+.raid-cran:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.raid-cran[data-cran='normal'] { border-color: var(--or); }
+.raid-cran[data-cran='difficile'] { border-color: var(--rouge); }
+
+.raid-vie { font: 600 10px var(--mono); color: var(--gris); }
+.raid-butin-cran { font-family: var(--corps); font-size: 11px; color: var(--gris-clair); }
+
+/* ---------- Objets équipés ---------- */
+
+.objets { display: flex; flex-direction: column; gap: 10px; }
+
+.objet-case {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  background: var(--blanc);
+  border: 2px solid var(--ligne);
+  border-radius: var(--rayon-petit);
+}
+
+/* Un emplacement vide reste visible et en pointillés : c'est une place à
+   remplir, pas une absence. */
+.objet-case[data-vide='true'] { border-style: dashed; background: transparent; }
+
+.objet-tete { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+.objet-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.objet-stats code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 3px 6px;
+  background: var(--ivoire);
+  border-radius: var(--rayon-petit);
+}
+
+/* L'innée ne se relance pas : elle est marquée pour qu'on ne la confonde pas
+   avec une sub-stat qu'on pourrait encore faire monter. */
+.objet-stats .objet-innee { background: #fdf0d8; color: #8a5a10; }
+
+.objet-choix { display: flex; flex-direction: column; gap: 5px; }

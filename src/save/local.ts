@@ -159,6 +159,8 @@ export function migrate(account: PlayerAccount): PlayerAccount {
       auto,
       ultime,
       traits: rebrancherTraits(membre),
+      // Les emplacements d'objets sont arrives apres les premieres sauvegardes.
+      items: membre.items ?? [null, null, null],
       subStats: membre.subStats ?? [
         { statType: 'pv', stack: 0 },
         { statType: 'atk', stack: 0 },
@@ -185,6 +187,7 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     equippedWeaponId: account.equippedWeaponId ?? null,
     // La Master Ball est arrivée après les premières sauvegardes.
     balls: account.balls ?? 0,
+    items: account.items ?? [],
     team: account.team ?? roster.slice(0, 6).map((membre) => membre.id),
     trainerName: account.trainerName ?? '',
   };

@@ -3,6 +3,10 @@
  * s'y conforme, et la couche de sauvegarde les sérialise tels quels.
  */
 
+// Import de type seulement : `items.ts` importe des valeurs d'ici, donc un
+// import ordinaire créerait un cycle au chargement. Le type, lui, s'efface à
+// la compilation.
+import type { OwnedItem } from './items';
 /**
  * Les cinq paliers, du plus commun au plus rare.
  *
@@ -292,6 +296,14 @@ export interface OwnedPokemon {
   traits: [Trait, Trait];
   /** Exactement 4 sub-stats. */
   subStats: [SubStat, SubStat, SubStat, SubStat];
+  /**
+   * Objets equipes, par emplacement : trois cases, null quand elle est vide.
+   *
+   * On stocke des **identifiants**, pas les objets : un objet appartient au
+   * compte, pas au Pokemon, et le meme ne peut etre porte que par un seul a
+   * la fois. Recopier l objet ici aurait permis de le dupliquer en silence.
+   */
+  items: Array<string | null>;
 }
 
 /** Arme possedee. Le modele vit dans data/weapons ; ceci est l'exemplaire. */
@@ -411,6 +423,8 @@ export interface PlayerAccount {
    * attendre d'en avoir assez pour retenter.
    */
   balls: number;
+  /** Objets equipables possedes, tous Pokemon confondus. */
+  items: OwnedItem[];
   inventory: Item[];
   progression: Progression;
   updatedAt: number;
@@ -430,6 +444,7 @@ export function emptyAccount(id: string): PlayerAccount {
     trainerName: '',
     crystals: 0,
     balls: 0,
+    items: [],
     inventory: [],
     progression: {
       storyLevel: 1,

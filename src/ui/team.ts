@@ -20,6 +20,15 @@ import { prochaineEvolution } from '@/data/evolution';
 import { analyseAffinites } from '@/data/affinites';
 import { bonbonsDisponibles, donnerBonbon } from '@/data/bonbons';
 import { employerPierre, pierresUtiles } from '@/data/pierres';
+import {
+  EMPLACEMENTS_ITEM,
+  LIBELLE_ITEM_STAT,
+  getFamille,
+  itemsEquipes,
+  setsActifs,
+  valeurPrincipale,
+} from '@/data/items';
+import { LIBELLE_RARETE } from '@/data/gacha';
 import { EQUIPE_MAX, basculerEquipe, dansEquipe } from '@/data/team';
 import { TRIS_POKEMON, detailStat, notePotentiel } from '@/data/stats';
 import { PALIER_MAX } from '@/data/paliers';
@@ -471,6 +480,137 @@ function remplirDetail(
     bonbons.appendChild(bouton);
   }
 
+  // --- Objets
+  //
+  // Trois emplacements, et un objet ne sert que dans le sien : c'est ce qui
+  // empêche d'empiler trois pièces de la même famille sur la case la plus
+  // rentable, et ce qui rend les sets réellement contraignants.
+  //
+  // Un objet porté par un autre Pokémon n'apparaît pas dans la liste : il
+  // appartient au compte, donc un seul le porte à la fois. Le lui reprendre
+  // en silence aurait déshabillé une équipe sans prévenir.
+  const inventaire = compte.items ?? [];
+  const portesAilleurs = new Set(
+    compte.roster
+      .filter((autre) => autre.id !== owned.id)
+      .flatMap((autre) => autre.items ?? [])
+      .filter((id): id is string => Boolean(id))
+  );
+
+  const blocObjets = elem('div', 'objets');
+  const equipes = itemsEquipes(owned, inventaire);
+
+  for (let emplacement = 1; emplacement <= EMPLACEMENTS_ITEM; emplacement++) {
+    const porte = equipes.find((item) => item.emplacement === emplacement) ?? null;
+    const ligne = elem('div', 'objet-case');
+    ligne.dataset['vide'] = String(!porte);
+
+    const tete = elem('div', 'objet-tete');
+    tete.append(elem('span', 'etiquette', `Emplacement ${emplacement}`));
+    if (porte) {
+      const famille = getFamille(porte.familleId);
+      const badge = elem('span', 'rarete', LIBELLE_RARETE[porte.rarity]);
+      badge.dataset['rarete'] = porte.rarity;
+      tete.append(
+        elem('b', undefined, `${famille?.glyphe ?? '◆'} ${famille?.nom ?? porte.familleId} +${porte.niveau}`),
+        badge
+      );
+    } else {
+      tete.appendChild(elem('span', 'affinites-vide', 'Vide'));
+    }
+    ligne.appendChild(tete);
+
+    if (porte) {
+      const lignes = elem('div', 'objet-stats');
+      lignes.appendChild(
+        elem(
+          'code',
+          undefined,
+          `${LIBELLE_ITEM_STAT[porte.principale.kind]} +${valeurPrincipale(porte)} %`
+        )
+      );
+      if (porte.innee) {
+        lignes.appendChild(
+          elem('code', 'objet-innee', `${LIBELLE_ITEM_STAT[porte.innee.kind]} +${porte.innee.valeur} %`)
+        );
+      }
+      for (const sub of porte.subStats) {
+        lignes.appendChild(
+          elem('code', undefined, `${LIBELLE_ITEM_STAT[sub.kind]} +${sub.valeur} %`)
+        );
+      }
+      ligne.appendChild(lignes);
+
+      const retirer = elem('button', 'bouton-cout', 'Retirer');
+      retirer.type = 'button';
+      retirer.id = `retirer-objet-${emplacement}`;
+      retirer.addEventListener('click', () => {
+        const cases = [...(owned.items ?? [null, null, null])];
+        cases[emplacement - 1] = null;
+        owned.items = cases;
+        surChangement();
+      });
+      ligne.appendChild(retirer);
+    }
+
+    // Les candidats : bon emplacement, et libres.
+    const candidats = inventaire.filter(
+      (item) =>
+        item.emplacement === emplacement &&
+        item.id !== porte?.id &&
+        !portesAilleurs.has(item.id) &&
+        !(owned.items ?? []).includes(item.id)
+    );
+
+    if (candidats.length) {
+      const choix = elem('div', 'objet-choix');
+      for (const item of candidats.slice(0, 6)) {
+        const famille = getFamille(item.familleId);
+        const bouton = elem('button', 'bonbon');
+        bouton.type = 'button';
+        bouton.id = `equiper-${item.id}`;
+        const gauche = elem('div');
+        gauche.append(
+          elem('span', 'raid-glyphe', famille?.glyphe ?? '◆'),
+          elem('b', undefined, famille?.nom ?? item.familleId),
+          elem(
+            'span',
+            'lignee-niveau',
+            ` ${LIBELLE_ITEM_STAT[item.principale.kind]} +${valeurPrincipale(item)} %`
+          )
+        );
+        const badge = elem('span', 'rarete', LIBELLE_RARETE[item.rarity]);
+        badge.dataset['rarete'] = item.rarity;
+        bouton.append(gauche, badge);
+        bouton.addEventListener('click', () => {
+          const cases = [...(owned.items ?? [null, null, null])];
+          cases[emplacement - 1] = item.id;
+          owned.items = cases;
+          surChangement();
+        });
+        choix.appendChild(bouton);
+      }
+      ligne.appendChild(choix);
+    } else if (!porte) {
+      ligne.appendChild(
+        elem('p', 'affinites-vide', 'Aucun objet pour cet emplacement. Il en tombe à chaque raid gagné.')
+      );
+    }
+
+    blocObjets.appendChild(ligne);
+  }
+
+  // Les sets actifs, en clair : un bonus qu'on ne voit pas ne pèse pas dans
+  // la décision d'équiper.
+  const actifs = setsActifs(equipes);
+  const noteSets = elem(
+    'span',
+    'bloc-note',
+    actifs.length
+      ? actifs.map((famille) => `${famille.nom} actif`).join(' · ')
+      : 'Aucun set actif'
+  );
+
   // --- Pierres
   //
   // N'apparaissent que pour les Pokémon qui en emploient une : proposer une
@@ -535,6 +675,7 @@ function remplirDetail(
     bloc('Traits', traits, relancerTraits),
     bloc(`Sub-stats — ${SUBSTAT_MAX_STACK} paliers maximum`, subs, solde),
     bloc('Stats réelles', base),
+    bloc(`Objets — ${EMPLACEMENTS_ITEM} emplacements`, blocObjets, noteSets),
     bloc('Affinités — ce qu’il encaisse', affinites),
     bloc('Lignée', blocLignee, noteLignee),
     bloc('Bonbons', bonbons)

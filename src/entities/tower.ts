@@ -22,6 +22,7 @@ import type { Move, OwnedPokemon, PokemonType, Species } from '@/data/types';
 import { RARITY_MULTIPLIER, STYLES, type StyleProfil } from '@/data/types';
 import { statsEffectives } from '@/data/stats';
 import { CADENCE_ULTIME, PALIER_MAX, multiplicateurPalier } from '@/data/paliers';
+import { bonusDesItems, type BonusItems, type OwnedItem } from '@/data/items';
 import type { Enemy } from './enemy';
 import type { SpatialGrid } from '@/world/spatial';
 
@@ -90,12 +91,23 @@ export class Tower {
   private castEnCours: AttaquePrete | null = null;
   target: Enemy | null = null;
 
+  /**
+   * Bonus apportés par les objets équipés, en pourcentage par stat.
+   *
+   * Calculés une fois à la pose et non à chaque tir : l'équipement ne change
+   * pas pendant une manche, et les recalculer soixante fois par seconde pour
+   * six unités serait du travail jeté.
+   */
+  private readonly bonus: BonusItems;
+
   constructor(
     readonly owned: OwnedPokemon,
-    species: Species
+    species: Species,
+    items: readonly OwnedItem[] = []
   ) {
     this.species = species;
     this.style = STYLES[species.style];
+    this.bonus = bonusDesItems(items);
     this.recalculer();
   }
 
@@ -113,7 +125,8 @@ export class Tower {
     const restantUltime = this.ultime?.timer ?? 0;
 
     this.style = STYLES[this.species.style];
-    this.range = this.species.range * (1 + this.traitBonus('range'));
+    this.range =
+      this.species.range * (1 + this.traitBonus('range') + this.bonus.portee / 100);
 
     this.auto = this.preparer(this.owned.auto, 1);
     this.auto.timer = restantAuto;
@@ -131,7 +144,12 @@ export class Tower {
   private preparer(move: Move, cadence: number): AttaquePrete {
     const rarity = RARITY_MULTIPLIER[this.species.rarity];
     const stats = statsEffectives(this.owned, this.species.id);
-    const puissance = move.category === 'special' ? stats.atkSpe : stats.atk;
+    // Les objets majorent la stat qui sert à l'attaque, pas les dégâts bruts :
+    // un Croc d'Attaque doit valoir plus sur un Pokémon qui frappe fort, sinon
+    // équiper reviendrait à ajouter un chiffre plat partout.
+    const brute = move.category === 'special' ? stats.atkSpe : stats.atk;
+    const majoration = move.category === 'special' ? this.bonus.atkSpe : this.bonus.atk;
+    const puissance = brute * (1 + majoration / 100);
     const affinite = puissance / STAT_REFERENCE;
 
     const degats =
@@ -143,7 +161,10 @@ export class Tower {
       (1 + this.traitBonus('stat')) *
       multiplicateurPalier(this.palier);
 
-    const reduction = 1 - Math.min(0.6, this.traitBonus('cooldown'));
+    // La recharge des objets s'ajoute à celle des traits, sous le même
+    // plafond : deux sources sans plafond commun auraient permis d'atteindre
+    // zéro seconde de recharge.
+    const reduction = 1 - Math.min(0.6, this.traitBonus('cooldown') + this.bonus.recharge / 100);
     const cooldown = move.cooldown * this.style.cadence * reduction * cadence;
     // `move.cast ?? 0` et non `move.cast` nu : une attaque sauvegardée avant
     // l'arrivée de ce champ donnait `undefined`, donc `NaN` après
