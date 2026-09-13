@@ -92,6 +92,8 @@ export interface DetailStat {
   niveau: number;
   /** Part apportée par les sub-stats, en pourcentage. */
   subStats: number;
+  /** Part apportée par les traits qui nomment cette stat, en pourcentage. */
+  traits: number;
 }
 
 /**
@@ -101,6 +103,28 @@ export interface DetailStat {
  * investissement doit valoir d'autant plus que le Pokémon est déjà bon, sinon
  * monter un prismatique et monter un normal reviennent au même.
  */
+/**
+ * Ce que les traits apportent à **cette** stat, en pourcentage.
+ *
+ * Le point qui compte est le `trait.effect.stat` : il était ignoré. Tous les
+ * traits de genre « stat » étaient additionnés puis appliqués aux dégâts, si
+ * bien que Carapace — « Défense +10 % » — augmentait l'attaque exactement
+ * comme Musclé, pendant que la fiche du Pokémon, elle, n'affichait aucune
+ * contribution de trait. Musclé se lisait donc « +0 % » sur la ligne Attaque
+ * alors qu'il agissait, et Carapace agissait là où il n'aurait pas dû.
+ *
+ * En le calculant ici, la contribution suit la stat nommée, et elle est
+ * visible partout où la stat l'est — fiche comprise.
+ */
+function bonusDesTraits(owned: OwnedPokemon, stat: StatType): number {
+  let total = 0;
+  for (const trait of owned.traits ?? []) {
+    const effet = trait?.effect;
+    if (effet?.kind === 'stat' && effet.stat === stat) total += effet.percent;
+  }
+  return total;
+}
+
 export function detailStat(
   owned: OwnedPokemon,
   stat: StatType,
@@ -119,15 +143,17 @@ export function detailStat(
   const etoiles = (multiplicateurEtoiles(owned.stars) - 1) * 100;
   const niveau = CROISSANCE_NIVEAU * Math.max(0, owned.level - 1) * 100;
   const subStats = GAIN_PAR_PALIER * paliers(owned, stat) * 100;
+  const traits = bonusDesTraits(owned, stat);
 
   const valeur =
     base *
     (1 + potentiel / 100) *
     multiplicateurEtoiles(owned.stars) *
     (1 + niveau / 100) *
-    (1 + subStats / 100);
+    (1 + subStats / 100) *
+    (1 + traits / 100);
 
-  return { stat, base, valeur, potentiel, etoiles, niveau, subStats };
+  return { stat, base, valeur, potentiel, etoiles, niveau, subStats, traits };
 }
 
 /** Toutes les stats réelles d'un exemplaire. */

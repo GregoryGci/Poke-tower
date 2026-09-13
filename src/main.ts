@@ -20,7 +20,7 @@ import { demanderStarter } from '@/ui/starter-screen';
 import { ouvrirMenu } from '@/ui/menu';
 import { afficherBilan } from '@/ui/result';
 import { ouvrirEquipe } from '@/ui/team';
-import { ouvrirInvocation } from '@/ui/summon';
+import { invocationOfferte, ouvrirInvocation } from '@/ui/summon';
 import { ouvrirCollection } from '@/ui/collection';
 import { ouvrirArmes } from '@/ui/weapons';
 import { ouvrirCampagne } from '@/ui/campaign';
@@ -442,6 +442,18 @@ if (!account.account.starterId) {
 
 // Le menu revient après chaque manche : c'est le point fixe du jeu.
 for (;;) {
+  // Le ×10 offert s'intercale avant le menu, une seule fois, à la sortie du
+  // tutoriel. Il est placé ici et pas à la fin de la manche : si le joueur
+  // ferme l'onglet entre les deux, il le retrouvera au lancement suivant
+  // plutôt que de le perdre.
+  if (
+    account.account.progression.tutorialDone &&
+    !account.account.progression.invocationOfferteFaite
+  ) {
+    await invocationOfferte(account);
+    continue;
+  }
+
   const destination = await ouvrirMenu(account.account);
 
   if (destination === 'histoire') {

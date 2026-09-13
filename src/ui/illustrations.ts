@@ -21,9 +21,17 @@
  */
 const ILLUSTRATIONS: Record<string, string> = {
   pokemon: 'illustrations/portail-pokemon.jpg',
+  arme: 'illustrations/portail-arme.jpg',
+  legendaire: 'illustrations/portail-legendaire.jpg',
 };
 
-/** Chemin de l'illustration d'un portail, ou null s'il n'en a pas encore. */
+/**
+ * Chemin de l'illustration d'un portail, ou null s'il n'en a pas encore.
+ *
+ * Le registre nomme un fichier ; il ne garantit pas qu'il soit là. Une image
+ * absente n'est pas une erreur — l'appelant écoute l'échec de chargement et
+ * retombe sur la capsule à glyphe, exactement comme un portail sans entrée.
+ */
 export function illustrationPortail(portail: string): string | null {
   return ILLUSTRATIONS[portail] ?? null;
 }

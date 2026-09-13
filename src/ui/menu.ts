@@ -10,11 +10,11 @@
  * de choses, et surtout au mauvais endroit : les soldes s'y noyaient alors
  * qu'ils sont la première chose qu'on vient vérifier en rentrant d'une manche.
  *
- * En dessous, les destinations. Chacune porte un glyphe : en pixel art, une
- * forme se reconnaît plus vite qu'un titre, et la grille se parcourt d'un
- * coup d'oeil une fois qu'on la connaît. Les sections verrouillées restent
- * visibles — le joueur doit voir où mène sa progression, pas découvrir des
- * pans de jeu au compte-gouttes.
+ * En dessous, les destinations. Elles portaient chacune un glyphe, retiré
+ * depuis : il répétait le titre sans rien préciser, et sur les cartes
+ * illustrées il se disputait la place avec le bandeau. Les sections
+ * verrouillées, elles, restent visibles — le joueur doit voir où mène sa
+ * progression, pas découvrir des pans de jeu au compte-gouttes.
  *
  * L'écran se résout sur la destination choisie et se retire lui-même.
  */
@@ -27,6 +27,7 @@ import { bonbonsDisponibles } from '@/data/bonbons';
 import { niveauDresseur } from '@/data/types';
 import { pastillePokemon } from './pastille';
 import { illustrationPortail } from './illustrations';
+import { ouvrirReglages } from './reglages';
 import type { PlayerAccount } from '@/data/types';
 
 export type Destination =
@@ -210,7 +211,17 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
   );
   if (bonbons > 0) soldes.appendChild(solde('Bonbons', String(bonbons)));
 
-  fiche.append(identite, avancee, soldes);
+  // Le rouage vit dans la bande du dresseur, à droite des monnaies : c'est le
+  // seul endroit permanent de l'écran, donc le seul où on saura le retrouver.
+  const reglages = elem('button', 'bouton-rouage');
+  reglages.type = 'button';
+  reglages.id = 'menu-reglages';
+  reglages.title = 'Réglages et commandes';
+  reglages.setAttribute('aria-label', 'Réglages et commandes');
+  reglages.textContent = '⚙';
+  reglages.addEventListener('click', () => void ouvrirReglages());
+
+  fiche.append(identite, avancee, soldes, reglages);
 
   /* ---- Destinations ---- */
 
@@ -239,7 +250,10 @@ export function ouvrirMenu(compte: PlayerAccount): Promise<Destination> {
         elem('p', 'etiquette', carte.etiquette),
         elem('h2', 'destination-titre', carte.titre)
       );
-      haut.append(texte, elem('span', 'destination-glyphe', carte.glyphe));
+      // Plus de glyphe : il doublait le titre sans rien ajouter, et sur les
+      // cartes illustrées il entrait en concurrence avec le bandeau. Le
+      // champ reste dans la table — il sert encore d'étiquette ailleurs.
+      haut.append(texte);
 
       const pied = elem('div', 'destination-pied');
       if (raison) {

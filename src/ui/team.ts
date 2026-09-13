@@ -347,6 +347,9 @@ function remplirDetail(
     if (detail.etoiles > 0) parts.push(`étoiles +${Math.round(detail.etoiles)} %`);
     if (detail.niveau > 0) parts.push(`niveau +${Math.round(detail.niveau)} %`);
     if (detail.subStats > 0) parts.push(`sub-stats +${Math.round(detail.subStats)} %`);
+    // Les traits manquaient à l'appel : Musclé se lisait « +0 % » sur la ligne
+    // Attaque alors qu'il l'augmentait bel et bien.
+    if (detail.traits > 0) parts.push(`traits +${Math.round(detail.traits)} %`);
     if (parts.length) {
       const note = elem('span', 'stat-detail', parts.join(' · '));
       droite.appendChild(note);

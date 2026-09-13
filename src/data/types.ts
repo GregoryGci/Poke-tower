@@ -369,6 +369,16 @@ export interface Progression {
   perfectLevels: string[];
   /** Expérience du dresseur lui-même, cumulée sur toutes les manches. */
   dresseurXp: number;
+  /**
+   * Le ×10 offert au sortir du tutoriel a été tiré.
+   *
+   * Un joueur qui vient de finir sa première manche possède un seul Pokémon
+   * et dix cristaux : il ne peut pas s'offrir d'invocation, donc il ne
+   * découvre pas le portail — c'est-à-dire la moitié du jeu. Le ×10 offert
+   * lui met une équipe dans les mains et lui montre l'écran une fois, en
+   * main forcée. Il ne se rejoue jamais, d'où ce drapeau.
+   */
+  invocationOfferteFaite?: boolean;
 }
 
 /**

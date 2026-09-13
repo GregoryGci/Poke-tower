@@ -132,37 +132,37 @@ const BASES: Record<string, Species> = {
   // --- Starters (légendaires : total de stats ~310, et lignées complètes)
   bulbasaur: {
     id: 'bulbasaur', dexNumber: 1, name: 'Bulbizarre', types: ['plante', 'poison'],
-    baseStats: stats(45, 49, 49, 65, 65, 45), rarity: 'legendaire',
+    baseStats: stats(45, 49, 49, 65, 65, 45), rarity: 'normal',
     range: 7.5, style: 'ligne', movepool: ['charge', 'fouet_lianes', 'tranch_herbe', 'dard_venin'],
     evolutions: [{ into: 'ivysaur', niveau: 16 }], model: 'bulbasaur', height: 1.07,
   },
   charmander: {
     id: 'charmander', dexNumber: 4, name: 'Salamèche', types: ['feu'],
-    baseStats: stats(39, 52, 43, 60, 50, 65), rarity: 'legendaire',
+    baseStats: stats(39, 52, 43, 60, 50, 65), rarity: 'normal',
     range: 5.2, style: 'zone', movepool: ['griffe', 'flammeche', 'morsure', 'vive_attaque'],
     evolutions: [{ into: 'charmeleon', niveau: 16 }], model: 'charmander', height: 1.31,
   },
   squirtle: {
     id: 'squirtle', dexNumber: 7, name: 'Carapuce', types: ['eau'],
-    baseStats: stats(44, 48, 65, 50, 64, 43), rarity: 'legendaire',
+    baseStats: stats(44, 48, 65, 50, 64, 43), rarity: 'normal',
     range: 8.5, style: 'unique', movepool: ['charge', 'pistolet_a_o', 'morsure', 'ecras_face'],
     evolutions: [{ into: 'wartortle', niveau: 16 }], model: 'squirtle', height: 1.17,
   },
   treecko: {
     id: 'treecko', dexNumber: 252, name: 'Arcko', types: ['plante'],
-    baseStats: stats(40, 45, 35, 65, 55, 70), rarity: 'legendaire',
+    baseStats: stats(40, 45, 35, 65, 55, 70), rarity: 'normal',
     range: 6.4, style: 'unique', movepool: ['charge', 'fouet_lianes', 'tranch_herbe', 'vive_attaque'],
     evolutions: [{ into: 'grovyle', niveau: 16 }], model: 'treecko', height: 1.53,
   },
   torchic: {
     id: 'torchic', dexNumber: 255, name: 'Poussifeu', types: ['feu'],
-    baseStats: stats(45, 60, 40, 70, 50, 45), rarity: 'legendaire',
+    baseStats: stats(45, 60, 40, 70, 50, 45), rarity: 'normal',
     range: 5, style: 'zone', movepool: ['griffe', 'flammeche', 'vive_attaque', 'ecras_face'],
     evolutions: [{ into: 'combusken', niveau: 16 }], model: 'torchic', height: 1.45,
   },
   mudkip: {
     id: 'mudkip', dexNumber: 258, name: 'Gobou', types: ['eau'],
-    baseStats: stats(50, 70, 50, 50, 50, 40), rarity: 'legendaire',
+    baseStats: stats(50, 70, 50, 50, 50, 40), rarity: 'normal',
     range: 3, style: 'cac', movepool: ['charge', 'pistolet_a_o', 'morsure'],
     evolutions: [{ into: 'marshtomp', niveau: 16 }], model: 'mudkip', height: 1.41,
   },

@@ -34,13 +34,19 @@ const HAUTEUR = 0.11;
 const LISERE = 0.02;
 
 /**
- * Vert tant que tout va bien, rouge à l'agonie.
+ * Rouge du début à la fin.
  *
- * Un vert plus franc que celui du feuillage : à la teinte du décor, les barres
- * se confondaient avec les arbres derrière lesquels passent les ennemis.
+ * La barre était verte à pleine vie et virait au rouge à l'agonie. C'était
+ * une information de plus à lire alors que la longueur de la barre la donne
+ * déjà, et surtout le vert se confondait avec le feuillage pendant qu'un
+ * Pokémon vert passait dessous. Le rouge se détache de tous les décors du
+ * jeu — herbe, cendre, pierre — et il dit ce qu'il faut : c'est un ennemi.
+ *
+ * Deux teintes tout de même, du sang au vermillon : sans le moindre écart la
+ * barre paraît plate, et on ne distingue plus la jauge de son fond.
  */
-const PLEINE = new Color('#3fd070');
-const VIDE = new Color('#e04a30');
+const PLEINE = new Color('#e0362b');
+const VIDE = new Color('#7d1410');
 
 export interface OptionsBarres {
   capacite: number;

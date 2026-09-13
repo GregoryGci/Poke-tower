@@ -17,6 +17,7 @@
  */
 
 import {
+  DoubleSide,
   AnimationClip,
   AnimationMixer,
   DataTexture,
@@ -163,7 +164,10 @@ function createVatMaterial(
     metalness: source.metalness,
     alphaTest: source.alphaTest || 0.5,
     transparent: false,
-    side: source.side,
+    // Double face, comme pour les modeles poses : les ailes et les nageoires
+    // sont des plans d une seule epaisseur, et la culture des faces arriere
+    // les fait disparaitre de profil.
+    side: DoubleSide,
   });
 
   material.userData['time'] = { value: 0 };

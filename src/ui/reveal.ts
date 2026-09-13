@@ -11,6 +11,13 @@
  * seulement un libelle : elle change la duree, la couleur et le fracas de la
  * revelation.
  *
+ * Le tirage multiple se joue **une carte a la fois**. La grille de dix cartes
+ * qui tombaient en cascade montrait tout en une seconde et demie : le seul
+ * legendaire du lot arrivait en meme temps que neuf normaux, et son aura se
+ * noyait dans le tas. En chaine, chaque tirage a son defile, et le rythme
+ * suit la rarete — les communes s'enchainent toutes seules, un legendaire
+ * attend qu'on le regarde.
+ *
  * Faute de sprites 2D, les ombres sont des formes CSS tirees d'un petit jeu
  * de silhouettes. On ne cherche pas a reconnaitre l'espece dans l'ombre — on
  * cherche la sensation du defile.
@@ -36,15 +43,46 @@ const DUREE_DEFILE: Record<Rarity, number> = {
   prismatique: 2900,
 };
 
+/**
+ * Defile raccourci quand on enchaine dix tirages.
+ *
+ * Dix fois neuf cents millisecondes de defile, c'est quinze secondes rien que
+ * d'attente pour des Pokemon communs : la sequence devient une corvee des le
+ * deuxieme x10. Les paliers bas sont donc expedies. Les deux hauts gardent
+ * leur duree pleine — c'est pour eux qu'on regarde.
+ */
+const DUREE_CHAINE: Record<Rarity, number> = {
+  normal: 420,
+  rare: 620,
+  epique: 1000,
+  legendaire: 2200,
+  prismatique: 2900,
+};
+
+/**
+ * Temps d'affichage d'une carte avant de passer a la suivante, en chaine.
+ *
+ * `null` veut dire : on attend un clic. Reserve aux deux paliers du haut —
+ * un legendaire qui disparait tout seul au bout d'une seconde donne
+ * l'impression d'avoir rate quelque chose.
+ */
+const MAINTIEN: Record<Rarity, number | null> = {
+  normal: 520,
+  rare: 700,
+  epique: 1100,
+  legendaire: null,
+  prismatique: null,
+};
+
 /** Nombre de silhouettes distinctes dans le jeu de formes. */
 const FORMES = 8;
 
 /**
  * Retard entre deux cartes d'un tirage multiple, en millisecondes.
  *
- * Dix cartes qui apparaissent ensemble ne se lisent pas : l'oeil ne sait pas
- * où regarder et l'aura de la seule carte rare se noie dans le lot. En
- * cascade, chacune a son instant.
+ * Sert encore au recapitulatif de fin de chaine, ou les dix cartes
+ * reapparaissent ensemble : les faire tomber l'une apres l'autre donne un
+ * mouvement au lieu d'un pave.
  */
 export const RETARD_CASCADE = 90;
 
@@ -71,6 +109,11 @@ export function rareteDominante(raretes: readonly Rarity[]): Rarity {
   return meilleure;
 }
 
+/** Vrai pour les deux paliers qui meritent leur propre mise en scene. */
+function estUnEvenement(rarete: Rarity): boolean {
+  return POIDS[rarete] >= POIDS.legendaire;
+}
+
 function elem<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string
@@ -80,17 +123,13 @@ function elem<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/**
- * Joue le defile puis rend la main.
- *
- * Le clic passe la sequence : une animation qu'on ne peut pas couper devient
- * une corvee des la dixieme invocation.
- */
-export function defileOmbres(rarete: Rarity): Promise<() => void> {
-  const duree = DUREE_DEFILE[rarete];
+function attendre(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+/** Le voile noir, sa piste d'ombres et son flash. Un seul pour toute une chaine. */
+function creerVoile(): HTMLDivElement {
   const voile = elem('div', 'revelation');
-  voile.dataset['rarete'] = rarete;
 
   const piste = elem('div', 'revelation-piste');
   // Deux fois assez d'ombres pour que la bande reste pleine a pleine vitesse.
@@ -106,30 +145,60 @@ export function defileOmbres(rarete: Rarity): Promise<() => void> {
 
   voile.append(piste, flash, indice);
   document.body.appendChild(voile);
+  return voile;
+}
 
-  piste.style.setProperty('--duree-defile', `${duree}ms`);
+/**
+ * Joue un defile dans un voile existant, et rend la main a la revelation.
+ *
+ * Le voile est reutilise d'un tirage a l'autre : le detruire et le recreer
+ * ferait clignoter le fond noir entre deux cartes de la chaine, ce qui casse
+ * exactement le rythme qu'on cherche a installer.
+ */
+async function jouerDefile(
+  voile: HTMLElement,
+  rarete: Rarity,
+  duree: number
+): Promise<void> {
+  const piste = voile.querySelector<HTMLElement>('.revelation-piste');
+  voile.dataset['rarete'] = rarete;
+  piste?.style.setProperty('--duree-defile', `${duree}ms`);
+
+  // Les animations CSS sont relancees en retirant puis reposant la phase :
+  // sans ce passage par `attente`, la piste garderait l'etat final du tirage
+  // precedent et ne defilerait plus du tout.
+  voile.dataset['phase'] = 'attente';
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   voile.dataset['phase'] = 'defile';
 
-  return new Promise<() => void>((resolve) => {
+  await new Promise<void>((resolve) => {
     let fini = false;
-
     const terminer = (): void => {
       if (fini) return;
       fini = true;
       clearTimeout(minuteur);
       voile.removeEventListener('click', terminer);
       voile.dataset['phase'] = 'flash';
-      // Le voile survit au flash : il sert de fond sombre a la carte revelee,
-      // et c'est l'appelant qui decide quand le retirer.
       setTimeout(() => {
         voile.dataset['phase'] = 'revele';
-        resolve(() => voile.remove());
+        resolve();
       }, 220);
     };
-
     const minuteur = setTimeout(terminer, duree);
     voile.addEventListener('click', terminer);
   });
+}
+
+/**
+ * Joue le defile puis rend la main.
+ *
+ * Le clic passe la sequence : une animation qu'on ne peut pas couper devient
+ * une corvee des la dixieme invocation.
+ */
+export async function defileOmbres(rarete: Rarity): Promise<() => void> {
+  const voile = creerVoile();
+  await jouerDefile(voile, rarete, DUREE_DEFILE[rarete]);
+  return () => voile.remove();
 }
 
 /**
@@ -161,6 +230,110 @@ export async function revelation(
       voile.style.opacity = '0';
       setTimeout(() => {
         fermer();
+        resolve();
+      }, 180);
+    });
+  });
+}
+
+/** Un tirage a reveler : sa rarete pilote la mise en scene, sa carte l'affichage. */
+export interface EntreeChaine {
+  rarete: Rarity;
+  carte: HTMLElement;
+  /** La meme carte, pour le recapitulatif : un noeud ne peut pas etre a deux endroits. */
+  copie: HTMLElement;
+}
+
+/**
+ * Revele un lot, une carte a la fois, puis montre le lot entier.
+ *
+ * Deux facons d'avancer, et c'est le coeur du rythme : les paliers bas
+ * defilent tout seuls, les deux hauts attendent un clic. Un bouton « Tout
+ * passer » coupe court a la sequence entiere — au dixieme x10, la mise en
+ * scene qu'on ne peut pas sauter devient une punition.
+ */
+export async function revelationEnChaine(
+  entrees: readonly EntreeChaine[],
+  recapitulatif: (copies: HTMLElement[]) => HTMLElement,
+  libelleFin = 'Continuer'
+): Promise<void> {
+  const voile = creerVoile();
+  let passerTout = false;
+
+  const passer = elem('button', 'bouton-discret revelation-passer');
+  passer.type = 'button';
+  passer.id = 'revelation-passer';
+  passer.textContent = 'Tout passer';
+  passer.addEventListener('click', (evenement) => {
+    // Sans cet arret, le clic traverse jusqu'au voile et compte aussi comme
+    // « passer ce defile-ci » : le bouton sauterait deux cartes.
+    evenement.stopPropagation();
+    passerTout = true;
+  });
+  voile.appendChild(passer);
+
+  const compteur = elem('p', 'revelation-compteur');
+  voile.appendChild(compteur);
+
+  for (let i = 0; i < entrees.length && !passerTout; i++) {
+    const entree = entrees[i]!;
+    compteur.textContent = `${i + 1} / ${entrees.length}`;
+    compteur.hidden = entrees.length < 2;
+
+    await jouerDefile(voile, entree.rarete, DUREE_CHAINE[entree.rarete]);
+    if (passerTout) break;
+
+    const scene = elem('div', 'revelation-scene');
+    scene.appendChild(entree.carte);
+    // Les deux paliers du haut recoivent leur propre marque : la feuille de
+    // style s'en sert pour l'eclat et le halo, sans quoi un legendaire
+    // arriverait exactement comme un Chenipan.
+    if (estUnEvenement(entree.rarete)) scene.dataset['evenement'] = entree.rarete;
+    voile.appendChild(scene);
+
+    const maintien = MAINTIEN[entree.rarete];
+    if (maintien === null) {
+      const suite = elem('button', 'bouton bouton-primaire');
+      suite.type = 'button';
+      suite.id = 'revelation-suite';
+      suite.textContent = i + 1 < entrees.length ? 'Suivant' : libelleFin;
+      scene.appendChild(suite);
+      suite.focus();
+      await new Promise<void>((resolve) => {
+        suite.addEventListener('click', () => resolve());
+        passer.addEventListener('click', () => resolve(), { once: true });
+      });
+    } else {
+      await attendre(maintien);
+    }
+
+    scene.remove();
+  }
+
+  passer.remove();
+  compteur.remove();
+
+  /* ---- Le lot entier, pour qu'on puisse le relire ---- */
+
+  voile.dataset['rarete'] = rareteDominante(entrees.map((e) => e.rarete));
+  voile.dataset['phase'] = 'revele';
+
+  const scene = elem('div', 'revelation-scene');
+  const grille = recapitulatif(entrees.map((entree) => entree.copie));
+  const suite = elem('button', 'bouton bouton-primaire');
+  suite.type = 'button';
+  suite.id = 'revelation-suite';
+  suite.textContent = libelleFin;
+  scene.append(grille, suite);
+  voile.appendChild(scene);
+  suite.focus();
+
+  await new Promise<void>((resolve) => {
+    suite.addEventListener('click', () => {
+      voile.style.transition = 'opacity .18s ease';
+      voile.style.opacity = '0';
+      setTimeout(() => {
+        voile.remove();
         resolve();
       }, 180);
     });

@@ -79,7 +79,11 @@ export function especesInvocables(): string[] {
  * jusqu'à trouver un palier habité, au lieu de renvoyer un lot vide.
  */
 function rareteServie(rng: () => number): Rarity {
-  const voulue = tirerRarete(rng);
+  return redescendre(tirerRarete(rng));
+}
+
+/** Le premier palier peuplé à partir de celui-ci, en descendant. */
+function redescendre(voulue: Rarity): Rarity {
   const depart = RARITIES.indexOf(voulue);
   for (let i = depart; i >= 0; i--) {
     const candidate = RARITIES[i];
@@ -90,6 +94,33 @@ function rareteServie(rng: () => number): Rarity {
   }
   // Aucun palier peuplé : le catalogue est cassé, mieux vaut le dire.
   throw new Error('Aucune espèce invocable');
+}
+
+/**
+ * Les taux **réellement servis**, palier vide compris.
+ *
+ * `TAUX` est une intention ; ceci est ce qui sort de la machine. Les deux ont
+ * divergé le jour où les six starters sont passés en normal : le palier
+ * légendaire s'est retrouvé sans une seule espèce, ses 7,5 % ont glissé vers
+ * l'épique — et l'écran continuait d'annoncer 7,5 % de légendaires qu'aucun
+ * tirage ne pouvait donner.
+ *
+ * C'est donc cette table que l'interface affiche. Elle se corrige d'elle-même
+ * le jour où une espèce légendaire entre au catalogue, sans que personne ait
+ * à penser à retoucher un libellé.
+ */
+export function tauxServis(): Record<Rarity, number> {
+  const servis: Record<Rarity, number> = {
+    normal: 0,
+    rare: 0,
+    epique: 0,
+    legendaire: 0,
+    prismatique: 0,
+  };
+  for (const [rarete, part] of Object.entries(TAUX) as Array<[Rarity, number]>) {
+    servis[redescendre(rarete)] += part;
+  }
+  return servis;
 }
 
 /**
@@ -157,6 +188,36 @@ export function invoquerMultiple(rng: () => number = Math.random): OwnedPokemon[
     const remplacant = rares[Math.floor(rng() * rares.length)];
     if (remplacant) lot[lot.length - 1] = createPokemon(remplacant, rng);
   }
+  return lot;
+}
+
+/**
+ * Le ×10 offert à la sortie du tutoriel.
+ *
+ * Scénarisé, et sans s'en cacher : un épique est **placé** dans le lot, à une
+ * position tirée au hasard. Un vrai tirage aurait donné dix communes une fois
+ * sur dix, et ce lot-là est précisément celui qui doit convaincre un joueur
+ * qui n'a encore jamais vu de portail. On ne laisse pas le hasard décider de
+ * la première impression.
+ *
+ * La position, elle, est bien tirée : toujours en dernier, l'épique
+ * deviendrait une formalité qu'on attend au lieu d'une surprise.
+ */
+export function invoquerMultipleOffert(rng: () => number = Math.random): OwnedPokemon[] {
+  const lot = invoquerMultiple(rng);
+
+  const epiques = especesDeRarete('epique');
+  const choisie = epiques[Math.floor(rng() * epiques.length)];
+  if (!choisie) return lot;
+
+  // Rien à forcer si le hasard a déjà fait au moins aussi bien.
+  const dejaBien = lot.some((membre) => {
+    const rarete = rareteDe(membre);
+    return rarete === 'epique' || rarete === 'legendaire' || rarete === 'prismatique';
+  });
+  if (dejaBien) return lot;
+
+  lot[Math.floor(rng() * lot.length)] = createPokemon(choisie, rng);
   return lot;
 }
 

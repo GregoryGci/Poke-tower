@@ -6,7 +6,15 @@
  * seul le squelette est dupliqué.
  */
 
-import { AnimationClip, Mesh, NearestFilter, Object3D, SkinnedMesh, Texture } from 'three';
+import {
+  AnimationClip,
+  DoubleSide,
+  Mesh,
+  NearestFilter,
+  Object3D,
+  SkinnedMesh,
+  Texture,
+} from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -122,6 +130,31 @@ function applyRestPose(root: Object3D, clips: readonly AnimationClip[]): void {
   }
 }
 
+/**
+ * Rend les faces visibles des deux côtés.
+ *
+ * Les modèles Cobblemon viennent de Minecraft, dont le rendu dessine les deux
+ * faces d'un plan. Une aile de Drattak, une nageoire, une oreille : ce sont
+ * des plans d'une seule épaisseur. Chargés tels quels avec la culture de
+ * faces arrière de three.js, ils **disparaissent** dès qu'on les regarde du
+ * mauvais côté — l'aile paraît cassée, et on voit au travers du corps là où
+ * une face a été supprimée. C'est exactement ce qu'on observait en tournant
+ * la caméra autour d'un Drattak posé.
+ *
+ * Le coût est réel — deux fois plus de faces à dessiner — mais il ne porte
+ * que sur les Pokémon posés, six au maximum. Les foules d'ennemis passent par
+ * la texture d'animation et ne traversent pas ce chemin.
+ */
+function rendreDoubleFace(racine: Object3D): void {
+  racine.traverse((noeud) => {
+    const mesh = noeud as Mesh;
+    if (!mesh.isMesh) return;
+    for (const matiere of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      if (matiere) matiere.side = DoubleSide;
+    }
+  });
+}
+
 export async function instantiate(
   name: string,
   options: OptionsChargement = {}
@@ -129,5 +162,6 @@ export async function instantiate(
   const model = await loadModel(name, options);
   const object = cloneSkinned(model.scene);
   applyRestPose(object, model.clips);
+  rendreDoubleFace(object);
   return { object, clips: model.clips };
 }

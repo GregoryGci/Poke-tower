@@ -131,6 +131,9 @@ export function migrate(account: PlayerAccount): PlayerAccount {
   const progression = {
     ...account.progression,
     tutorialDone: account.progression?.tutorialDone ?? true,
+    // Meme raison : un compte qui existait avant le x10 offert a deja passe
+    // ce moment. Le lui rejouer lui donnerait dix Pokemon gratuits.
+    invocationOfferteFaite: account.progression?.invocationOfferteFaite ?? true,
   };
   // Les etoiles sont arrivees apres les premieres sauvegardes : tout ce qui
   // existait deja part a une etoile, sans brillance.

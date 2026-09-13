@@ -153,12 +153,15 @@ export class Tower {
     const affinite = puissance / STAT_REFERENCE;
 
     const degats =
+      // Plus de `traitBonus('stat')` ici : les traits de stat vivent
+      // désormais dans `statsEffectives`, donc dans `brute` juste au-dessus.
+      // Les laisser aussi en facteur les compterait deux fois — et surtout ils
+      // s'appliquaient sans regarder quelle stat ils nomment.
       move.power *
       FACTEUR_DEGATS *
       affinite *
       rarity *
       this.style.degats *
-      (1 + this.traitBonus('stat')) *
       multiplicateurPalier(this.palier);
 
     // La recharge des objets s'ajoute à celle des traits, sous le même
@@ -183,7 +186,14 @@ export class Tower {
     };
   }
 
-  private traitBonus(kind: 'stat' | 'range' | 'cooldown'): number {
+  /**
+   * Somme des traits d'un genre donné.
+   *
+   * Ne sert plus qu'à la portée et à la recharge, qui ne nomment aucune stat.
+   * Les traits de stat sont appliqués à la stat qu'ils nomment, dans
+   * `data/stats.ts`.
+   */
+  private traitBonus(kind: 'range' | 'cooldown'): number {
     let total = 0;
     for (const trait of this.owned.traits) {
       if (trait.effect.kind === kind && 'percent' in trait.effect) {
