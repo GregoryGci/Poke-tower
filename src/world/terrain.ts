@@ -7,9 +7,7 @@
 
 import {
   BufferGeometry,
-  CircleGeometry,
   ConeGeometry,
-  CylinderGeometry,
   Float32BufferAttribute,
   Group,
   Mesh,
@@ -19,6 +17,8 @@ import {
 } from 'three';
 import type { EnemyPath } from './path';
 import type { ThemeMonde } from '@/data/campaign';
+import { construirePortail } from './portail';
+import { construireBase } from './base';
 
 export interface TerrainOptions {
   size: number;
@@ -134,6 +134,13 @@ export interface Terrain {
   fleches: Group;
   /** Plan du sol, cible du raycast pour savoir où pointe la souris. */
   groundMesh: Mesh;
+  /**
+   * Anime ce qui bouge dans le decor : le vortex du portail, le halo de la
+   * base. Le reste du mobilier ne bouge jamais.
+   */
+  avancer(dt: number, vagueLancee: boolean): void;
+  /** Part de vies restantes, de 1 a 0. La base s assombrit avec elle. */
+  majVies(part: number): void;
   dispose(): void;
 }
 
@@ -160,49 +167,53 @@ export function createTerrain(path: EnemyPath, options: TerrainOptions): Terrain
   ribbon.receiveShadow = true;
   group.add(ribbon);
 
-  // La tour a defendre, a l'arrivee du chemin. Elle donne un but visible a la
+  // La base a defendre, a l'arrivee du chemin. Elle donne un but visible a la
   // manche : sans elle, le joueur protege une ligne abstraite.
-  const tour = new Group();
-  const pierre = new MeshStandardMaterial({ color: options.theme.pierre, roughness: 0.9 });
-  const toit = new MeshStandardMaterial({ color: options.theme.toit, roughness: 0.7 });
-  const socleTour = new Mesh(new CylinderGeometry(1.5, 1.8, 0.4, 20), pierre);
-  socleTour.position.y = 0.2;
-  const fut = new Mesh(new CylinderGeometry(1.05, 1.25, 2.6, 20), pierre);
-  fut.position.y = 1.7;
-  const corniche = new Mesh(new CylinderGeometry(1.35, 1.1, 0.3, 20), pierre);
-  corniche.position.y = 3.1;
-  const coiffe = new Mesh(new ConeGeometry(1.4, 1.3, 20), toit);
-  coiffe.position.y = 3.9;
-  for (const piece of [socleTour, fut, corniche, coiffe]) {
-    piece.castShadow = true;
-    piece.receiveShadow = true;
-    tour.add(piece);
-  }
   const arrivee = path.sample(path.length, new Vector2());
-  tour.position.set(arrivee.x, 0, arrivee.y);
-  group.add(tour);
+  const base = construireBase(options.theme);
+  base.group.position.set(arrivee.x, 0, arrivee.y);
+  // La facade regarde d ou viennent les ennemis. Sans ca, l embleme et les
+  // fenetres pointaient vers -Z quel que soit le trace : sur la moitie des
+  // cartes, on ne voyait de la base que son mur arriere.
+  //
+  // Les modeles du jeu regardent tous vers -Z. Pour que cet axe pointe vers le
+  // vecteur V, il faut donc y = atan2(-Vx, -Vz).
+  const avantArrivee = path.sample(Math.max(0, path.length - 2), new Vector2());
+  base.group.rotation.y = Math.atan2(
+    -(avantArrivee.x - arrivee.x),
+    -(avantArrivee.y - arrivee.y)
+  );
+  group.add(base.group);
 
-  // Repères visuels de départ et d'arrivée.
-  const marker = (color: string, at: Vector2): Mesh => {
-    const mesh = new Mesh(
-      new CircleGeometry(options.pathWidth * 0.55, 24),
-      new MeshStandardMaterial({ color, roughness: 0.8 })
-    );
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(at.x, 0.02, at.y);
-    return mesh;
-  };
   const fleches = construireFleches(path);
   group.add(fleches);
 
-  group.add(marker('#0e7a57', path.sample(0, new Vector2())));
+  // Le portail remplace le disque vert du depart : il dit d ou sortent les
+  // ennemis, et surtout pourquoi.
+  const depart = path.sample(0, new Vector2());
+  const portail = construirePortail(options.theme);
+  portail.group.position.set(depart.x, 0, depart.y);
+  // L arche regarde le long du chemin : les ennemis doivent en sortir de
+  // face, pas de profil.
+  const suivant = path.sample(Math.min(2, path.length), new Vector2());
+  portail.group.rotation.y = Math.atan2(suivant.x - depart.x, suivant.y - depart.y);
+  group.add(portail.group);
 
 
   return {
     group,
     fleches,
     groundMesh,
+    avancer(dt: number, vagueLancee: boolean): void {
+      portail.avancer(dt, vagueLancee);
+      base.avancer(dt);
+    },
+    majVies(part: number): void {
+      base.majVies(part);
+    },
     dispose(): void {
+      portail.dispose();
+      base.dispose();
       group.traverse((child) => {
         const mesh = child as Mesh;
         if (!mesh.isMesh) return;

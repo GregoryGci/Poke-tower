@@ -472,6 +472,7 @@ export class Game {
   private selectionDistante: string | null = null;
   private prochainIdEnnemi = 1;
   private horlogeDresseur = 0;
+  private derniereImageDecor = performance.now();
   /**
    * Inventaire d'objets du compte, pour équiper les Pokémon posés.
    *
@@ -1947,6 +1948,12 @@ export class Game {
   /* ---------- Rendu ---------- */
 
   render(alpha: number): void {
+    const maintenant = performance.now();
+    const dtDecor = Math.min(0.1, (maintenant - this.derniereImageDecor) / 1000);
+    this.derniereImageDecor = maintenant;
+    this.terrain.avancer(dtDecor, this.phase === 'en_cours');
+    this.terrain.majVies(Math.max(0, VIES - this.leaked) / VIES);
+
     for (const { crowd } of this.crowds.values()) crowd.begin();
     this.barresVie.begin(this.camera);
 
