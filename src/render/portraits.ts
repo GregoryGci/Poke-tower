@@ -35,6 +35,7 @@ import {
 } from 'three';
 import { instantiate } from '@/core/assets';
 import { getSpecies } from '@/data/content';
+import { getWeapon } from '@/data/weapons';
 
 /** Côté du portrait, en pixels. */
 const TAILLE = 192;
@@ -48,7 +49,13 @@ const TAILLE = 192;
  */
 const REMPLISSAGE = 0.78;
 
-/** Portraits déjà produits, par identifiant d'espèce. */
+/**
+ * Portraits déjà produits.
+ *
+ * La clé porte le type de sujet — `espece:bulbasaur`, `arme:deagle` — parce
+ * que les deux familles partagent le même atelier et pourraient se marcher
+ * dessus sur un identifiant commun.
+ */
 const cache = new Map<string, Promise<string>>();
 
 interface Atelier {
@@ -105,22 +112,40 @@ function ouvrirAtelier(): Atelier {
  * même espèce en même temps ne déclenchent pas deux rendus.
  */
 export function portrait(speciesId: string): Promise<string> {
-  const deja = cache.get(speciesId);
+  return miseEnCache(`espece:${speciesId}`, () => produire(speciesId));
+}
+
+/**
+ * Portrait d'une arme.
+ *
+ * Les trois armes de la collection Printstream partagent un seul .glb : on en
+ * extrait le noeud voulu plutôt que de découper le fichier. Rendre null quand
+ * l'arme n'a pas de modèle est une réponse valide, pas un échec — la vignette
+ * retombe alors sur le sprite dessiné au pixel.
+ */
+export function portraitArme(weaponId: string): Promise<string> | null {
+  const modele = getWeapon(weaponId).modele;
+  if (!modele) return null;
+  return miseEnCache(`arme:${weaponId}`, () => produireArme(modele.fichier, modele.noeud));
+}
+
+function miseEnCache(cle: string, produire: () => Promise<string>): Promise<string> {
+  const deja = cache.get(cle);
   if (deja) return deja;
 
-  const travail = produire(speciesId).catch((erreur) => {
+  const travail = produire().catch((erreur) => {
     // Un portrait manquant ne doit jamais empêcher d'afficher une vignette :
-    // l'appelant retombe sur la pastille à lettre.
-    console.warn(`Portrait indisponible pour ${speciesId} :`, erreur);
-    cache.delete(speciesId);
+    // l'appelant retombe sur la lettre ou sur le sprite.
+    console.warn(`Portrait indisponible pour ${cle} :`, erreur);
+    cache.delete(cle);
     throw erreur;
   });
-  cache.set(speciesId, travail);
+  cache.set(cle, travail);
   return travail;
 }
 
 async function produire(speciesId: string): Promise<string> {
-  const { renderer, scene, camera, support } = ouvrirAtelier();
+  const { support } = ouvrirAtelier();
   const { object } = await instantiate(getSpecies(speciesId).model);
 
   support.clear();
@@ -129,6 +154,69 @@ async function produire(speciesId: string): Promise<string> {
   // volume là où une vue de face écrase tout sur un plan.
   object.rotation.y = Math.PI + 0.55;
   support.add(object);
+
+  return rendre();
+}
+
+/**
+ * Produit le portrait d'une arme.
+ *
+ * Le modèle est incliné plutôt que posé de face : une arme vue strictement de
+ * profil est une silhouette plate, et vue de face elle n'est qu'un point. Les
+ * trois quarts montrent la longueur **et** le volume, ce qui est exactement ce
+ * qui distingue un Desert Eagle d'un USP-S sur une vignette.
+ */
+async function produireArme(fichier: string, noeud: string): Promise<string> {
+  const { support } = ouvrirAtelier();
+  // Les textures d'arme sont des cartes PBR en haute définition : le filtrage
+  // au plus proche, qui sauve les modèles Cobblemon, les rendrait crénelées.
+  const { object } = await instantiate(fichier, { pixelise: false });
+
+  const sujet = object.getObjectByName(noeud);
+  if (!sujet) throw new Error(`Noeud « ${noeud} » absent de ${fichier}`);
+
+  support.clear();
+
+  // On garde la transformation propre du noeud, et c'est capital : les trois
+  // armes sont à l'échelle 0,1 dans le fichier. La remettre à 1 — ce que
+  // faisait la première version — rendait le M4A1-S dix fois trop grand, au
+  // point de sortir du plan de coupe lointain : il ne restait que deux
+  // fragments à l'image.
+  //
+  // Les trois conteneurs Sketchfab au-dessus portent deux rotations de ±90°
+  // qui s'annulent exactement. Le repère local du noeud est donc déjà le
+  // repère monde, et on peut le rattacher tel quel.
+  const socle = new Group();
+  // Mesuré : l'arme est couchée à plat, longueur sur X, épaisseur sur Y,
+  // hauteur de crosse sur Z. La caméra regardant selon -Z, elle la voyait par
+  // la tranche — dix-neuf centimètres d'épaisseur vus de face. Ce quart de
+  // tour la met de profil, la seule vue où une arme se reconnaît.
+  // Le sens du quart de tour compte : mesuré, la hauteur de crosse va vers
+  // +Z, donc un quart de tour negatif la renvoyait vers le haut et les trois
+  // armes sortaient crosse en l air.
+  socle.rotation.x = Math.PI / 2;
+  socle.add(sujet);
+
+  // Puis un léger trois-quarts : le profil strict est une silhouette plate,
+  // et c'est le volume qui distingue un Desert Eagle d'un USP-S.
+  support.rotation.set(-0.2, -0.5, 0);
+  support.add(socle);
+
+  const url = rendre();
+  // L'atelier est partagé : on lui rend son orientation neutre, sinon le
+  // portrait de Pokémon suivant sortirait de biais.
+  support.rotation.set(0, 0, 0);
+  return url;
+}
+
+/**
+ * Cadre le contenu de l'atelier et en rend une image.
+ *
+ * Partagé par les deux familles de sujets : le cadrage ne dépend que de la
+ * boîte englobante, pas de ce qu'il y a dedans.
+ */
+function rendre(): string {
+  const { renderer, scene, camera, support } = ouvrirAtelier();
 
   // On mesure APRÈS avoir tourné : la boîte englobante d'un sujet pivoté
   // n'est pas celle du même sujet de face, et cadrer sur la mauvaise couperait
@@ -139,7 +227,8 @@ async function produire(speciesId: string): Promise<string> {
   const etendue = boite.getSize(new Vector3());
 
   // On cadre sur la plus grande dimension visible : un sujet large et bas
-  // (Racaillou) doit tenir en largeur, un sujet haut et fin (Arcko) en hauteur.
+  // (Racaillou, ou une arme couchée) doit tenir en largeur, un sujet haut et
+  // fin (Arcko) en hauteur.
   const rayon = Math.max(etendue.x, etendue.y) / 2 || 0.5;
   const champ = (camera.fov * Math.PI) / 360;
   const distance = rayon / (Math.tan(champ) * REMPLISSAGE);

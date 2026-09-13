@@ -2847,9 +2847,13 @@
   object-fit: contain;
   display: block;
   /* Les sprites d'armes sont dessinés pixel par pixel : les lisser
-     annulerait tout l'intérêt, et les portraits rendus en 192 px gagnent
-     aussi à rester nets sur une vignette de 34 px. */
+     annulerait tout l'intérêt. Les rendus 3D, eux, se lissent — d'où le
+     drapeau posé par la pastille plutôt qu'une règle unique. */
   image-rendering: pixelated;
+}
+
+.pastille-portrait[data-pixelise='false'] {
+  image-rendering: auto;
 }
 
 /* Une pastille qui porte une image garde la couleur de son type, mais

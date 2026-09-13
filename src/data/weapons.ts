@@ -13,10 +13,33 @@
 
 import { STYLES, type AttackStyle, type Rarity } from './types';
 
+/**
+ * Où trouver le modèle 3D d'une arme.
+ *
+ * Les trois armes de la collection Printstream vivent dans **un seul** .glb :
+ * le découper en trois aurait multiplié les requêtes pour le même poids, et
+ * le fichier n'est chargé que quand on ouvre l'arsenal ou le portail.
+ */
+export interface ModeleArme {
+  /** Nom du .glb dans public/models, sans extension. */
+  fichier: string;
+  /** Nom du noeud à extraire dans ce fichier. */
+  noeud: string;
+}
+
 export interface WeaponModel {
   id: string;
   name: string;
   rarity: Rarity;
+  /**
+   * Modèle 3D, quand il en existe un.
+   *
+   * Les armes qui n'en ont pas gardent leur sprite dessiné au pixel. Les deux
+   * coexistent volontairement : une arme dont on a le modèle mérite d'être
+   * montrée telle qu'elle est, et attendre d'avoir les six pour en montrer une
+   * seule n'aurait servi personne.
+   */
+  modele?: ModeleArme;
   /** Dégâts par tir, avant modificateurs. */
   damage: number;
   /** Secondes entre deux tirs. */
@@ -101,6 +124,49 @@ export const WEAPONS: Record<string, WeaponModel> = {
     range: 16,
     style: 'ligne',
     description: 'Transperce une file entière d’un bout à l’autre.',
+  },
+
+  // --- Collection Printstream
+  //
+  // Trois armes réelles, avec leur modèle. Leurs chiffres suivent ce qu'elles
+  // sont plutôt que de reprendre ceux d'une arme existante : un Desert Eagle
+  // n'est pas un Glock rebaptisé, et le faire passer pour tel aurait gâché le
+  // seul intérêt d'avoir le vrai modèle.
+  usp_s: {
+    id: 'usp_s',
+    name: 'USP-S',
+    rarity: 'rare',
+    damage: 12,
+    cooldown: 0.5,
+    cast: 0,
+    range: 8,
+    style: 'unique',
+    description: 'Silencieux et précis. Porte plus loin que le Glock, pour à peine plus fort.',
+    modele: { fichier: 'armes-printstream', noeud: 'usp-s_2' },
+  },
+  deagle: {
+    id: 'deagle',
+    name: 'Desert Eagle',
+    rarity: 'epique',
+    damage: 38,
+    cooldown: 1.3,
+    cast: 0.2,
+    range: 9,
+    style: 'unique',
+    description: 'Lourd, lent, et il ne pardonne pas. Un tir bien placé vaut cinq rafales.',
+    modele: { fichier: 'armes-printstream', noeud: 'desert_eagle_0' },
+  },
+  m4a1_s: {
+    id: 'm4a1_s',
+    name: 'M4A1-S',
+    rarity: 'legendaire',
+    damage: 16,
+    cooldown: 0.28,
+    cast: 0,
+    range: 11,
+    style: 'unique',
+    description: 'La cadence d’un Uzi avec l’allonge d’un fusil. Aucun défaut, et c’est le problème.',
+    modele: { fichier: 'armes-printstream', noeud: 'm4a1_s_1' },
   },
 };
 

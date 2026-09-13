@@ -16,7 +16,7 @@
  */
 
 import { getSpecies } from '@/data/content';
-import { portrait } from '@/render/portraits';
+import { portrait, portraitArme } from '@/render/portraits';
 import { spriteArme } from './weapon-sprites';
 
 function elem<K extends keyof HTMLElementTagNameMap>(
@@ -60,18 +60,42 @@ export function pastillePokemon(speciesId: string, classes = ''): HTMLSpanElemen
   return pastille;
 }
 
-/** Pastille d'une arme : le sprite, ou le symbole par défaut s'il manque. */
+/**
+ * Pastille d'une arme.
+ *
+ * Trois sources, dans cet ordre : le **modèle 3D** quand l'arme en a un, le
+ * sprite dessiné au pixel sinon, et le symbole en dernier recours.
+ *
+ * Les deux premières coexistent volontairement. Une arme dont on a le vrai
+ * modèle mérite d'être montrée telle qu'elle est, et attendre d'avoir les
+ * modèles des neuf pour en montrer une seule n'aurait servi personne. Le
+ * sprite reste aussi le repli immédiat pendant que le .glb se charge.
+ */
 export function pastilleArme(weaponId: string, classes = ''): HTMLSpanElement {
   const pastille = elem('span', `pastille pastille-arme${classes ? ' ' + classes : ''}`);
-  const sprite = spriteArme(weaponId);
-  if (sprite) {
+
+  const poser = (url: string, pixelise: boolean): void => {
     const image = elem('img', 'pastille-portrait');
-    image.src = sprite;
+    image.src = url;
     image.alt = '';
-    pastille.appendChild(image);
+    image.dataset['pixelise'] = String(pixelise);
+    pastille.textContent = '';
+    pastille.replaceChildren(image);
     pastille.dataset['portrait'] = 'true';
-  } else {
-    pastille.textContent = '✦';
+  };
+
+  const sprite = spriteArme(weaponId);
+  if (sprite) poser(sprite, true);
+  else pastille.textContent = '✦';
+
+  // Le rendu 3D arrive après : il demande de charger un .glb de plusieurs
+  // mégaoctets, alors que la vignette doit s'afficher tout de suite.
+  const rendu = portraitArme(weaponId);
+  if (rendu) {
+    void rendu.then((url) => poser(url, false)).catch(() => {
+      // Le sprite ou le symbole reste en place.
+    });
   }
+
   return pastille;
 }

@@ -23,7 +23,15 @@ export interface ModelInstance {
 const loader = new GLTFLoader();
 const cache = new Map<string, Promise<LoadedModel>>();
 
-/** Les textures Cobblemon sont du pixel art : tout lissage les transforme en bouillie. */
+/**
+ * Les textures Cobblemon sont du pixel art : tout lissage les transforme en
+ * bouillie.
+ *
+ * Ce n'est vrai que d'elles. Les modèles d'armes portent des textures PBR en
+ * haute définition, que le filtrage au plus proche rendrait crénelées et
+ * bruitées — d'où l'option, plutôt qu'un traitement unique appliqué à tout ce
+ * qui passe.
+ */
 function keepPixelsSharp(root: Object3D): void {
   const seen = new Set<Texture>();
   root.traverse((child) => {
@@ -47,11 +55,22 @@ function keepPixelsSharp(root: Object3D): void {
   });
 }
 
-export function loadModel(name: string): Promise<LoadedModel> {
+export interface OptionsChargement {
+  /**
+   * Forcer le filtrage au plus proche sur les textures.
+   *
+   * Vrai par défaut : c'est ce que veulent les modèles Cobblemon. Les armes
+   * le passent à faux.
+   */
+  pixelise?: boolean;
+}
+
+export function loadModel(name: string, options: OptionsChargement = {}): Promise<LoadedModel> {
   let pending = cache.get(name);
   if (!pending) {
+    const pixelise = options.pixelise !== false;
     pending = loader.loadAsync(`models/${name}.glb`).then((gltf) => {
-      keepPixelsSharp(gltf.scene);
+      if (pixelise) keepPixelsSharp(gltf.scene);
       return { scene: gltf.scene, clips: gltf.animations };
     });
     cache.set(name, pending);
@@ -103,8 +122,11 @@ function applyRestPose(root: Object3D, clips: readonly AnimationClip[]): void {
   }
 }
 
-export async function instantiate(name: string): Promise<ModelInstance> {
-  const model = await loadModel(name);
+export async function instantiate(
+  name: string,
+  options: OptionsChargement = {}
+): Promise<ModelInstance> {
+  const model = await loadModel(name, options);
   const object = cloneSkinned(model.scene);
   applyRestPose(object, model.clips);
   return { object, clips: model.clips };

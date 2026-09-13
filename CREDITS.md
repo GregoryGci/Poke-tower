@@ -14,6 +14,19 @@ du squelette — comme l'autorise l'article 3(b) de la licence.
 **Ce projet est non commercial.** L'article 4(b) de la licence interdit tout
 usage principalement destiné à un avantage commercial ou à une rémunération.
 
+## Modèles d'armes
+
+Les modèles des armes **USP-S**, **Desert Eagle** et **M4A1-S** proviennent
+d'une collection « Printstream » extraite de Counter-Strike 2.
+
+Counter-Strike, ses armes et ses apparences sont la propriété de **Valve
+Corporation**. Ces modèles sont utilisés ici à titre de travail de fan, sans
+affiliation ni approbation de Valve, dans un projet **non commercial et non
+distribué publiquement**.
+
+Les six autres armes du jeu n'ont pas de modèle : leur vignette est un sprite
+pixel écrit dans , sous la licence du projet.
+
 ## Propriété intellectuelle
 
 Pokémon est une marque de Nintendo, Game Freak et The Pokémon Company.
