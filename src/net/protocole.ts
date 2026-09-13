@@ -105,6 +105,22 @@ export interface Presence {
   role: Role;
   /** Espèces de son équipe : l'hôte doit les précharger avant de lancer. */
   especes: string[];
+  /**
+   * Son équipe, en entier.
+   *
+   * Elle voyage au salon et **pas** au moment de la pose, ce qui n'est pas un
+   * détail : l'hôte fige ces fiches à l'entrée en partie et pose toujours
+   * d'après elles. Un client modifié ne peut donc pas gonfler un Pokémon une
+   * fois la vague lancée — au pire il entre avec une équipe truquée, et c'est
+   * son ami qui le voit.
+   *
+   * Le type reste volontairement opaque ici : le protocole n'a pas à
+   * dépendre du catalogue, sinon toute retouche de fiche deviendrait une
+   * rupture de compatibilité réseau.
+   */
+  equipe: unknown[];
+  /** Ses objets équipés, nécessaires pour recalculer ses bonus. */
+  objets: unknown[];
   pret: boolean;
 }
 

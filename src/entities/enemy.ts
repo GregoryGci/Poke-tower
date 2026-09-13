@@ -18,6 +18,15 @@ import type { Poolable } from '@/core/pool';
 export type EnemyState = 'marche' | 'mort' | 'ko' | 'arrive';
 
 export class Enemy implements Poolable, SpatialItem {
+  /**
+   * Numéro donné à l'apparition, jamais réutilisé tant que l'unité vit.
+   *
+   * Le réservoir recycle ses objets : sans ce numéro, l'invité n'aurait aucun
+   * moyen de distinguer un ennemi disparu d'un instantané d'un autre apparu au
+   * même emplacement du réservoir. Il verrait un Pokémon se téléporter d'un
+   * bout du chemin à l'autre.
+   */
+  idReseau = 0;
   /** Espèce affichée : décide de la foule instanciée qui la rendra. */
   speciesId = '';
   /** Décalage d'animation, pour que la vague ne marche pas au pas cadencé. */
@@ -47,6 +56,7 @@ export class Enemy implements Poolable, SpatialItem {
   private readonly tmp = new Vector2();
 
   reset(): void {
+    this.idReseau = 0;
     this.speciesId = '';
     this.phase = 0;
     this.path = null;

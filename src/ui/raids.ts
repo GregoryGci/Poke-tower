@@ -38,8 +38,11 @@ function elem<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** Ce qui sort de l'écran : un raid en solo, l'envie de jouer à deux, ou rien. */
+export type SortieRaids = ChoixRaidComplet | 'coop' | null;
+
 /** Affiche les raids et rend celui choisi, ou null si le joueur repart. */
-export function ouvrirRaids(compte: PlayerAccount): Promise<ChoixRaidComplet | null> {
+export function ouvrirRaids(compte: PlayerAccount): Promise<SortieRaids> {
   const faits = compte.progression.clearedLevels.length;
   const racine = elem('div', 'ecran-equipe');
 
@@ -58,8 +61,8 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<ChoixRaidComplet | n
 
   const liste = elem('div', 'raids-liste');
 
-  return new Promise<ChoixRaidComplet | null>((resolve) => {
-    const partir = (choix: ChoixRaidComplet | null): void => {
+  return new Promise<SortieRaids>((resolve) => {
+    const partir = (choix: SortieRaids): void => {
       racine.style.transition = 'opacity .22s ease';
       racine.style.opacity = '0';
       setTimeout(() => {
@@ -144,18 +147,23 @@ export function ouvrirRaids(compte: PlayerAccount): Promise<ChoixRaidComplet | n
       liste.appendChild(carte);
     }
 
-    // Les raids sont pensés pour être joués à plusieurs, et la coopération en
-    // réseau n'existe pas : autant le dire ici plutôt que de laisser croire
-    // que la difficulté est mal calibrée.
+    // Les raids sont pensés pour être joués à plusieurs. La porte d'entrée est
+    // ici, en haut, et non cachée derrière un cran de difficulté : c'est une
+    // autre façon de jouer, pas une option du raid choisi.
+    const coop = elem('button', 'bouton-primaire', 'Jouer à deux');
+    coop.type = 'button';
+    coop.id = 'raids-coop';
+    coop.addEventListener('click', () => partir('coop'));
+
     const note = elem(
       'p',
       'affinites-vide',
-      'Prévus pour être joués à plusieurs — la coopération n’est pas encore branchée. En solo, « Facile » est le cran d’entrée.'
+      'Prévus pour être joués à plusieurs. En solo, « Facile » est le cran d’entrée.'
     );
 
     retour.addEventListener('click', () => partir(null));
 
-    racine.append(haut, note, liste);
+    racine.append(haut, coop, note, liste);
     document.body.appendChild(racine);
   });
 }

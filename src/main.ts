@@ -39,13 +39,16 @@ import { ajouterPierres, getPierre } from '@/data/pierres';
 import { recolter } from '@/data/recolte';
 import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
 import { ouvrirRaids } from '@/ui/raids';
+import { ouvrirSalon } from '@/ui/salon';
+import type { SessionCoop } from '@/net/partie';
 import { demanderNomDresseur } from '@/ui/creation';
 import { Game } from '@/game/game';
 import { AccountManager, createStore, resolveAccountId } from '@/save';
 import { createPokemon } from '@/data/roll';
 import { ARME_DE_DEPART } from '@/data/weapons';
 import { armeNeuve } from '@/data/gacha';
-import type { OwnedWeapon } from '@/data/types';
+import type { OwnedPokemon, OwnedWeapon } from '@/data/types';
+import type { OwnedItem } from '@/data/items';
 import { membresEquipe, normaliserEquipe } from '@/data/team';
 
 import { STARTER_CASES } from '@/data/content';
@@ -116,11 +119,18 @@ function armeEquipee(compte: typeof account.account): OwnedWeapon | null {
 
 /* ---------- Une manche ---------- */
 
-/** Joue une manche et rend la main quand le joueur la quitte. */
+/**
+ * Joue une manche et rend la main quand le joueur la quitte.
+ *
+ * `coop` change qui simule, et rien d'autre : l'écran, le HUD et les
+ * récompenses sont les mêmes. C'est ce qui permet à une manche en réseau de
+ * ne pas être un deuxième jeu à maintenir.
+ */
 async function jouerManche(
   niveau: Niveau,
   tutoriel: boolean,
-  raid: ChoixRaidComplet | null = null
+  raid: ChoixRaidComplet | null = null,
+  coop: SessionCoop | null = null
 ): Promise<void> {
   input.reset();
 
@@ -132,7 +142,11 @@ async function jouerManche(
   // ceux de toute la collection.
   normaliserEquipe(account.account);
   const equipe = membresEquipe(account.account);
-  const rosterSpecies = [...new Set(equipe.map((p) => p.speciesId))];
+  // En coopération, les Pokémon de l'équipier doivent être chargés ici aussi :
+  // ceux qu'il pose s'afficheront sur notre terrain.
+  const rosterSpecies = [
+    ...new Set([...equipe.map((p) => p.speciesId), ...(coop?.especesDesAutres ?? [])]),
+  ];
   const game = await Game.create(
     stage.scene,
     stage.camera,
@@ -146,6 +160,36 @@ async function jouerManche(
 
   // Les objets équipés doivent être connus avant la première pose.
   game.inventaireItems = account.account.items ?? [];
+
+  /* ---------- Branchement du réseau ---------- */
+
+  const debrancher: Array<() => void> = [];
+  if (coop) {
+    game.reseau = coop.estHote ? 'hote' : 'invite';
+    game.joueurLocal = coop.moi;
+    // Six places chacun : un plafond partagé ferait de la pose une course.
+    game.maxPoses = 6 * Math.max(1, coop.joueurs.length);
+    game.enregistrerEquipe(coop.moi, equipe, account.account.items ?? []);
+    for (const joueur of coop.joueurs) {
+      if (joueur.joueur === coop.moi) continue;
+      game.enregistrerEquipe(
+        joueur.joueur,
+        joueur.equipe as OwnedPokemon[],
+        joueur.objets as OwnedItem[]
+      );
+    }
+
+    if (coop.estHote) {
+      debrancher.push(
+        coop.ecouterIntentions((joueur, intention) => game.appliquerIntention(joueur, intention))
+      );
+    } else {
+      game.envoyerIntention = (intention) => coop.demander(intention);
+      debrancher.push(
+        coop.ecouterInstantanes((instantane) => game.appliquerInstantane(instantane))
+      );
+    }
+  }
 
   let selectionActive = false;
   let terminer: ((abandon: boolean) => void) | null = null;
@@ -162,6 +206,9 @@ async function jouerManche(
       game.lancerRun();
     },
     onSpeed(multiplicateur) {
+      // L'invité ne simule pas : accélérer sa boucle ne ferait rien avancer,
+      // et lui laisser croire le contraire serait pire que de refuser.
+      if (coop && !coop.estHote) return;
       loop.speed = multiplicateur;
     },
     onPalier() {
@@ -192,6 +239,10 @@ async function jouerManche(
 
   let lastCrystals = 0;
   let derniereImage = performance.now();
+  // La cadence des instantanés se compte en temps réel et non en pas de
+  // simulation : à vitesse ×3 la boucle fait trois pas par image, et compter
+  // en pas enverrait trente instantanés par seconde au lieu de dix.
+  let dernierInstantane = 0;
 
   const loop = new GameLoop({
     update(dt) {
@@ -206,10 +257,23 @@ async function jouerManche(
       tutorial?.update(dt, { status: game.status, selection: selectionActive });
 
       const status = game.status;
+
+      if (coop?.estHote) {
+        const maintenant = performance.now();
+        if (maintenant - dernierInstantane >= 100) {
+          dernierInstantane = maintenant;
+          coop.publier(game.instantane());
+        }
+      }
+
       if (status.outcome !== 'en_cours') terminer?.(false);
+      // Ce qui remonte au compte est le **gain** de la manche, pas son total.
+      // L'affectation directe écrasait le solde : cinq mille cristaux mis de
+      // côté devenaient les trois cents gagnés dans la run qui suivait. Le
+      // compteur de manche repart de zéro à chaque partie, le solde non.
       if (status.crystals !== lastCrystals) {
+        account.account.crystals += status.crystals - lastCrystals;
         lastCrystals = status.crystals;
-        account.account.crystals = status.crystals;
         account.touch();
       }
     },
@@ -248,6 +312,18 @@ async function jouerManche(
   // On fige la simulation avant de lire le bilan : sans cela, les compteurs
   // continueraient d'avancer pendant que le joueur lit son résultat.
   loop.stop();
+
+  if (coop) {
+    // Un dernier instantané avant de couper : sans lui, l'invité resterait
+    // sur l'avant-dernier et ne verrait jamais le coup qui a tout décidé.
+    if (coop.estHote) {
+      coop.publier(game.instantane());
+      const issue = game.status.outcome;
+      if (issue !== 'en_cours') coop.annoncerFin(issue);
+    }
+    for (const off of debrancher) off();
+    await coop.quitter();
+  }
   window.removeEventListener('keydown', recoller);
   stage.reprendreSuivi();
   const bilanFinal = game.status;
@@ -412,6 +488,19 @@ for (;;) {
 
   if (destination === 'raid') {
     const choix = await ouvrirRaids(account.account);
+    if (choix === 'coop') {
+      const partie = await ouvrirSalon(account.account);
+      if (partie) {
+        const complet = { raid: partie.raid, difficulte: partie.difficulte };
+        await jouerManche(
+          niveauDuRaid(partie.raid, partie.difficulte),
+          false,
+          complet,
+          partie.session
+        );
+      }
+      continue;
+    }
     if (choix) {
       await jouerManche(niveauDuRaid(choix.raid, choix.difficulte), false, choix);
     }

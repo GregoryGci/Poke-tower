@@ -30,8 +30,8 @@ export interface Canal {
   ecouter(fn: (message: Message) => void): () => void;
   /** Nombre de participants actuellement connectés, soi-même compris. */
   readonly participants: number;
-  /** Prévenu quand quelqu'un rejoint ou part. */
-  surPresence(fn: (participants: number) => void): void;
+  /** Prévenu quand quelqu'un rejoint ou part. Rend de quoi se désabonner. */
+  surPresence(fn: (participants: number) => void): () => void;
   quitter(): Promise<void>;
 }
 
@@ -41,6 +41,13 @@ export interface Canal {
  * La promesse n'est tenue qu'une fois l'abonnement confirmé : envoyer avant
  * que le canal soit `SUBSCRIBED` perd le message en silence, ce qui donnerait
  * un salon où le premier « bonjour » n'arrive jamais.
+ *
+ * Elle attend aussi la **première synchronisation de présence**. Mesuré :
+ * `SUBSCRIBED` arrive une soixantaine de millisecondes avant elle, et pendant
+ * ce temps `participants` vaut zéro — y compris soi-même. Un salon qui lit ce
+ * compteur en revenant de `ouvrirCanal` s'affichait donc vide alors qu'on
+ * venait d'y entrer. Plutôt que de demander à chaque appelant de retarder sa
+ * lecture, on rend la main quand le compte est juste.
  */
 export async function ouvrirCanal(
   client: SupabaseClient,
@@ -75,17 +82,31 @@ export async function ouvrirCanal(
       () => reject(new Error('Le salon n’a pas répondu')),
       10_000
     );
+    const fini = (): void => {
+      clearTimeout(minuterie);
+      ecouteursPresence.delete(attendrePresence);
+      resolve();
+    };
+    // On se contente de l'abonnement si la présence tarde : mieux vaut un
+    // compteur provisoirement faux qu'un salon qui refuse de s'ouvrir.
+    const secours = setTimeout(fini, 3_000);
+    const attendrePresence = (n: number): void => {
+      if (n < 1) return;
+      clearTimeout(secours);
+      fini();
+    };
+
     canal.subscribe((statut, erreur) => {
       if (statut === 'SUBSCRIBED') {
-        clearTimeout(minuterie);
         // La présence sert à savoir qui est là : sans elle, on ne saurait pas
         // que l'autre joueur a fermé son onglet.
+        ecouteursPresence.add(attendrePresence);
         void canal.track({ joueur, depuis: Date.now() });
-        resolve();
         return;
       }
       if (statut === 'CHANNEL_ERROR' || statut === 'TIMED_OUT') {
         clearTimeout(minuterie);
+        clearTimeout(secours);
         reject(erreur ?? new Error(`Salon indisponible (${statut})`));
       }
     });
@@ -106,6 +127,7 @@ export async function ouvrirCanal(
     },
     surPresence(fn) {
       ecouteursPresence.add(fn);
+      return () => ecouteursPresence.delete(fn);
     },
     async quitter() {
       ecouteurs.clear();

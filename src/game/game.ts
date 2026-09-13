@@ -52,6 +52,7 @@ import { construireDecor, type Decor } from '@/world/decor';
 import { bakeAnimations, Crowd, type BakedClip } from '@/render/vat';
 import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
+import type { Instantane, Intention, TourRepliquee } from '@/net/protocole';
 import {
   WAVES,
   WaveRunner,
@@ -292,6 +293,47 @@ interface SpeciesCrowd {
   faint: BakedClip | null;
 }
 
+/* ---------- Répliques : ce que l'invité affiche sans le simuler ---------- */
+
+/**
+ * Un ennemi vu par l'invité.
+ *
+ * Deux positions : celle affichée, et celle qu'a annoncée le dernier
+ * instantané. L'affichée rattrape l'annoncée en douceur. Les instantanés
+ * arrivent à dix par seconde et le rendu tourne à soixante : coller
+ * directement la position reçue donnerait une marche saccadée à dix images
+ * par seconde, alors que le mouvement est parfaitement régulier.
+ */
+interface EnnemiDistant {
+  espece: string;
+  x: number;
+  z: number;
+  cibleX: number;
+  cibleZ: number;
+  vie: number;
+  echelle: number;
+  angle: number;
+  boss: boolean;
+  phase: number;
+  /** Vrai tant que le dernier instantané l'a mentionné. */
+  vu: boolean;
+}
+
+interface TourDistante {
+  holder: Group;
+  espece: string;
+  palier: number;
+  joueur: string;
+}
+
+interface DresseurDistant {
+  mesh: Group;
+  x: number;
+  z: number;
+  cibleX: number;
+  cibleZ: number;
+}
+
 export class Game {
   readonly root = new Group();
 
@@ -382,6 +424,46 @@ export class Game {
   private tick = 0;
 
   pendingPlacement: OwnedPokemon | null = null;
+
+  /* ---------- Coopération ---------- */
+
+  /**
+   * Rôle de ce client.
+   *
+   * `solo` est le cas ordinaire et ne traverse aucun chemin réseau. `hote`
+   * simule et publie ; `invite` ne simule rien du tout, il affiche ce qu'on
+   * lui envoie et demande le reste.
+   */
+  reseau: 'solo' | 'hote' | 'invite' = 'solo';
+
+  /** Où partent les intentions de l'invité. Posé par la boucle de manche. */
+  envoyerIntention: ((intention: Intention) => void) | null = null;
+
+  /** Identifiant du joueur local dans la partie en réseau. */
+  joueurLocal = 'moi';
+
+  /**
+   * Nombre total de Pokémon posables sur le terrain.
+   *
+   * Variable et non constante : à deux, chacun garde ses six places. Un
+   * plafond partagé transformerait la coopération en course à la pose.
+   */
+  maxPoses = MAX_POSES;
+
+  /** Équipes des autres joueurs, figées à l'entrée en partie. */
+  private readonly equipesDistantes = new Map<string, readonly OwnedPokemon[]>();
+  private readonly objetsDistants = new Map<string, readonly OwnedItem[]>();
+  /** À qui appartient chaque tour posée. Vide en solo. */
+  private readonly proprietaires = new Map<string, string>();
+
+  /** Ce que l'hôte a envoyé en dernier, côté invité. */
+  private readonly ennemisDistants = new Map<number, EnnemiDistant>();
+  private readonly toursDistantes = new Map<string, TourDistante>();
+  private readonly dresseursDistants = new Map<string, DresseurDistant>();
+  private etatDistant: Instantane | null = null;
+  private selectionDistante: string | null = null;
+  private prochainIdEnnemi = 1;
+  private horlogeDresseur = 0;
   /**
    * Inventaire d'objets du compte, pour équiper les Pokémon posés.
    *
@@ -498,8 +580,13 @@ export class Game {
           void this.tryPlace();
         } else if (this.survolTour) {
           this.tourSelectionnee = this.survolTour;
+        } else if (this.reseau === 'invite' && this.tourDistanteSous()) {
+          // Chez l'invité le terrain est vide d'objets de jeu : la saisie
+          // porte sur les répliques, seules choses qui existent chez lui.
+          this.selectionDistante = this.tourDistanteSous();
         } else if (this.pointerValid) {
           this.tourSelectionnee = null;
+          this.selectionDistante = null;
           this.trainer.allerVers(this.pointerWorld.x, this.pointerWorld.z);
         }
       }
@@ -508,6 +595,7 @@ export class Game {
         // Il sert aussi à tourner la vue, mais seul un vrai glisser le fait.
         this.pendingPlacement = null;
         this.tourSelectionnee = null;
+        this.selectionDistante = null;
       }
     });
   }
@@ -568,6 +656,30 @@ export class Game {
   }
 
   get status(): GameStatus {
+    // L'invité ne simule rien : ses compteurs sont ceux de l'hôte. Les
+    // recalculer localement donnerait un HUD qui contredit ce qu'on voit.
+    const distant = this.reseau === 'invite' ? this.etatDistant : null;
+    if (distant) {
+      const miennes = distant.tours.filter((tour) => tour.j === this.joueurLocal).length;
+      return {
+        wave: distant.vague,
+        totalWaves: distant.vagues,
+        alive: distant.ennemis.length,
+        leaked: VIES - distant.vies,
+        crystals: distant.cristaux,
+        pokepieces: distant.pieces,
+        placed: distant.tours.length,
+        lives: distant.vies,
+        slotsLibres: Math.max(0, MAX_POSES - miennes),
+        maxPoses: MAX_POSES,
+        outcome: distant.issue,
+        phase: distant.phase,
+        trainerMoved: this.trainerMoved,
+        selection: this.selection,
+        drawCalls: [...this.crowds.values()].filter((c) => c.crowd.mesh.count > 0).length,
+        message: this.message,
+      };
+    }
     return {
       wave: this.waves.currentWave,
       totalWaves: this.waves.totalWaves,
@@ -577,8 +689,8 @@ export class Game {
       pokepieces: this.pokepieces,
       placed: this.towers.length,
       lives: Math.max(0, VIES - this.leaked),
-      slotsLibres: Math.max(0, MAX_POSES - this.towers.length),
-      maxPoses: MAX_POSES,
+      slotsLibres: Math.max(0, this.maxPoses - this.towers.length),
+      maxPoses: this.maxPoses,
       outcome: this.outcome,
       phase: this.phase,
       trainerMoved: this.trainerMoved,
@@ -600,6 +712,13 @@ export class Game {
 
   /** Ouvre les hostilites. Sans effet si la manche a deja commence. */
   lancerRun(): void {
+    // L'invité n'ouvre pas les hostilités : il le demande. Rien ne bouge chez
+    // lui tant que l'hôte n'a pas tranché — sinon il verrait la vague partir
+    // alors qu'elle n'est pas partie.
+    if (this.reseau === 'invite') {
+      this.envoyerIntention?.({ kind: 'lancer' });
+      return;
+    }
     if (this.phase !== 'preparation') return;
     this.phase = 'en_cours';
     // Les reperes de direction ont fait leur office.
@@ -610,6 +729,11 @@ export class Game {
   update(dt: number, tick: number): void {
     this.tick = tick;
     if (this.message && tick > this.messageUntil) this.message = null;
+
+    if (this.reseau === 'invite') {
+      this.avancerReplique(dt);
+      return;
+    }
 
     // Le dresseur se déplace par rapport à ce que le joueur voit, donc par
     // rapport au cap **courant** de la caméra. On le relit sur la caméra
@@ -916,7 +1040,9 @@ export class Game {
     // Un boss marche au milieu de la voie : le decalage lateral le ferait
     // deborder sur l'herbe, ou l'enfoncer dans le decor.
     const offset = boss ? 0 : (Math.random() - 0.5) * (PATH_WIDTH - 0.8);
-    this.enemies.acquire().spawn(speciesId, this.path, hp, speed, offset, scale, boss);
+    const ennemi = this.enemies.acquire();
+    ennemi.spawn(speciesId, this.path, hp, speed, offset, scale, boss);
+    ennemi.idReseau = this.prochainIdEnnemi++;
   }
 
   /* ---------- Apercu des attaques ---------- */
@@ -1099,6 +1225,8 @@ export class Game {
    * pire que pas de panneau du tout.
    */
   get selection(): SelectionTour | null {
+    if (this.reseau === 'invite') return this.selectionRepliquee();
+
     const tour = this.tourSelectionnee;
     // Une tour retirée du terrain ne doit pas garder le panneau ouvert.
     if (!tour || !this.towers.includes(tour)) return null;
@@ -1124,6 +1252,11 @@ export class Game {
    * — une dépense à moitié appliquée est impossible à expliquer au joueur.
    */
   monterPalierSelection(): boolean {
+    if (this.reseau === 'invite') {
+      const cible = this.selectionDistante;
+      if (cible) this.envoyerIntention?.({ kind: 'palier', tourId: cible });
+      return cible !== null;
+    }
     const tour = this.tourSelectionnee;
     if (!tour || !this.towers.includes(tour)) return false;
 
@@ -1251,28 +1384,60 @@ export class Game {
     const pending = this.pendingPlacement;
     if (!pending || !this.pointerValid) return;
 
-    if (this.towers.length >= MAX_POSES) {
+    // Le plafond est personnel : on compte ses propres poses, pas celles du
+    // terrain. En solo les deux comptes sont le même.
+    const miennes =
+      this.reseau === 'solo'
+        ? this.towers.length
+        : this.towers.filter((tour) => this.proprietaireDe(tour) === this.joueurLocal).length;
+    if (miennes >= MAX_POSES) {
       this.notify(`Terrain plein — ${MAX_POSES} Pokémon au maximum`);
       return;
     }
 
-    const check = canPlace(
-      this.pointerWorld.x,
-      this.pointerWorld.z,
-      this.path,
-      this.towers,
-      PLACEMENT_RULES,
-      this.obstacles
-    );
+    // L'invité ne pose pas : il demande. Seul l'hôte connaît l'état réel du
+    // terrain — y compris ce que l'autre joueur vient d'y poser et qui n'est
+    // pas encore arrivé ici.
+    if (this.reseau === 'invite') {
+      this.envoyerIntention?.({
+        kind: 'poser',
+        ownedId: pending.id,
+        x: this.pointerWorld.x,
+        z: this.pointerWorld.z,
+      });
+      this.pendingPlacement = null;
+      return;
+    }
+
+    const x = this.pointerWorld.x;
+    const z = this.pointerWorld.z;
+    this.pendingPlacement = null;
+    await this.poser(pending, x, z, this.joueurLocal, this.itemsDe(pending));
+  }
+
+  /**
+   * Pose un Pokémon sur le terrain, d'où qu'en vienne la demande.
+   *
+   * Le clic local et l'intention reçue d'un équipier passent tous les deux par
+   * ici, et c'est le but : les règles de pose sont vérifiées à un seul
+   * endroit. Si un jour la route change de forme, aucun des deux chemins ne
+   * pourra l'ignorer.
+   */
+  private async poser(
+    pending: OwnedPokemon,
+    x: number,
+    z: number,
+    joueur: string,
+    items: readonly OwnedItem[]
+  ): Promise<void> {
+    const check = canPlace(x, z, this.path, this.towers, PLACEMENT_RULES, this.obstacles);
     if (!check.ok) {
       this.notify(REJECTION_LABELS[check.reason]);
       return;
     }
 
     const species = getSpecies(pending.speciesId);
-    const x = this.pointerWorld.x;
-    const z = this.pointerWorld.z;
-    this.pendingPlacement = null;
+    this.proprietaires.set(pending.id, joueur);
 
     // La tour est enregistrée avant le chargement du modèle, qui est
     // asynchrone : sans cela deux clics rapides passeraient tous les deux et
@@ -1280,7 +1445,7 @@ export class Game {
     // les règles de pose la voient, et reçoit son visuel une fois chargé.
     // Les objets viennent du compte, pas du Pokémon : celui-ci n'en porte
     // que les identifiants.
-    const tower = new Tower(pending, species, this.itemsDe(pending));
+    const tower = new Tower(pending, species, items);
     tower.place(x, z);
     this.towers.push(tower);
 
@@ -1380,6 +1545,387 @@ export class Game {
     this.messageUntil = this.tick + 60;
   }
 
+  /* ---------- Coopération : publier, recevoir, répliquer ---------- */
+
+  /**
+   * Enregistre l'équipe d'un joueur.
+   *
+   * Figée à l'entrée en partie, et c'est volontaire : quand l'hôte applique
+   * l'intention « je pose celui-là », il lit les stats d'ici, pas celles que
+   * l'invité lui enverrait au moment de la pose. Un client modifié ne peut donc
+   * pas s'offrir un Pokémon gonflé en cours de manche.
+   */
+  enregistrerEquipe(
+    joueur: string,
+    equipe: readonly OwnedPokemon[],
+    objets: readonly OwnedItem[] = []
+  ): void {
+    this.equipesDistantes.set(joueur, equipe);
+    this.objetsDistants.set(joueur, objets);
+  }
+
+  /** À qui appartient une tour. En solo, tout est au joueur local. */
+  private proprietaireDe(tour: Tower): string {
+    return this.proprietaires.get(tour.owned.id) ?? this.joueurLocal;
+  }
+
+  /**
+   * L'état du terrain, tel qu'il part sur le réseau.
+   *
+   * Les coordonnées sont arrondies au dixième. Un Pokémon fait deux unités de
+   * large : un dixième d'unité est invisible, et les décimales complètes
+   * triplaient le poids de l'instantané pour rien.
+   */
+  instantane(): Instantane {
+    const ennemis: Instantane['ennemis'] = [];
+    this.enemies.forEach((enemy) => {
+      if (enemy.state === 'mort') return;
+      ennemis.push({
+        i: enemy.idReseau,
+        e: enemy.speciesId,
+        x: Math.round(enemy.x * 10) / 10,
+        z: Math.round(enemy.z * 10) / 10,
+        v: enemy.maxHp > 0 ? Math.round((enemy.hp / enemy.maxHp) * 100) / 100 : 0,
+        s: enemy.scale,
+        a: Math.round((Math.atan2(enemy.x - enemy.prevX, enemy.z - enemy.prevZ)) * 100) / 100,
+        b: enemy.boss,
+      });
+    });
+
+    const dresseurs: Instantane['dresseurs'] = [
+      {
+        j: this.joueurLocal,
+        x: Math.round(this.trainer.x * 10) / 10,
+        z: Math.round(this.trainer.z * 10) / 10,
+      },
+    ];
+    for (const [joueur, dresseur] of this.dresseursDistants) {
+      dresseurs.push({
+        j: joueur,
+        x: Math.round(dresseur.cibleX * 10) / 10,
+        z: Math.round(dresseur.cibleZ * 10) / 10,
+      });
+    }
+
+    const etat = this.status;
+    return {
+      t: this.tick,
+      ennemis,
+      tours: this.towers.map((tour) => ({
+        i: tour.owned.id,
+        e: tour.species.id,
+        x: Math.round(tour.x * 10) / 10,
+        z: Math.round(tour.z * 10) / 10,
+        p: tour.palier,
+        j: this.proprietaireDe(tour),
+      })),
+      dresseurs,
+      vies: etat.lives,
+      vague: etat.wave,
+      vagues: etat.totalWaves,
+      pieces: etat.pokepieces,
+      cristaux: etat.crystals,
+      issue: etat.outcome,
+      phase: etat.phase,
+    };
+  }
+
+  /**
+   * Applique ce qu'un équipier demande. Réservé à l'hôte.
+   *
+   * Rien n'est pris pour argent comptant : la pose repasse par les règles,
+   * le palier par la caisse. C'est tout l'intérêt d'échanger des intentions
+   * plutôt que des résultats.
+   */
+  appliquerIntention(joueur: string, intention: Intention): void {
+    if (this.reseau !== 'hote') return;
+
+    if (intention.kind === 'dresseur') {
+      // Le dresseur d'un équipier n'est pas simulé : on prend sa position
+      // telle qu'il l'annonce. Elle ne donne aucun avantage — il ne tire pas.
+      this.dresseurDistant(joueur).cibleX = intention.x;
+      this.dresseurDistant(joueur).cibleZ = intention.z;
+      return;
+    }
+
+    if (intention.kind === 'lancer') {
+      this.lancerRun();
+      return;
+    }
+
+    if (intention.kind === 'palier') {
+      const tour = this.towers.find((t) => t.owned.id === intention.tourId);
+      if (!tour) return;
+      const cout = coutPalier(tour.palier);
+      // La caisse est commune : c'est ce qui fait de la coopération autre
+      // chose que deux parties côte à côte.
+      if (cout === null || this.pokepieces < cout) return;
+      if (!tour.monterPalier()) return;
+      this.pokepieces -= cout;
+      this.notify(`${tour.species.name} passe au palier ${tour.palier}`);
+      return;
+    }
+
+    const equipe = this.equipesDistantes.get(joueur);
+    const owned = equipe?.find((membre) => membre.id === intention.ownedId);
+    if (!owned) return;
+    // Le plafond personnel vaut aussi pour l'équipier.
+    const siennes = this.towers.filter((tour) => this.proprietaireDe(tour) === joueur).length;
+    if (siennes >= MAX_POSES) return;
+    if (this.towers.some((tour) => tour.owned.id === owned.id)) return;
+    void this.poser(
+      owned,
+      intention.x,
+      intention.z,
+      joueur,
+      itemsEquipes(owned, this.objetsDistants.get(joueur) ?? [])
+    );
+  }
+
+  /** Le dresseur d'un équipier, créé à sa première apparition. */
+  private dresseurDistant(joueur: string): DresseurDistant {
+    const connu = this.dresseursDistants.get(joueur);
+    if (connu) return connu;
+
+    const mesh = construireDresseur();
+    // Une casquette d'une autre couleur : à deux, savoir lequel est soi doit
+    // se lire d'un coup d'œil, sans étiquette flottante.
+    mesh.traverse((enfant) => {
+      const piece = enfant as Mesh;
+      if (!piece.isMesh) return;
+      const source = piece.material as MeshStandardMaterial;
+      if (source.color.getHex() === 0xc8452f) {
+        const teinte = source.clone();
+        teinte.color.set('#7a4fb5');
+        piece.material = teinte;
+      }
+    });
+    const dresseur: DresseurDistant = { mesh, x: 0, z: 0, cibleX: 0, cibleZ: 0 };
+    this.root.add(mesh);
+    this.dresseursDistants.set(joueur, dresseur);
+    return dresseur;
+  }
+
+  /**
+   * Range un instantané reçu. Réservé à l'invité.
+   *
+   * On ne recrée rien : les ennemis déjà connus gardent leur objet et voient
+   * leur cible bouger. Remplacer la table à chaque instantané ferait repartir
+   * chaque Pokémon de sa nouvelle position, et la marche deviendrait une
+   * succession de bonds.
+   */
+  appliquerInstantane(instantane: Instantane): void {
+    if (this.reseau !== 'invite') return;
+    // Un instantané doublé par un plus récent n'a plus rien à dire.
+    if (this.etatDistant && instantane.t < this.etatDistant.t) return;
+    this.etatDistant = instantane;
+
+    for (const ennemi of this.ennemisDistants.values()) ennemi.vu = false;
+
+    for (const recu of instantane.ennemis) {
+      const connu = this.ennemisDistants.get(recu.i);
+      if (connu) {
+        connu.cibleX = recu.x;
+        connu.cibleZ = recu.z;
+        connu.vie = recu.v;
+        connu.angle = recu.a;
+        connu.vu = true;
+        continue;
+      }
+      this.ennemisDistants.set(recu.i, {
+        espece: recu.e,
+        x: recu.x,
+        z: recu.z,
+        cibleX: recu.x,
+        cibleZ: recu.z,
+        vie: recu.v,
+        echelle: recu.s,
+        angle: recu.a,
+        boss: recu.b,
+        phase: Math.random() * 10,
+        vu: true,
+      });
+    }
+    for (const [id, ennemi] of this.ennemisDistants) {
+      if (!ennemi.vu) this.ennemisDistants.delete(id);
+    }
+
+    /* Les tours : on ne crée le visuel qu'une fois, à la première apparition. */
+    const vues = new Set<string>();
+    for (const tour of instantane.tours) {
+      vues.add(tour.i);
+      const connue = this.toursDistantes.get(tour.i);
+      if (connue) {
+        connue.palier = tour.p;
+        // Un palier change l'espèce quand il déclenche une évolution : le
+        // visuel doit alors être refait.
+        if (connue.espece !== tour.e) {
+          this.root.remove(connue.holder);
+          this.toursDistantes.delete(tour.i);
+          void this.construireTourDistante(tour);
+        }
+        continue;
+      }
+      void this.construireTourDistante(tour);
+    }
+    for (const [id, tour] of this.toursDistantes) {
+      if (vues.has(id)) continue;
+      this.root.remove(tour.holder);
+      this.toursDistantes.delete(id);
+    }
+    if (this.selectionDistante && !vues.has(this.selectionDistante)) {
+      this.selectionDistante = null;
+    }
+
+    /* Les dresseurs, le sien excepté : celui-là, il le bouge lui-même. */
+    for (const recu of instantane.dresseurs) {
+      if (recu.j === this.joueurLocal) continue;
+      const dresseur = this.dresseurDistant(recu.j);
+      dresseur.cibleX = recu.x;
+      dresseur.cibleZ = recu.z;
+    }
+  }
+
+  private async construireTourDistante(tour: TourRepliquee): Promise<void> {
+    // La place est réservée avant le chargement : deux instantanés rapprochés
+    // construiraient sinon deux fois le même Pokémon.
+    if (this.toursDistantes.has(tour.i)) return;
+    const holder = new Group();
+    holder.position.set(tour.x, 0, tour.z);
+    holder.rotation.y = MODEL_FACING;
+    this.toursDistantes.set(tour.i, {
+      holder,
+      espece: tour.e,
+      palier: tour.p,
+      joueur: tour.j,
+    });
+    this.root.add(holder);
+
+    const base = new Mesh(
+      new CylinderGeometry(0.5, 0.55, 0.1, 16),
+      new MeshStandardMaterial({ color: '#c9cfd6', roughness: 0.8 })
+    );
+    base.position.y = 0.05;
+    holder.add(base);
+
+    try {
+      const espece = getSpecies(tour.e);
+      const { object } = await instantiate(espece.model);
+      if (espece.echelle) object.scale.setScalar(espece.echelle);
+      holder.add(object);
+    } catch (error) {
+      // Un modèle manquant ne doit pas vider le terrain : le socle reste,
+      // et l'on sait au moins qu'il y a quelqu'un là.
+      console.warn(`Modèle indisponible pour ${tour.e} :`, error);
+    }
+  }
+
+  /**
+   * Un pas de réplique : personne ne simule, tout rattrape.
+   *
+   * Le lissage est exponentiel et non linéaire : une cible qui bouge dix fois
+   * par seconde et un rendu à soixante images donneraient, avec une vitesse
+   * fixe, un mouvement qui accélère puis attend. Là, chaque image comble une
+   * fraction constante de l'écart, et l'arrivée est douce.
+   */
+  private avancerReplique(dt: number): void {
+    this.camera.getWorldDirection(this.tmpVec);
+    this.trainer.update(dt, this.input.move, Math.atan2(-this.tmpVec.x, -this.tmpVec.z));
+    if (!this.trainerMoved && this.input.move.lengthSq() > 0.01) this.trainerMoved = true;
+
+    // Sa position part à la même cadence que les instantanés : plus souvent
+    // serait du trafic pour un déplacement que personne ne mesure au dixième.
+    this.horlogeDresseur += dt;
+    if (this.horlogeDresseur >= 0.1) {
+      this.horlogeDresseur = 0;
+      this.envoyerIntention?.({
+        kind: 'dresseur',
+        x: Math.round(this.trainer.x * 10) / 10,
+        z: Math.round(this.trainer.z * 10) / 10,
+      });
+    }
+
+    // L'invité vise, lui aussi. Sans cette ligne son curseur restait à
+    // l'origine : il ne pouvait ni poser, ni cliquer pour se déplacer, ni
+    // sélectionner un Pokémon — le mode se regardait au lieu de se jouer.
+    this.updatePointer();
+
+    const rattrapage = Math.min(1, dt * 12);
+    for (const ennemi of this.ennemisDistants.values()) {
+      ennemi.x += (ennemi.cibleX - ennemi.x) * rattrapage;
+      ennemi.z += (ennemi.cibleZ - ennemi.z) * rattrapage;
+      ennemi.phase += dt;
+    }
+    for (const dresseur of this.dresseursDistants.values()) {
+      dresseur.x += (dresseur.cibleX - dresseur.x) * rattrapage;
+      dresseur.z += (dresseur.cibleZ - dresseur.z) * rattrapage;
+      dresseur.mesh.position.set(dresseur.x, 0, dresseur.z);
+    }
+  }
+
+  /** Fiche du Pokémon posé sélectionné, côté invité. */
+  private selectionRepliquee(): SelectionTour | null {
+    const id = this.selectionDistante;
+    if (!id) return null;
+    const tour = this.toursDistantes.get(id);
+    if (!tour) return null;
+
+    const owned = this.annuaire(id);
+    const cout = coutPalier(tour.palier);
+    return {
+      ownedId: id,
+      nom: getSpecies(tour.espece).name,
+      palier: tour.palier,
+      palierMax: PALIER_MAX,
+      cout,
+      abordable: cout !== null && (this.etatDistant?.pieces ?? 0) >= cout,
+      // Sans la fiche du Pokémon — un équipier qu'on ne connaît pas — on
+      // n'invente pas un nom d'attaque : un tiret se lit comme « inconnu »,
+      // un faux nom se lit comme une information.
+      ultime: owned?.ultime.name ?? '—',
+      ultimeDebloque: tour.palier >= PALIER_MAX,
+    };
+  }
+
+  /** Retrouve un Pokémon posé parmi les équipes connues. */
+  private annuaire(ownedId: string): OwnedPokemon | null {
+    for (const equipe of this.equipesDistantes.values()) {
+      const trouve = equipe.find((membre) => membre.id === ownedId);
+      if (trouve) return trouve;
+    }
+    return null;
+  }
+
+  /** La tour répliquée sous le curseur, ou null. */
+  private tourDistanteSous(): string | null {
+    if (!this.pointerValid) return null;
+    let meilleure: string | null = null;
+    let meilleurEcart = RAYON_SURVOL * RAYON_SURVOL;
+    for (const [id, tour] of this.toursDistantes) {
+      const dx = tour.holder.position.x - this.pointerWorld.x;
+      const dz = tour.holder.position.z - this.pointerWorld.z;
+      const ecart = dx * dx + dz * dz;
+      if (ecart <= meilleurEcart) {
+        meilleurEcart = ecart;
+        meilleure = id;
+      }
+    }
+    return meilleure;
+  }
+
+  /** Dessine ce qui vient du réseau. Sans effet en solo. */
+  private rendreRepliques(): void {
+    for (const ennemi of this.ennemisDistants.values()) {
+      const entry = this.crowds.get(ennemi.espece);
+      if (!entry) continue;
+      const clip = entry.walk ?? entry.idle;
+      if (!clip) continue;
+      entry.crowd.add(ennemi.x, ennemi.z, ennemi.angle + MODEL_FACING, ennemi.echelle, clip, ennemi.phase);
+      const hauteur = getSpecies(ennemi.espece).height * ennemi.echelle + 0.45;
+      this.barresVie.add(ennemi.x, hauteur, ennemi.z, ennemi.vie, ennemi.boss ? 2.2 : 1);
+    }
+  }
+
   /* ---------- Rendu ---------- */
 
   render(alpha: number): void {
@@ -1411,6 +1957,10 @@ export class Game {
         enemy.boss ? 2.2 : 1
       );
     });
+
+    // Les répliques passent par les mêmes foules que les ennemis simulés :
+    // elles doivent donc être ajoutées entre le begin et le end.
+    if (this.reseau === 'invite') this.rendreRepliques();
 
     for (const { crowd } of this.crowds.values()) crowd.end();
     this.barresVie.end();
@@ -1464,6 +2014,11 @@ export class Game {
   }
 
   dispose(): void {
+    for (const tour of this.toursDistantes.values()) this.root.remove(tour.holder);
+    for (const dresseur of this.dresseursDistants.values()) this.root.remove(dresseur.mesh);
+    this.toursDistantes.clear();
+    this.dresseursDistants.clear();
+    this.ennemisDistants.clear();
     this.terrain.dispose();
     this.decor?.dispose();
     this.barresVie.dispose();
