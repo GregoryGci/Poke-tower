@@ -1,0 +1,71 @@
+# Publie le jeu sur GitHub Pages a chaque poussee sur main.
+#
+# Pourquoi Pages plutot qu un hebergeur dedie : le jeu est un paquet
+# entierement statique — il n a pas de serveur a lui, Supabase fait le reste
+# depuis le navigateur. Pages est donc suffisant, gratuit, et le depot y est
+# deja. Le jour ou il faudra un vrai serveur de jeu, ce fichier sautera.
+#
+# Les deux variables VITE_* sont lues au moment du BUILD et inscrites dans le
+# paquet : Vite ne les lit pas a l execution. Les oublier ne casse rien — le
+# jeu retombe sur la sauvegarde locale et la cooperation se declare
+# indisponible — mais il n y aura ni sauvegarde en ligne ni jeu a deux.
+name: Deploiement
+
+on:
+  push:
+    branches: [main]
+  # Permet de relancer une publication a la main depuis l onglet Actions,
+  # sans avoir a pousser un commit vide.
+  workflow_dispatch:
+
+# Les droits minimaux dont Pages a besoin. `id-token` sert a prouver a Pages
+# que la publication vient bien de ce workflow.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une seule publication a la fois. `cancel-in-progress: false` parce qu une
+# publication a moitie faite laisserait le site casse : mieux vaut laisser la
+# precedente finir que d empiler deux ecritures.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` et non `npm install` : il installe exactement ce que decrit
+      # le fichier de verrouillage, donc la publication ne peut pas differer
+      # de ce qui tourne en local a cause d une mise a jour silencieuse.
+      - run: npm ci
+
+      # `npm run build` lance aussi le typecheck : une erreur de type arrete
+      # la publication au lieu de mettre en ligne un jeu casse.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4

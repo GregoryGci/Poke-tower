@@ -13,6 +13,7 @@
 import './ui/theme.css';
 
 import { armerAudio } from '@/audio/moteur';
+import { cacherChargement, montrerChargement } from '@/ui/chargement';
 import { prechargerCri, sonClic, sonDefaite, sonVictoire } from '@/audio/sons';
 
 import { GameLoop } from '@/core/loop';
@@ -174,6 +175,9 @@ async function jouerManche(
   const rosterSpecies = [
     ...new Set([...equipe.map((p) => p.speciesId), ...(coop?.especesDesAutres ?? [])]),
   ];
+  // Pas de compte d espèces dans le libellé : il ne connaîtrait que celles de
+  // l équipe, alors que le gros du chargement est le bestiaire du lieu.
+  montrerChargement(`${niveau.nom} — préparation du terrain`);
   const game = await Game.create(
     stage.scene,
     stage.camera,
@@ -185,6 +189,8 @@ async function jouerManche(
     raid ? VIE_PAR_DIFFICULTE[raid.difficulte] : null,
     champion
   );
+
+  cacherChargement();
 
   // Les cris partent en telechargement pendant le chargement des modeles :
   // les chercher au moment de poser donnerait un silence puis un cri en retard.
@@ -495,6 +501,9 @@ async function alerterButin(noms: string): Promise<void> {
 }
 
 /* ---------- Enchaînement des écrans ---------- */
+
+// Le jeu est en place : l ecran de demarrage a fait son office.
+cacherChargement();
 
 if (!account.account.trainerName) {
   account.account.trainerName = await demanderNomDresseur();

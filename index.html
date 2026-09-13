@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,10 +15,57 @@
       html, body { margin: 0; height: 100%; overflow: hidden; background: #eef2e2; }
       #app { width: 100%; height: 100%; }
       canvas { display: block; }
+
+      /* L ecran de demarrage est ecrit ICI, en clair dans le document, et pas
+         dans un module : il doit s afficher avant que le moindre script soit
+         telecharge. Mesure avant : une seconde et demie de page blanche au
+         chargement, et quinze secondes de noir a l entree en manche — un
+         testeur croit que ca a plante. */
+      #demarrage {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
+        background: #eef2e2;
+        color: #1e2a1c;
+        font-family: 'Pixelify Sans', 'Trebuchet MS', system-ui, sans-serif;
+        transition: opacity .3s ease;
+      }
+      #demarrage[hidden] { display: none; }
+      #demarrage.parti { opacity: 0; pointer-events: none; }
+      #demarrage h1 { margin: 0; font-size: 40px; letter-spacing: -.02em; }
+      #demarrage p { margin: 0; font-size: 13px; color: #5d6b59; }
+      /* Une barre qui va-et-vient : on ne connait pas la taille totale a
+         telecharger, donc une barre de progression chiffree mentirait. */
+      #demarrage .piste {
+        width: 220px;
+        height: 14px;
+        background: #fdfdf4;
+        border: 2px solid #2a3a54;
+      }
+      #demarrage .piste i {
+        display: block;
+        width: 38%;
+        height: 100%;
+        background: #2f7d4f;
+        animation: va-et-vient 1.1s steps(12, end) infinite alternate;
+      }
+      @keyframes va-et-vient { from { margin-left: 0; } to { margin-left: 62%; } }
+      @media (prefers-reduced-motion: reduce) {
+        #demarrage .piste i { animation: none; width: 100%; }
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="demarrage">
+      <h1>Poke Tower</h1>
+      <div class="piste"><i></i></div>
+      <p id="demarrage-texte">Chargement…</p>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
