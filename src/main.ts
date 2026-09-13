@@ -12,6 +12,9 @@
 
 import './ui/theme.css';
 
+import { armerAudio } from '@/audio/moteur';
+import { prechargerCri, sonClic, sonDefaite, sonVictoire } from '@/audio/sons';
+
 import { GameLoop } from '@/core/loop';
 import { InputState } from '@/core/input';
 import { createStage } from '@/render/scene';
@@ -55,6 +58,26 @@ import { membresEquipe, normaliserEquipe } from '@/data/team';
 import { STARTER_CASES } from '@/data/content';
 import { Hud } from '@/ui/hud';
 import { Tutorial } from '@/ui/tutorial';
+
+// Le contexte audio ne peut pas s ouvrir avant un geste du joueur : on le
+// branche sur le premier, quel qu il soit.
+armerAudio();
+
+// Un clic sur un bouton fait un bruit, partout dans l interface.
+//
+// Un seul ecouteur delegue plutot qu un appel dans chacun des quinze ecrans :
+// c est la seule facon de ne pas oublier un bouton le jour ou on en ajoute un.
+// Les boutons qui ont deja leur propre son portent `data-sans-son`.
+document.addEventListener(
+  'pointerdown',
+  (evenement) => {
+    const cible = (evenement.target as HTMLElement | null)?.closest('button');
+    if (!cible || cible.disabled || cible.dataset['sansSon'] !== undefined) return;
+    if (cible.getAttribute('aria-disabled') === 'true') return;
+    sonClic();
+  },
+  true
+);
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app introuvable');
@@ -158,6 +181,10 @@ async function jouerManche(
     armeEquipee(account.account),
     raid ? VIE_PAR_DIFFICULTE[raid.difficulte] : null
   );
+
+  // Les cris partent en telechargement pendant le chargement des modeles :
+  // les chercher au moment de poser donnerait un silence puis un cri en retard.
+  for (const espece of rosterSpecies) prechargerCri(espece);
 
   // Les objets équipés doivent être connus avant la première pose.
   game.inventaireItems = account.account.items ?? [];
@@ -328,6 +355,10 @@ async function jouerManche(
   window.removeEventListener('keydown', recoller);
   stage.reprendreSuivi();
   const bilanFinal = game.status;
+  if (!abandon) {
+    if (bilanFinal.outcome === 'victoire') sonVictoire();
+    else if (bilanFinal.outcome === 'defaite') sonDefaite();
+  }
   hud.dispose();
   tutorial?.dispose();
 

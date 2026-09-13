@@ -27,6 +27,7 @@
  * cherche la sensation du defile.
  */
 
+import { sonDefile, sonRevelation } from '@/audio/sons';
 import type { Rarity } from '@/data/types';
 
 /** Ordre croissant : sert a choisir la rarete qui pilote la mise en scene. */
@@ -143,10 +144,18 @@ function creerVoile(): HTMLDivElement {
  * ferait clignoter le fond noir entre deux cartes de la chaine, ce qui casse
  * exactement le rythme qu'on cherche a installer.
  */
+/**
+ * `sonner` dit si le defile se conclut par la fanfare de sa rarete.
+ *
+ * Faux en ouverture de chaine : le defile y est neutre, et faire retentir la
+ * fanfare de l epique avant la premiere carte promettrait un resultat que le
+ * lot ne tiendra peut-etre pas. Chaque carte sonne ensuite pour elle-meme.
+ */
 async function jouerDefile(
   voile: HTMLElement,
   rarete: Rarity,
-  duree: number
+  duree: number,
+  sonner = true
 ): Promise<void> {
   const piste = voile.querySelector<HTMLElement>('.revelation-piste');
   voile.dataset['rarete'] = rarete;
@@ -158,6 +167,7 @@ async function jouerDefile(
   voile.dataset['phase'] = 'attente';
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   voile.dataset['phase'] = 'defile';
+  sonDefile();
 
   await new Promise<void>((resolve) => {
     let fini = false;
@@ -169,6 +179,7 @@ async function jouerDefile(
       voile.dataset['phase'] = 'flash';
       setTimeout(() => {
         voile.dataset['phase'] = 'revele';
+        if (sonner) sonRevelation(rarete);
         resolve();
       }, 220);
     };
@@ -257,7 +268,7 @@ export async function revelationEnChaine(
    * meilleur tirage du lot annoncerait le résultat avant de l'avoir montré.
    * La surprise appartient aux cartes.
    */
-  await jouerDefile(voile, 'epique', DUREE_DEFILE.epique);
+  await jouerDefile(voile, 'epique', DUREE_DEFILE.epique, false);
 
   const passer = elem('button', 'bouton-discret revelation-passer');
   passer.type = 'button';
@@ -283,6 +294,7 @@ export async function revelationEnChaine(
     // colore le cadre pendant qu'on la regarde.
     voile.dataset['rarete'] = entree.rarete;
     voile.dataset['phase'] = 'revele';
+    sonRevelation(entree.rarete);
 
     const scene = elem('div', 'revelation-scene');
     scene.appendChild(entree.carte);

@@ -3937,3 +3937,13 @@
    et pas assez pour prendre le pas sur « Defendre la tour ». */
 
 .destination.vedette { border-color: var(--or); }
+
+/* Le curseur de volume : même grammaire que le reste, des blocs nets. */
+.reglages-curseur {
+  flex: 1;
+  min-width: 140px;
+  height: 20px;
+  accent-color: var(--emeraude);
+  cursor: pointer;
+}
+.reglages-curseur:disabled { opacity: .4; cursor: not-allowed; }

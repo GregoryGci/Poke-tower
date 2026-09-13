@@ -1,16 +1,20 @@
 /**
  * Réglages.
  *
- * Pour l'instant, une seule chose à y mettre : les commandes. Elles vivaient
- * en bloc permanent sur le menu, ce qui coûtait un tiers de l'écran à une
- * information qu'on lit une fois. Derrière un rouage, elles restent
- * consultables sans encombrer.
+ * Deux choses : le rappel des commandes, et le son. Les commandes vivaient en
+ * bloc permanent sur le menu, ce qui coûtait un tiers de l'écran à une
+ * information qu'on lit une fois ; derrière un rouage, elles restent
+ * consultables sans encombrer. Le volume les rejoint parce que c'est le seul
+ * réglage du jeu, et qu'un écran de réglages sans volume n'en est pas un.
  *
  * La liste est écrite à la main et **doit** suivre `core/input.ts` et
  * `render/scene.ts`. C'est le défaut assumé de la solution : un aide-mémoire
  * dérivé automatiquement demanderait que chaque touche porte son libellé, ce
  * qui alourdirait le code de jeu pour un écran qu'on ouvre rarement.
  */
+
+import { estMuet, reglerMuet, reglerVolume, volumeAudio } from '@/audio/moteur';
+import { sonClic } from '@/audio/sons';
 
 interface Commande {
   touches: string[];
@@ -92,6 +96,50 @@ export function ouvrirReglages(): Promise<void> {
     }
     panneau.appendChild(bloc);
   }
+
+  /* ---- Le son ---- */
+
+  const bloc = elem('div', 'reglages-groupe');
+  bloc.appendChild(elem('p', 'etiquette', 'Son'));
+
+  const ligneMuet = elem('div', 'reglages-ligne');
+  const boutonMuet = elem('button', 'bouton-discret');
+  boutonMuet.type = 'button';
+  boutonMuet.id = 'reglages-muet';
+  const majMuet = (): void => {
+    boutonMuet.textContent = estMuet() ? 'Réactiver le son' : 'Couper le son';
+    curseur.disabled = estMuet();
+  };
+  boutonMuet.addEventListener('click', () => {
+    reglerMuet(!estMuet());
+    majMuet();
+    // Un retour sonore au moment où on réactive : sans lui, on ne sait pas si
+    // le bouton a agi ou si le son était déjà coupé plus bas.
+    if (!estMuet()) sonClic();
+  });
+  ligneMuet.append(boutonMuet, elem('span', 'reglages-quoi', 'Coupe tout, bruitages compris'));
+
+  const ligneVolume = elem('div', 'reglages-ligne');
+  const curseur = elem('input', 'reglages-curseur');
+  curseur.type = 'range';
+  curseur.id = 'reglages-volume';
+  curseur.min = '0';
+  curseur.max = '100';
+  curseur.step = '5';
+  curseur.value = String(Math.round(volumeAudio() * 100));
+  const valeur = elem('span', 'reglages-quoi', `${curseur.value} %`);
+  curseur.addEventListener('input', () => {
+    reglerVolume(Number(curseur.value) / 100);
+    valeur.textContent = `${curseur.value} %`;
+  });
+  // Le son d'essai part au relâchement et pas à chaque pas : en glissant, on
+  // déclencherait vingt bips par seconde.
+  curseur.addEventListener('change', () => sonClic());
+  ligneVolume.append(curseur, valeur);
+
+  bloc.append(ligneVolume, ligneMuet);
+  panneau.appendChild(bloc);
+  majMuet();
 
   voile.appendChild(panneau);
   document.body.appendChild(voile);

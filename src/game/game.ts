@@ -54,6 +54,14 @@ import { BarresVie } from '@/render/health-bars';
 import { canPlace, REJECTION_LABELS, type Obstacle, type PlacementRules } from './placement';
 import type { Instantane, Intention, TourRepliquee } from '@/net/protocole';
 import {
+  sonFuite,
+  sonImpact,
+  sonPalier,
+  sonPose,
+  sonVagueLancee,
+  sonVagueTenue,
+} from '@/audio/sons';
+import {
   WAVES,
   WaveRunner,
   especesDuNiveau,
@@ -721,6 +729,7 @@ export class Game {
     }
     if (this.phase !== 'preparation') return;
     this.phase = 'en_cours';
+    sonVagueLancee();
     // Les reperes de direction ont fait leur office.
     this.terrain.fleches.visible = false;
     this.notify('La vague arrive');
@@ -762,6 +771,7 @@ export class Game {
         );
       }
       if (event.kind === 'waveCleared') {
+        sonVagueTenue();
         this.crystals += PRIME_VAGUE;
         this.pokepieces += PIECES_VAGUE;
         this.notify(
@@ -778,6 +788,7 @@ export class Game {
       enemy.update(dt);
 
       if (enemy.state === 'arrive') {
+        sonFuite();
         this.leaked++;
         this.enemies.release(enemy);
         return;
@@ -870,6 +881,11 @@ export class Game {
   private appliquerImpact(shot: Projectile): void {
     const style = shot.style;
     if (!style) return;
+
+    // Un impact par **tir**, pas par ennemi touché : une attaque de zone qui
+    // en prend douze ne doit pas jouer douze fois le même choc. La couleur du
+    // son suit le type de l'attaque, comme la table des affinités.
+    if (shot.moveType) sonImpact(shot.moveType);
 
     if (style.rayon > 0) {
       this.enemyGrid.queryRadius(shot.x, shot.z, style.rayon, (enemy) => {
@@ -1272,6 +1288,7 @@ export class Game {
 
     if (!tour.monterPalier()) return false;
     this.pokepieces -= cout;
+    sonPalier();
 
     this.notify(
       tour.ultimeDebloque
@@ -1513,6 +1530,7 @@ export class Game {
     tower.object = holder;
     tower.place(x, z);
     this.root.add(holder);
+    sonPose(species.id);
     this.notify(`${species.name} posé`);
   }
 

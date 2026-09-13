@@ -14,6 +14,17 @@ du squelette — comme l'autorise l'article 3(b) de la licence.
 **Ce projet est non commercial.** L'article 4(b) de la licence interdit tout
 usage principalement destiné à un avantage commercial ou à une rémunération.
 
+## Sons
+
+Les **cris de Pokémon** (, 23 fichiers) et les **impacts par
+type** (, 51 fichiers) proviennent du même dépôt
+**Cobblemon Assets**, sous la même licence **CC BY-NC 3.0**. Ils sont repris
+tels quels, sans modification.
+
+Les bruitages d'interface — clics, fanfares de révélation, annonces de vague —
+ne sont pas des fichiers : ils sont **synthétisés** à l'exécution par
+ (Web Audio). Aucune licence tierce ne s'y applique.
+
 ## Modèles d'armes
 
 Les modèles des armes **USP-S**, **Desert Eagle** et **M4A1-S** proviennent
