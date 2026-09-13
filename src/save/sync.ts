@@ -48,6 +48,21 @@ export class SyncStore implements SaveStore {
 
   constructor(private readonly distant: SaveStore) {}
 
+  /**
+   * Relaie l'identite du magasin distant.
+   *
+   * Sans ce relais, l'enveloppe avalait l'identite : `AccountManager.open`
+   * appelait `store.identifiant?.()` sur le SyncStore, qui ne l'implementait
+   * pas, et repartait donc avec l'identifiant local. Le compte etait alors
+   * cree sous l'ancien nom et ecrit sous une cle que le demarrage suivant
+   * n'allait pas lire.
+   */
+  async identifiant(): Promise<string> {
+    const uid = await this.distant.identifiant?.();
+    if (!uid) throw new Error("Le magasin distant n'a pas d'identite");
+    return uid;
+  }
+
   get etat(): EtatSync {
     return {
       enAttente: this.enAttente !== null || this.enVol !== null,

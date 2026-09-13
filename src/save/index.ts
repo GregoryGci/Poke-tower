@@ -6,6 +6,7 @@ import { SyncStore } from './sync';
 // L'identifiant vit dans son propre module : `sync.ts` doit pouvoir l'adopter
 // quand le serveur en impose un autre, et l'importer d'ici ferait un cycle.
 export { resolveAccountId } from './identite';
+import { adopterIdentite } from './identite';
 import type { SaveStore } from './store';
 
 export type { SaveStore } from './store';
@@ -42,14 +43,38 @@ export class AccountManager {
     public account: PlayerAccount
   ) {}
 
+  /**
+   * Ouvre le compte.
+   *
+   * L'identité est résolue **avant** la lecture, et c'est essentiel : c'est
+   * elle qui décide sous quelle clé la sauvegarde sera écrite ensuite. Tant
+   * qu'on ouvrait avec l'identifiant local puis qu'on adoptait celui du
+   * serveur après coup, un compte neuf gardait l'ancien identifiant en
+   * mémoire — il était donc écrit sous une clé, et relu sous une autre. Les
+   * données étaient bien là, et le jeu repartait quand même de zéro.
+   *
+   * Hors ligne, `identifiant()` échoue : on garde l'identifiant local, et
+   * tout continue comme avant.
+   */
   static async open(store: SaveStore, accountId: string): Promise<AccountManager> {
+    let id = accountId;
+    try {
+      const uid = await store.identifiant?.();
+      if (uid) {
+        adopterIdentite(uid, accountId);
+        id = uid;
+      }
+    } catch (error) {
+      console.info('Identité en ligne indisponible, on garde l’identifiant local.', error);
+    }
+
     let account: PlayerAccount | null = null;
     try {
-      account = await store.load(accountId);
+      account = await store.load(id);
     } catch (error) {
       console.warn('Chargement du compte impossible, partie hors ligne.', error);
     }
-    return new AccountManager(store, account ?? emptyAccount(accountId));
+    return new AccountManager(store, account ?? emptyAccount(id));
   }
 
   touch(delayMs = 1500): void {
