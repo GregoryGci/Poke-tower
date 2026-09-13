@@ -290,31 +290,57 @@ export function vaguesDeRaid(niveau: Niveau, multiplicateurVie: number): Wave[] 
 export function vaguesDeLArene(champion: Champion, niveau: Niveau): Wave[] {
   const monde = getMonde(niveau.mondeId);
   const palier = niveau.rang - 1;
-  const vie = (1 + palier * 0.22) * monde.durete;
+
+  // La durete est PLAFONNEE, et c est une correction, pas un reglage.
+  // Sans plafond, l as du Maitre montait a 14 840 points de vie : mesure au
+  // navigateur, une equipe de six prismatiques niveau 30, toutes posees le
+  // long du trace et tous paliers achetes, perdait quand meme. Un defi qu on
+  // ne peut pas gagner n est pas difficile, il est casse.
+  const vie = Math.min(4.2, 1 + palier * 0.16) * monde.durete;
+  const vitesse = 1.15 * (1 + palier * 0.01);
+
+  /** Un ennemi ordinaire du monde, pour l escorte. */
+  const espece = (rang: number): string =>
+    monde.bestiaire[rang % monde.bestiaire.length] ?? monde.bestiaire[0]!;
 
   return champion.equipe.map((speciesId, rang) => {
-    const espece = getSpecies(speciesId);
-    // La taille suit la stature réelle de l'espèce, ramenée autour de 1,6 :
+    const modele = getSpecies(speciesId);
+    // La taille suit la stature reelle de l espece, ramenee autour de 1,6 :
     // un Chenipan de champion doit rester un Chenipan, en plus imposant.
-    const stature = Math.min(2.2, Math.max(1.25, 1.15 + espece.height * 0.22));
-    return {
-      batches: [
-        {
-          speciesId,
-          count: 1,
-          interval: 1,
-          // Les points de vie montent d'un tiers à chaque rang, et l'as
-          // reçoit encore la moitié en plus.
-          hp: Math.round(220 * vie * (1 + rang * 0.34) * (rang === 5 ? 1.5 : 1)),
-          // Lent : un boss rapide ne laisse pas le temps de le voir arriver,
-          // et l'Arène se joue sur la durée, pas sur la surprise.
-          speed: 1.15 * (1 + palier * 0.01),
-          scale: stature * (rang === 5 ? 1.18 : 1),
-          boss: true,
-        },
-      ],
-      restAfter: 0,
+    const stature = Math.min(2.2, Math.max(1.25, 1.15 + modele.height * 0.22));
+
+    const boss: SpawnBatch = {
+      speciesId,
+      count: 1,
+      interval: 1,
+      hp: Math.round(200 * vie * (1 + rang * 0.26) * (rang === 5 ? 1.4 : 1)),
+      // Lent : un boss rapide ne laisse pas le temps de le voir arriver, et
+      // l Arene se joue sur la duree, pas sur la surprise.
+      speed: vitesse,
+      scale: stature * (rang === 5 ? 1.18 : 1),
+      boss: true,
     };
+
+    /**
+     * L escorte.
+     *
+     * Six duels successifs, c etait six barres de vie et rien entre : aucun
+     * K.O. pendant des minutes, donc aucune Pokepiece, donc aucun palier
+     * achetable — alors meme que le mode est CONSTRUIT autour du fait qu on
+     * achete pendant le combat. L escorte remet ce carburant dans la vague,
+     * et donne au terrain l aspect d un siege plutot que d un tour par tour.
+     *
+     * Elle entre AVANT le boss : elle ouvre la voie, il la suit.
+     */
+    const escorte = lot(
+      espece(rang),
+      4 + rang * 2,
+      Math.max(0.5, 1.1 - rang * 0.08),
+      Math.round((18 + rang * 9) * vie),
+      vitesse * 1.7
+    );
+
+    return { batches: [escorte, boss], restAfter: 0 };
   });
 }
 

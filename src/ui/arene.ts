@@ -52,7 +52,7 @@ export function ouvrirArene(compte: PlayerAccount): Promise<Champion | null> {
   const note = elem(
     'p',
     'affinites-vide',
-    'Le champion envoie son équipe un par un, sans laisser souffler. Tu connais ses six Pokémon d’avance : compose contre eux.'
+    'Le champion envoie son équipe un par un, sans laisser souffler. Une seule vie : un de ses Pokémon qui atteint ta base met fin au défi. Tu connais les six d’avance — compose contre eux.'
   );
 
   const liste = elem('div', 'raids-liste');

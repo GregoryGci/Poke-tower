@@ -32,6 +32,7 @@ const GROUPES: Groupe[] = [
     commandes: [
       { touches: ['Z', 'Q', 'S', 'D'], quoi: 'Se déplacer, par rapport à ce que tu vois' },
       { touches: ['Clic gauche'], quoi: 'Aller au point cliqué' },
+      { touches: ['Espace'], quoi: 'Sauter' },
     ],
   },
   {
@@ -42,7 +43,7 @@ const GROUPES: Groupe[] = [
       { touches: ['Molette'], quoi: 'Rapprocher ou éloigner' },
       { touches: ['Clic milieu maintenu'], quoi: 'Faire glisser le terrain' },
       { touches: ['R'], quoi: 'Remettre la vue d’aplomb' },
-      { touches: ['Espace'], quoi: 'Recoller la caméra au dresseur' },
+      { touches: ['Échap'], quoi: 'Recoller la caméra au dresseur' },
     ],
   },
   {

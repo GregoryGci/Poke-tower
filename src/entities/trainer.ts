@@ -27,6 +27,17 @@ export class Trainer {
   bounds = 15;
 
   private readonly velocity = new Vector2();
+
+  /**
+   * Hauteur au-dessus du sol, en unités. Zéro quand le dresseur touche terre.
+   *
+   * Le saut est **purement visuel** : il ne change ni la portée, ni la
+   * collision, ni ce que le clic atteint. C'est délibéré — un saut qui
+   * modifierait la pose ou le tir ouvrirait une deuxième physique à tenir,
+   * pour un geste dont l'intérêt est d'être expressif.
+   */
+  hauteur = 0;
+  private vitesseVerticale = 0;
   /** Point à rejoindre, posé au clic. Null quand le dresseur est à l'arrêt. */
   private destination: Vector2 | null = null;
 
@@ -42,6 +53,24 @@ export class Trainer {
     const cible = this.destination ?? new Vector2();
     cible.set(clamp(x, this.bounds), clamp(z, this.bounds));
     this.destination = cible;
+  }
+
+  /** Vrai tant que le dresseur quitte le sol. */
+  get enLAir(): boolean {
+    return this.hauteur > 0.001;
+  }
+
+  /**
+   * Saute, si les pieds sont au sol.
+   *
+   * Pas de double saut : on ne relance l'impulsion que depuis le sol. Sans ce
+   * garde-fou, maintenir la barre d'espace ferait monter le dresseur
+   * indéfiniment.
+   */
+  sauter(): boolean {
+    if (this.enLAir) return false;
+    this.vitesseVerticale = IMPULSION;
+    return true;
   }
 
   /** Vrai tant que le dresseur a un point à rejoindre. */
@@ -65,6 +94,7 @@ export class Trainer {
   update(dt: number, input: Vector2, capCamera: number): void {
     this.prevX = this.x;
     this.prevZ = this.z;
+    this.avancerSaut(dt);
 
     if (input.lengthSq() > 0) {
       // Le clavier reprend la main : la destination posée au clic tombe.
@@ -99,6 +129,27 @@ export class Trainer {
     }
   }
 
+  /**
+   * Un pas de saut.
+   *
+   * Intégration d'Euler toute simple, et une gravité plus forte que la vraie :
+   * à 9,81 le dresseur flotte, parce que l'échelle du terrain n'est pas celle
+   * du monde réel. Ce qu'on cherche est un bond sec, pas une chute libre.
+   */
+  private avancerSaut(dt: number): void {
+    if (!this.enLAir && this.vitesseVerticale <= 0) {
+      this.vitesseVerticale = 0;
+      this.hauteur = 0;
+      return;
+    }
+    this.vitesseVerticale -= GRAVITE * dt;
+    this.hauteur += this.vitesseVerticale * dt;
+    if (this.hauteur <= 0) {
+      this.hauteur = 0;
+      this.vitesseVerticale = 0;
+    }
+  }
+
   renderAt(alpha: number, out: Vector2): Vector2 {
     return out.set(
       this.prevX + (this.x - this.prevX) * alpha,
@@ -108,6 +159,16 @@ export class Trainer {
 }
 
 const ORIGIN = new Vector2(0, 0);
+
+/**
+ * Impulsion et gravité du saut.
+ *
+ * Réglées ensemble : à 7,2 d'impulsion pour 26 de gravité, le bond culmine à
+ * un peu moins d'une unité et dure environ 0,55 s. Assez haut pour se voir en
+ * vue plongeante, assez court pour qu'on puisse enchaîner sans attendre.
+ */
+const IMPULSION = 7.2;
+const GRAVITE = 26;
 
 function clamp(value: number, limit: number): number {
   return Math.max(-limit, Math.min(limit, value));

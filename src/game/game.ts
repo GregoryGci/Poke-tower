@@ -56,6 +56,7 @@ import type { Champion } from '@/data/arene';
 import type { Instantane, Intention, TourRepliquee } from '@/net/protocole';
 import {
   sonFuite,
+  sonSaut,
   sonImpact,
   sonPalier,
   sonPose,
@@ -113,6 +114,24 @@ const PRIME_VAGUE = 12;
 const PRIME_VICTOIRE = 30;
 /** Ennemis qu'on peut laisser passer avant de perdre la manche. */
 const VIES = 10;
+
+/**
+ * Vies d'une Arène : **une seule**.
+ *
+ * Le défaut etait structurel, pas de reglage. Une arene envoie SIX ennemis ;
+ * avec dix vies, il etait arithmetiquement impossible de la perdre — on
+ * pouvait laisser passer l equipe entiere du champion sans en abattre un seul
+ * et decrocher le badge. Mesure avant correction : trois defis, trois
+ * « victoires », six fuites a chaque fois, et l equipe employee ne changeait
+ * rien au resultat.
+ *
+ * Trois vies remettent l enjeu la ou il doit etre. C est trois et non une
+ * parce que les boss arrivent escortes : une seule vie ferait de la premiere
+ * piece de pietaille qui file la fin du defi, ce qui punirait un oubli plutot
+ * qu une mauvaise preparation. A trois, on encaisse deux erreurs et la
+ * troisieme coute le badge.
+ */
+const VIES_ARENE = 3;
 
 /**
  * Grossissement de l'aperçu quand c'est l'ultime qui part.
@@ -474,6 +493,8 @@ export class Game {
   private selectionDistante: string | null = null;
   private prochainIdEnnemi = 1;
   private horlogeDresseur = 0;
+  /** Vies de cette manche : dix d ordinaire, une en Arene. */
+  private readonly vies: number;
   private derniereImageDecor = performance.now();
   /**
    * Inventaire d'objets du compte, pour équiper les Pokémon posés.
@@ -509,6 +530,7 @@ export class Game {
      */
     champion: Champion | null
   ) {
+    this.vies = champion ? VIES_ARENE : VIES;
     this.arme = arme ? statsArme(arme) : null;
     this.niveau = niveau;
     this.waves = new WaveRunner(
@@ -593,6 +615,13 @@ export class Game {
     // en attente, il ouvre celui qui est sous le curseur, ou — à défaut — il
     // envoie le dresseur là où on a cliqué. L'ordre compte : poser et
     // sélectionner sont des gestes visés, se déplacer est ce qui reste.
+    // La barre d'espace fait sauter le dresseur. Elle ne servait qu'a recoller
+    // la camera, ce que fait deja Echap : elle etait donc libre pour le seul
+    // geste expressif du personnage.
+    this.input.onAction(() => {
+      if (this.trainer.sauter()) sonSaut();
+    });
+
     this.input.onClick((button) => {
       if (button === 0) {
         if (this.pendingPlacement) {
@@ -670,7 +699,7 @@ export class Game {
 
   private get outcome(): Outcome {
     if (this.phase === 'preparation') return 'en_cours';
-    if (this.leaked >= VIES) return 'defaite';
+    if (this.leaked >= this.vies) return 'defaite';
     // Victoire seulement une fois le terrain vide : une vague epuisee dont les
     // derniers ennemis marchent encore n'est pas gagnee.
     if (this.waves.done && this.enemies.activeCount === 0) return 'victoire';
@@ -687,7 +716,7 @@ export class Game {
         wave: distant.vague,
         totalWaves: distant.vagues,
         alive: distant.ennemis.length,
-        leaked: VIES - distant.vies,
+        leaked: this.vies - distant.vies,
         crystals: distant.cristaux,
         pokepieces: distant.pieces,
         placed: distant.tours.length,
@@ -710,7 +739,7 @@ export class Game {
       crystals: this.crystals,
       pokepieces: this.pokepieces,
       placed: this.towers.length,
-      lives: Math.max(0, VIES - this.leaked),
+      lives: Math.max(0, this.vies - this.leaked),
       slotsLibres: Math.max(0, this.maxPoses - this.towers.length),
       maxPoses: this.maxPoses,
       outcome: this.outcome,
@@ -1965,7 +1994,7 @@ export class Game {
     const dtDecor = Math.min(0.1, (maintenant - this.derniereImageDecor) / 1000);
     this.derniereImageDecor = maintenant;
     this.terrain.avancer(dtDecor, this.phase === 'en_cours');
-    this.terrain.majVies(Math.max(0, VIES - this.leaked) / VIES);
+    this.terrain.majVies(Math.max(0, this.vies - this.leaked) / this.vies);
 
     for (const { crowd } of this.crowds.values()) crowd.begin();
     this.barresVie.begin(this.camera);
@@ -2047,8 +2076,13 @@ export class Game {
     }
 
     this.trainer.renderAt(alpha, this.tmpVec2);
-    this.trainer.object?.position.set(this.tmpVec2.x, 0, this.tmpVec2.y);
+    this.trainer.object?.position.set(this.tmpVec2.x, this.trainer.hauteur, this.tmpVec2.y);
     this.trainerMesh.rotation.z = Math.sin(this.tick * 0.15) * 0.035;
+    // Etirement en l'air, ecrasement a l'appel : sans cette deformation, le
+    // dresseur monte et descend comme un ascenseur. Elle est tiree de la
+    // hauteur elle-meme, donc elle suit la courbe du saut sans etat de plus.
+    const etirement = 1 + Math.min(0.22, this.trainer.hauteur * 0.26);
+    this.trainerMesh.scale.set(2 - etirement, etirement, 2 - etirement);
   }
 
   dispose(): void {

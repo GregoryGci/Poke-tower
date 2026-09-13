@@ -135,6 +135,7 @@ export function migrate(account: PlayerAccount): PlayerAccount {
     // ce moment. Le lui rejouer lui donnerait dix Pokemon gratuits.
     invocationOfferteFaite: account.progression?.invocationOfferteFaite ?? true,
     championsVaincus: account.progression?.championsVaincus ?? [],
+    recoltesDuJour: account.progression?.recoltesDuJour,
   };
   // Les etoiles sont arrivees apres les premieres sauvegardes : tout ce qui
   // existait deja part a une etoile, sans brillance.

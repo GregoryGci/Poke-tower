@@ -387,6 +387,14 @@ export interface Progression {
    * champion en boucle serait la meilleure source de Balls du jeu.
    */
   championsVaincus?: string[];
+  /**
+   * Recoltes automatiques de la journee, par lieu.
+   *
+   * Un seul jour est conserve : le journal est jete en bloc des que la date
+   * change. Garder l historique ne servirait a rien et ferait grossir la
+   * sauvegarde d une entree par lieu et par jour, indefiniment.
+   */
+  recoltesDuJour?: { jour: string; parLieu: Record<string, number> };
 }
 
 /**

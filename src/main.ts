@@ -40,7 +40,7 @@ import {
 import { LIBELLE_RARETE } from '@/data/gacha';
 import { getFamille, itemNeuf } from '@/data/items';
 import { ajouterPierres, getPierre } from '@/data/pierres';
-import { recolter } from '@/data/recolte';
+import { recolter, type Recolte } from '@/data/recolte';
 import { alerterEvolution, alerterInfo } from '@/ui/evolution-annonce';
 import { ouvrirRaids } from '@/ui/raids';
 import { ouvrirArene } from '@/ui/arene';
@@ -255,8 +255,11 @@ async function jouerManche(
   // La camera reste sur le dresseur : c'est autour de lui qu'on tourne la
   // vue. Seul le glisser au bouton du milieu la detache, et une touche la
   // recolle.
+  // Echap seulement : la barre d'espace fait desormais sauter le dresseur, et
+  // lui laisser en plus le recollage de camera aurait rendu le saut brouillon
+  // des qu'on a detache la vue.
   const recoller = (evenement: KeyboardEvent): void => {
-    if (evenement.code === 'Space' || evenement.code === 'Escape') stage.reprendreSuivi();
+    if (evenement.code === 'Escape') stage.reprendreSuivi();
   };
   window.addEventListener('keydown', recoller);
 
@@ -466,14 +469,23 @@ async function jouerManche(
  * seconde fenêtre modale pour trois chiffres aurait ajouté un vocabulaire
  * visuel de plus sans rien clarifier.
  */
-async function alerterRecolte(
-  lieu: string,
-  cristaux: number,
-  xp: number,
-  bonbons: number
-): Promise<void> {
-  const lignes = [`+${cristaux} cristaux`, `+${xp} XP par Pokémon de l’équipe`];
-  if (bonbons > 0) lignes.push(`+${bonbons} bonbon${bonbons > 1 ? 's' : ''}`);
+async function alerterRecolte(lieu: string, gains: Recolte): Promise<void> {
+  const lignes = [
+    `+${gains.cristaux} cristaux`,
+    `+${gains.xpParPokemon} XP par Pokémon de l’équipe`,
+  ];
+  if (gains.bonbons.length > 0) {
+    lignes.push(`+${gains.bonbons.length} bonbon${gains.bonbons.length > 1 ? 's' : ''}`);
+  }
+  // Le rendement est annoncé dès qu'il n'est plus plein. Un gain qui fond sans
+  // explication se lit comme un bug ; nommé, il se lit comme une règle — et il
+  // dit du même coup quoi faire : aller récolter ailleurs.
+  if (gains.rendement < 1) {
+    lignes.push(
+      `${gains.rang}ᵉ récolte du jour ici — rendement ${Math.round(gains.rendement * 100)} %`
+    );
+    lignes.push('Un autre lieu maîtrisé rapporterait le plein tarif.');
+  }
   await alerterInfo('Récolte automatique', lieu, lignes);
 }
 
@@ -521,7 +533,7 @@ for (;;) {
     if (choix.auto) {
       const gains = recolter(account.account, choix.niveau);
       await account.flush();
-      await alerterRecolte(choix.niveau.nom, gains.cristaux, gains.xpParPokemon, gains.bonbons.length);
+      await alerterRecolte(choix.niveau.nom, gains);
       if (gains.evolutions.length) {
         await alerterEvolution(gains.evolutions.map((espece) => espece.name));
       }

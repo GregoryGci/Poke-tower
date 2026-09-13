@@ -119,6 +119,11 @@ export function sonPose(speciesId: string): void {
   setTimeout(() => sonCri(speciesId, 0.45), 120);
 }
 
+/** Le bond : une montee courte, rien de plus. */
+export function sonSaut(): void {
+  bip({ frequence: 440, vers: 760, duree: 0.09, gain: 0.1, forme: 'triangle' });
+}
+
 export function sonPalier(): void {
   arpege([523, 659, 784, 1046], { duree: 0.07, gain: 0.13, pas: 0.055 });
 }

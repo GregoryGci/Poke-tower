@@ -4006,3 +4006,7 @@
   color: var(--emeraude);
   border-color: var(--emeraude);
 }
+
+/* La récolte automatique s'éteint quand son rendement du jour a fondu : le
+   bouton reste cliquable, mais il cesse d'attirer l'œil. */
+.campagne-auto[data-epuise='true'] { opacity: .45; }

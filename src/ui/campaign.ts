@@ -19,6 +19,7 @@ import {
   type Monde,
   type Niveau,
 } from '@/data/campaign';
+import { apercuRecolte } from '@/data/recolte';
 import type { PlayerAccount } from '@/data/types';
 import { ecrire } from './typewriter';
 
@@ -144,7 +145,15 @@ export function ouvrirCampagne(compte: PlayerAccount): Promise<ChoixCampagne | n
           const auto = elem('button', 'campagne-auto', '⏩');
           auto.type = 'button';
           auto.id = `auto-${niveau.id}`;
-          auto.title = `Récolter ${niveau.nom} sans jouer — débloqué par une manche sans dégât`;
+          // Ce qu'on va toucher est annoncé **avant** le clic, pas après : un
+          // rendement qu'on découvre une fois les gains versés se lit comme
+          // une arnaque, le même affiché d'avance se lit comme une règle.
+          const apercu = apercuRecolte(compte, niveau);
+          auto.title =
+            apercu.rendement >= 1
+              ? `Récolter ${niveau.nom} sans jouer — +${apercu.cristaux} cristaux`
+              : `Récolter ${niveau.nom} — ${apercu.rang}ᵉ fois aujourd’hui, rendement ${Math.round(apercu.rendement * 100)} % (+${apercu.cristaux} cristaux)`;
+          auto.dataset['epuise'] = String(apercu.rendement < 1);
           auto.addEventListener('click', (evenement) => {
             // Sans ça, le clic remonte à la case et lance la manche.
             evenement.stopPropagation();

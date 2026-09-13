@@ -30,7 +30,74 @@ import { membresEquipe } from './team';
  */
 const RENDEMENT = 0.8;
 
-/** Cristaux et expérience que ce lieu rapporte, hors aléa. */
+/**
+ * Rendement des récoltes successives d'un **même lieu**, dans la journée.
+ *
+ * Le vrai défaut n'était pas la vitesse ×3 : c'était qu'un lieu maîtrisé se
+ * récoltait à l'infini au plein tarif. Cinquante clics sur le même niveau
+ * rapportaient cinquante fois la même chose, ce qui en faisait mécaniquement
+ * la meilleure stratégie du jeu — une stratégie qui consiste à ne pas jouer.
+ *
+ * Trois réponses étaient possibles, et le choix compte :
+ *
+ *  - une **énergie** qui se recharge : ça règle le problème, mais ça punit
+ *    celui qui a envie de jouer deux heures d'affilée. C'est une mécanique de
+ *    monétisation dans un jeu qui n'est pas monétisé ;
+ *  - un **plafond dur** par jour : simple, mais il transforme le dernier clic
+ *    autorisé en mur, et laisse le joueur devant un bouton mort ;
+ *  - des **rendements décroissants**. Rien n'est jamais interdit, on peut
+ *    toujours cliquer, mais la deuxième récolte du jour vaut 55 %, la
+ *    troisième 30 %, et ça se stabilise à 10 %. Farmer le même lieu cesse
+ *    d'être rentable **sans cesser d'être possible**, et la réponse naturelle
+ *    devient d'aller récolter ailleurs — c'est-à-dire de faire tourner la
+ *    campagne au lieu de marteler son premier niveau.
+ *
+ * Le dernier a été retenu. Le compteur est par lieu et par jour : douze lieux
+ * maîtrisés donnent donc douze pleins tarifs quotidiens, ce qui récompense
+ * d'avoir avancé plutôt que d'avoir cliqué.
+ *
+ * Mesuré : huit clics sur le même lieu rapportent 509 cristaux au lieu de
+ * 1 672, soit 70 % de moins, pendant qu'un lieu voisin repart à 100 %.
+ */
+export const PALIERS_RECOLTE = [1, 0.55, 0.3, 0.18, 0.1] as const;
+
+/** Le rendement de la n-ième récolte du jour, à partir de zéro. */
+export function rendementRecolte(dejaFaites: number): number {
+  const index = Math.min(dejaFaites, PALIERS_RECOLTE.length - 1);
+  return PALIERS_RECOLTE[index] ?? PALIERS_RECOLTE[PALIERS_RECOLTE.length - 1]!;
+}
+
+/**
+ * Le jour courant, en date locale.
+ *
+ * Locale et non UTC : le joueur vit dans son fuseau, et une remise à zéro à
+ * une heure du matin serait incompréhensible. Le format suédois donne l'ISO —
+ * c'est le raccourci habituel pour obtenir AAAA-MM-JJ sans assembler la
+ * chaîne à la main.
+ */
+export function jourCourant(maintenant: Date = new Date()): string {
+  return maintenant.toLocaleDateString('sv-SE');
+}
+
+/** Combien de fois ce lieu a déjà été récolté aujourd'hui. */
+export function recoltesDuJour(compte: PlayerAccount, niveauId: string): number {
+  const journal = compte.progression.recoltesDuJour;
+  if (!journal || journal.jour !== jourCourant()) return 0;
+  return journal.parLieu[niveauId] ?? 0;
+}
+
+/** Inscrit une récolte au journal du jour, en le remettant à zéro s'il a vieilli. */
+function inscrireRecolte(compte: PlayerAccount, niveauId: string): void {
+  const jour = jourCourant();
+  const journal = compte.progression.recoltesDuJour;
+  if (!journal || journal.jour !== jour) {
+    compte.progression.recoltesDuJour = { jour, parLieu: { [niveauId]: 1 } };
+    return;
+  }
+  journal.parLieu[niveauId] = (journal.parLieu[niveauId] ?? 0) + 1;
+}
+
+/** Cristaux et expérience que ce lieu rapporte, hors aléa et hors rendement. */
 function baremeDuNiveau(niveau: Niveau): { cristaux: number; xpParPokemon: number } {
   const vagues = vaguesDuNiveau(niveau);
   // On compte les ennemis réellement prévus plutôt que d'estimer : c'est la
@@ -51,6 +118,10 @@ function baremeDuNiveau(niveau: Niveau): { cristaux: number; xpParPokemon: numbe
 export interface Recolte {
   cristaux: number;
   xpParPokemon: number;
+  /** Rendement appliqué, de 1 à 0,1 selon les récoltes déjà faites du jour. */
+  rendement: number;
+  /** Rang de cette récolte dans la journée, à partir de 1. */
+  rang: number;
   /** Expérience versée au dresseur lui-même. */
   xpDresseur: number;
   bonbons: Array<{ id: string; quantite: number }>;
@@ -71,7 +142,14 @@ export function recolter(
   niveau: Niveau,
   rng: () => number = Math.random
 ): Recolte {
-  const { cristaux, xpParPokemon } = baremeDuNiveau(niveau);
+  const deja = recoltesDuJour(compte, niveau.id);
+  const rendement = rendementRecolte(deja);
+  const bareme = baremeDuNiveau(niveau);
+
+  // Un cristal au minimum : une récolte qui ne rapporte littéralement rien se
+  // lit comme un bouton cassé, pas comme un rendement qui s'épuise.
+  const cristaux = Math.max(1, Math.round(bareme.cristaux * rendement));
+  const xpParPokemon = Math.max(1, Math.round(bareme.xpParPokemon * rendement));
 
   compte.crystals += cristaux;
 
@@ -81,16 +159,46 @@ export function recolter(
     evolutions.push(...evoluerSiPossible(membre));
   }
 
-  const bonbons = bonbonsDeManche(niveau.index, true, rng);
+  // Les bonbons suivent le même rendement, mais **en probabilité** : à 30 %,
+  // une récolte sur trois en donne. Les rogner en quantité aurait donné des
+  // lots de zéro bonbon, ce qui revient au même en moins lisible.
+  const bonbons = rng() < rendement ? bonbonsDeManche(niveau.index, true, rng) : [];
   for (const drop of bonbons) ajouterBonbons(compte, drop.id, drop.quantite);
 
   const xpDresseur = Math.round(xpParPokemon * 0.5);
   compte.progression.dresseurXp = (compte.progression.dresseurXp ?? 0) + xpDresseur;
 
-  return { cristaux, xpParPokemon, xpDresseur, bonbons, evolutions };
+  inscrireRecolte(compte, niveau.id);
+
+  return {
+    cristaux,
+    xpParPokemon,
+    xpDresseur,
+    bonbons,
+    evolutions,
+    rendement,
+    rang: deja + 1,
+  };
 }
 
-/** Aperçu des gains, sans rien appliquer. Sert à l'afficher avant de valider. */
-export function apercuRecolte(niveau: Niveau): { cristaux: number; xpParPokemon: number } {
-  return baremeDuNiveau(niveau);
+/**
+ * Aperçu des gains, sans rien appliquer.
+ *
+ * Il tient compte des récoltes déjà faites : annoncer le plein tarif puis en
+ * verser un dixième serait une tromperie, et c'est exactement le genre de
+ * chose qui fait douter de tous les autres chiffres du jeu.
+ */
+export function apercuRecolte(
+  compte: PlayerAccount,
+  niveau: Niveau
+): { cristaux: number; xpParPokemon: number; rendement: number; rang: number } {
+  const deja = recoltesDuJour(compte, niveau.id);
+  const rendement = rendementRecolte(deja);
+  const bareme = baremeDuNiveau(niveau);
+  return {
+    cristaux: Math.max(1, Math.round(bareme.cristaux * rendement)),
+    xpParPokemon: Math.max(1, Math.round(bareme.xpParPokemon * rendement)),
+    rendement,
+    rang: deja + 1,
+  };
 }
