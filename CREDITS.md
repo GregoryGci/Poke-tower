@@ -16,14 +16,14 @@ usage principalement destiné à un avantage commercial ou à une rémunération
 
 ## Sons
 
-Les **cris de Pokémon** (, 23 fichiers) et les **impacts par
-type** (, 51 fichiers) proviennent du même dépôt
+Les **cris de Pokémon** (`public/sons/cris`, 23 fichiers) et les **impacts par
+type** (`public/sons/impacts`, 51 fichiers) proviennent du même dépôt
 **Cobblemon Assets**, sous la même licence **CC BY-NC 3.0**. Ils sont repris
 tels quels, sans modification.
 
 Les bruitages d'interface — clics, fanfares de révélation, annonces de vague —
 ne sont pas des fichiers : ils sont **synthétisés** à l'exécution par
- (Web Audio). Aucune licence tierce ne s'y applique.
+`src/audio/moteur.ts` (Web Audio). Aucune licence tierce ne s'y applique.
 
 ## Modèles d'armes
 
